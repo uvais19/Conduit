@@ -39,6 +39,8 @@ export default function ApprovalPage() {
   const [error, setError] = useState("");
   const [revisionNotes, setRevisionNotes] = useState("");
   const [showRevisionForm, setShowRevisionForm] = useState(false);
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<"all" | ContentDraftRecord["status"]>("in-review");
@@ -111,6 +113,58 @@ export default function ApprovalPage() {
       setRevisionNotes("");
     } catch (e) {
       setError(e instanceof Error ? e.message : `Unable to ${action}`);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleSchedule() {
+    if (!selectedDraft) return;
+    setActionLoading(true);
+    setError("");
+    try {
+      const body: Record<string, string> = {};
+      if (scheduleDate) body.scheduledAt = new Date(scheduleDate).toISOString();
+
+      const response = await fetch(`/api/drafts/${selectedDraft.id}/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to schedule");
+
+      const updated = data.draft as ContentDraftRecord;
+      setDrafts((current) =>
+        current.map((d) => (d.id === updated.id ? updated : d))
+      );
+      setShowScheduleForm(false);
+      setScheduleDate("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to schedule");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handlePublish() {
+    if (!selectedDraft) return;
+    setActionLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/drafts/${selectedDraft.id}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to publish");
+
+      const updated = data.draft as ContentDraftRecord;
+      setDrafts((current) =>
+        current.map((d) => (d.id === updated.id ? updated : d))
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to publish");
     } finally {
       setActionLoading(false);
     }
@@ -347,6 +401,99 @@ export default function ApprovalPage() {
                           Cancel
                         </button>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Schedule — shown when draft is approved */}
+                  {selectedDraft.status === "approved" && (
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => setShowScheduleForm((v) => !v)}
+                        className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                      >
+                        Schedule
+                      </button>
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => void handlePublish()}
+                        className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium disabled:opacity-50"
+                      >
+                        {actionLoading ? "Publishing..." : "Publish Now"}
+                      </button>
+                    </div>
+                  )}
+
+                  {showScheduleForm && selectedDraft.status === "approved" && (
+                    <div className="space-y-2 rounded-md border p-3">
+                      <label className="block space-y-1 text-sm">
+                        <span className="font-medium">Schedule date & time</span>
+                        <input
+                          type="datetime-local"
+                          className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+                          value={scheduleDate}
+                          onChange={(e) => setScheduleDate(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Leave empty to use AI-suggested optimal time.
+                        </p>
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={actionLoading}
+                          onClick={() => void handleSchedule()}
+                          className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                        >
+                          {actionLoading ? "Scheduling..." : "Confirm Schedule"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowScheduleForm(false);
+                            setScheduleDate("");
+                          }}
+                          className="inline-flex h-8 items-center rounded-md border px-3 text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Publish — shown when draft is scheduled */}
+                  {selectedDraft.status === "scheduled" && (
+                    <div className="space-y-2 pt-2">
+                      {selectedDraft.scheduledAt && (
+                        <p className="text-sm text-muted-foreground">
+                          Scheduled for {new Date(selectedDraft.scheduledAt).toLocaleString()}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => void handlePublish()}
+                        className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                      >
+                        {actionLoading ? "Publishing..." : "Publish Now"}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Published info */}
+                  {selectedDraft.status === "published" && selectedDraft.platformPostId && (
+                    <div className="rounded-md border bg-muted/30 p-3">
+                      <p className="text-sm font-medium">Published</p>
+                      <p className="text-xs text-muted-foreground">
+                        Post ID: {selectedDraft.platformPostId}
+                      </p>
+                      {selectedDraft.publishedAt && (
+                        <p className="text-xs text-muted-foreground">
+                          Published at {new Date(selectedDraft.publishedAt).toLocaleString()}
+                        </p>
+                      )}
                     </div>
                   )}
                 </CardContent>

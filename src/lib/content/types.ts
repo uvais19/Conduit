@@ -87,6 +87,9 @@ export type ContentDraftRecord = {
   status: "draft" | "in-review" | "revision-requested" | "approved" | "scheduled" | "published" | "failed";
   variantGroup: string;
   variantLabel: VariantLabel;
+  scheduledAt: string | null;
+  publishedAt: string | null;
+  platformPostId: string | null;
   createdAt: string;
   updatedAt: string;
 };

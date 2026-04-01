@@ -38,6 +38,9 @@ export function createDraftsFromVariants({
     status: "draft" as const,
     variantGroup,
     variantLabel: variant.variantLabel,
+    scheduledAt: null,
+    publishedAt: null,
+    platformPostId: null,
     createdAt: now,
     updatedAt: now,
   }));
@@ -88,6 +91,9 @@ export function updateDraft(
       | "mediaType"
       | "carousel"
       | "storyTemplate"
+      | "scheduledAt"
+      | "publishedAt"
+      | "platformPostId"
     >
   >
 ): ContentDraftRecord | null {
