@@ -37,6 +37,7 @@ export default function ApprovalPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [revisionNotes, setRevisionNotes] = useState("");
   const [showRevisionForm, setShowRevisionForm] = useState(false);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
@@ -56,6 +57,7 @@ export default function ApprovalPage() {
   async function fetchDrafts() {
     setLoading(true);
     setError("");
+    setNotice("");
     try {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);
@@ -96,6 +98,7 @@ export default function ApprovalPage() {
     if (!selectedDraft) return;
     setActionLoading(true);
     setError("");
+    setNotice("");
     try {
       const response = await fetch(`/api/drafts/${selectedDraft.id}/${action}`, {
         method: "POST",
@@ -122,6 +125,7 @@ export default function ApprovalPage() {
     if (!selectedDraft) return;
     setActionLoading(true);
     setError("");
+    setNotice("");
     try {
       const body: Record<string, string> = {};
       if (scheduleDate) body.scheduledAt = new Date(scheduleDate).toISOString();
@@ -151,6 +155,7 @@ export default function ApprovalPage() {
     if (!selectedDraft) return;
     setActionLoading(true);
     setError("");
+    setNotice("");
     try {
       const response = await fetch(`/api/drafts/${selectedDraft.id}/publish`, {
         method: "POST",
@@ -170,6 +175,27 @@ export default function ApprovalPage() {
     }
   }
 
+  async function handleCollectAnalytics() {
+    if (!selectedDraft) return;
+    setActionLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/analytics/collect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId: selectedDraft.id }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to collect analytics");
+      setNotice(data.message ?? "Analytics collected successfully.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to collect analytics");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -182,6 +208,12 @@ export default function ApprovalPage() {
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {notice && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary">
+          {notice}
         </div>
       )}
 
@@ -494,6 +526,16 @@ export default function ApprovalPage() {
                           Published at {new Date(selectedDraft.publishedAt).toLocaleString()}
                         </p>
                       )}
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          disabled={actionLoading}
+                          onClick={() => void handleCollectAnalytics()}
+                          className="inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium disabled:opacity-50"
+                        >
+                          {actionLoading ? "Collecting..." : "Collect Analytics"}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </CardContent>
