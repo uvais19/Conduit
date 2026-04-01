@@ -5,6 +5,7 @@ import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DraftVisualEditor } from "@/components/draft-visual-editor";
 
 type GenerationPayload = {
   platform: (typeof PLATFORMS)[number];
@@ -33,10 +34,16 @@ export function ContentGenerationStudio() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<ContentDraftRecord[]>([]);
+  const [selectedId, setSelectedId] = useState("");
 
   const grouped = useMemo(() => {
     return drafts.sort((a, b) => a.variantLabel.localeCompare(b.variantLabel));
   }, [drafts]);
+
+  const selectedDraft = useMemo(
+    () => drafts.find((draft) => draft.id === selectedId) ?? null,
+    [drafts, selectedId]
+  );
 
   async function handleGenerate() {
     setLoading(true);
@@ -55,6 +62,7 @@ export function ContentGenerationStudio() {
       }
 
       setDrafts(data.drafts as ContentDraftRecord[]);
+      setSelectedId((data.drafts as ContentDraftRecord[])[0]?.id ?? "");
     } catch (generationError) {
       setError(
         generationError instanceof Error
@@ -195,20 +203,44 @@ export function ContentGenerationStudio() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         {grouped.map((draft) => (
-          <Card key={draft.id}>
+          <Card
+            key={draft.id}
+            className={selectedId === draft.id ? "border-primary" : undefined}
+          >
             <CardHeader>
               <CardTitle className="text-base">
                 Variant {draft.variantLabel} · {PLATFORM_LABELS[draft.platform]}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
+              <button
+                type="button"
+                onClick={() => setSelectedId(draft.id)}
+                className="rounded border px-2 py-1 text-xs"
+              >
+                Edit visuals
+              </button>
               <p className="whitespace-pre-wrap">{draft.caption}</p>
               <p className="text-muted-foreground">{draft.hashtags.join(" ")}</p>
               <p className="font-medium">CTA: {draft.cta}</p>
+              {draft.mediaUrls[0] && (
+                <p className="text-xs text-muted-foreground">Image: {draft.mediaUrls[0]}</p>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
+
+      {selectedDraft && (
+        <DraftVisualEditor
+          draft={selectedDraft}
+          onDraftChange={(nextDraft) => {
+            setDrafts((current) =>
+              current.map((draft) => (draft.id === nextDraft.id ? nextDraft : draft))
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

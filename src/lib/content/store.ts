@@ -31,6 +31,10 @@ export function createDraftsFromVariants({
     caption: variant.caption,
     hashtags: variant.hashtags,
     cta: variant.cta,
+    mediaUrls: [],
+    mediaType: "text-only" as const,
+    carousel: [],
+    storyTemplate: null,
     status: "draft" as const,
     variantGroup,
     variantLabel: variant.variantLabel,
@@ -75,7 +79,15 @@ export function updateDraft(
   patch: Partial<
     Pick<
       ContentDraftRecord,
-      "caption" | "hashtags" | "cta" | "pillar" | "status"
+      | "caption"
+      | "hashtags"
+      | "cta"
+      | "pillar"
+      | "status"
+      | "mediaUrls"
+      | "mediaType"
+      | "carousel"
+      | "storyTemplate"
     >
   >
 ): ContentDraftRecord | null {
@@ -94,6 +106,24 @@ export function updateDraft(
   drafts[index] = updated;
   draftsByTenant.set(tenantId, drafts);
   return updated;
+}
+
+export function appendDraftMediaUrl(
+  tenantId: string,
+  id: string,
+  mediaUrl: string,
+  mediaType: ContentDraftRecord["mediaType"] = "image"
+): ContentDraftRecord | null {
+  const draft = getDraftById(tenantId, id);
+  if (!draft) {
+    return null;
+  }
+
+  const deduped = Array.from(new Set([mediaUrl, ...draft.mediaUrls]));
+  return updateDraft(tenantId, id, {
+    mediaUrls: deduped,
+    mediaType,
+  });
 }
 
 export function groupVariants(drafts: ContentDraftRecord[]) {

@@ -5,6 +5,7 @@ import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DraftVisualEditor } from "@/components/draft-visual-editor";
 
 type DraftFilters = {
   platform: "all" | (typeof PLATFORMS)[number];
@@ -95,6 +96,10 @@ export function DraftsEditor() {
           hashtags: selectedDraft.hashtags,
           cta: selectedDraft.cta,
           pillar: selectedDraft.pillar,
+          mediaUrls: selectedDraft.mediaUrls,
+          mediaType: selectedDraft.mediaType,
+          carousel: selectedDraft.carousel,
+          storyTemplate: selectedDraft.storyTemplate,
         }),
       });
 
@@ -288,6 +293,17 @@ export function DraftsEditor() {
                 >
                   {saving ? "Saving..." : "Save Draft"}
                 </button>
+
+                <DraftVisualEditor
+                  draft={selectedDraft}
+                  onDraftChange={(nextDraft) => {
+                    setDrafts((current) =>
+                      current.map((draft) =>
+                        draft.id === nextDraft.id ? nextDraft : draft
+                      )
+                    );
+                  }}
+                />
               </>
             )}
           </CardContent>
