@@ -20,7 +20,7 @@ export async function POST(
     const tenantId = session.user.tenantId;
     const { id } = await context.params;
 
-    const draft = getDraftById(tenantId, id);
+    const draft = await getDraftById(tenantId, id);
     if (!draft) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
@@ -39,7 +39,7 @@ export async function POST(
       : await simulatePublish(draft);
 
     if (result.success) {
-      const updated = updateDraft(tenantId, id, {
+      const updated = await updateDraft(tenantId, id, {
         status: "published",
         publishedAt: result.publishedAt,
         platformPostId: result.platformPostId,
@@ -73,7 +73,7 @@ export async function POST(
 
     // Handle failure — retry or mark as failed
     if (hasExceededRetries(id)) {
-      const failed = updateDraft(tenantId, id, { status: "failed" });
+      const failed = await updateDraft(tenantId, id, { status: "failed" });
       dequeue(id);
 
       recordAuditEvent({

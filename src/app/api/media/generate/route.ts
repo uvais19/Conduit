@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const draft = getDraftById(tenantId, parsed.data.draftId);
+    const draft = await getDraftById(tenantId, parsed.data.draftId);
     if (!draft) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       aspectRatio: parsed.data.aspectRatio,
     });
 
-    const updated = appendDraftMediaUrl(
+    const updated = await appendDraftMediaUrl(
       tenantId,
       draft.id,
       generated.imageUrl,

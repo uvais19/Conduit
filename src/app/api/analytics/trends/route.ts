@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get("days") ?? "30", 10);
 
-    const trends = getTrendData(session.user.tenantId, days);
+    const trends = await getTrendData(session.user.tenantId, days);
     return NextResponse.json({ trends });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

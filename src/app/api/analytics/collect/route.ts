@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     }
 
     if (draftId) {
-      const draft = getDraftById(tenantId, draftId);
+      const draft = await getDraftById(tenantId, draftId);
       if (!draft) {
         return NextResponse.json({ error: "Draft not found" }, { status: 404 });
       }

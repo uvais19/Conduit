@@ -23,7 +23,7 @@ export async function POST(
     const parsed = bodySchema.safeParse(body);
     const requestedTime = parsed.success ? parsed.data.scheduledAt : undefined;
 
-    const draft = getDraftById(tenantId, id);
+    const draft = await getDraftById(tenantId, id);
     if (!draft) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
@@ -39,7 +39,7 @@ export async function POST(
       ? new Date(requestedTime).toISOString()
       : suggestPostingTime(draft.platform).toISOString();
 
-    const updated = updateDraft(tenantId, id, {
+    const updated = await updateDraft(tenantId, id, {
       status: "scheduled",
       scheduledAt,
     });

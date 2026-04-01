@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     }
 
     const generated = generatePlatformVariants(parsed.data);
-    const drafts = createDraftsFromVariants({
+    const drafts = await createDraftsFromVariants({
       tenantId,
       platform: parsed.data.platform,
       pillar: parsed.data.pillar,

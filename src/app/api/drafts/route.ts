@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const pillar = searchParams.get("pillar") ?? undefined;
     const grouped = searchParams.get("grouped") === "true";
 
-    const drafts = listDrafts({
+    const drafts = await listDrafts({
       tenantId,
       platform,
       status: status as never,

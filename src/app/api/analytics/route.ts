@@ -5,7 +5,7 @@ import { getDashboardOverview } from "@/lib/analytics/store";
 export async function GET() {
   try {
     const session = await requirePermission("view_analytics");
-    const overview = getDashboardOverview(session.user.tenantId);
+    const overview = await getDashboardOverview(session.user.tenantId);
     return NextResponse.json({ overview });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

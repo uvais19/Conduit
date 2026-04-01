@@ -25,7 +25,7 @@ export async function POST(
       );
     }
 
-    const draft = getDraftById(tenantId, id);
+    const draft = await getDraftById(tenantId, id);
     if (!draft) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
@@ -36,7 +36,7 @@ export async function POST(
       styleHint: parsed.data.styleHint,
     });
 
-    const updated = updateDraft(tenantId, id, {
+    const updated = await updateDraft(tenantId, id, {
       carousel: plan.carousel,
       storyTemplate: plan.storyTemplate,
       mediaType: "carousel",

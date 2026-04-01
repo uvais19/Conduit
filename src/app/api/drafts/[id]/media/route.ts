@@ -27,7 +27,7 @@ export async function POST(
       );
     }
 
-    const updated = appendDraftMediaUrl(
+    const updated = await appendDraftMediaUrl(
       tenantId,
       id,
       parsed.data.mediaUrl,

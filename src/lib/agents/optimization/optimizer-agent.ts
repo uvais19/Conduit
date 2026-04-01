@@ -21,8 +21,8 @@ const VALID_TYPES: ProposalType[] = [
 export async function runOptimizerAgent(
   tenantId: string
 ): Promise<OptimizationProposal[]> {
-  const overview = getDashboardOverview(tenantId);
-  const trends = getTrendData(tenantId, 30);
+  const overview = await getDashboardOverview(tenantId);
+  const trends = await getTrendData(tenantId, 30);
 
   const fallback: RawProposal[] = [];
 

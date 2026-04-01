@@ -12,7 +12,7 @@ export async function GET(
     const tenantId = session.user.tenantId;
     const { id } = await context.params;
 
-    const draft = getDraftById(tenantId, id);
+    const draft = await getDraftById(tenantId, id);
     if (!draft) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }

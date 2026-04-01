@@ -1,4 +1,7 @@
+import { and, desc, eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { db } from "@/lib/db";
+import { contentDrafts, postAnalytics } from "@/lib/db/schema";
 import type { Platform } from "@/lib/types";
 import type { ContentDraftRecord, VariantLabel } from "@/lib/content/types";
 import type {
@@ -18,38 +21,103 @@ import { listDrafts, groupVariants } from "@/lib/content/store";
 
 const metricsByTenant = new Map<string, PostMetrics[]>();
 
-export function recordMetrics(
-  params: Omit<PostMetrics, "id" | "collectedAt">
+function useDb() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
+function mapMetricRow(
+  row: typeof postAnalytics.$inferSelect,
+  tenantId: string
 ): PostMetrics {
-  const record: PostMetrics = {
-    ...params,
-    id: randomUUID(),
-    collectedAt: new Date().toISOString(),
+  return {
+    id: row.id,
+    draftId: row.draftId,
+    tenantId,
+    platform: row.platform,
+    platformPostId: row.platformPostId ?? "",
+    collectedAt: row.collectedAt.toISOString(),
+    impressions: row.impressions ?? 0,
+    reach: row.reach ?? 0,
+    likes: row.likes ?? 0,
+    comments: row.comments ?? 0,
+    shares: row.shares ?? 0,
+    saves: row.saves ?? 0,
+    clicks: row.clicks ?? 0,
+    engagementRate: Number(row.engagementRate ?? 0),
   };
-
-  const existing = metricsByTenant.get(params.tenantId) ?? [];
-  metricsByTenant.set(params.tenantId, [record, ...existing]);
-  return record;
 }
 
-export function getMetricsForDraft(
-  tenantId: string,
-  draftId: string
-): PostMetrics[] {
-  const all = metricsByTenant.get(tenantId) ?? [];
-  return all
-    .filter((m) => m.draftId === draftId)
-    .sort(
-      (a, b) =>
-        new Date(b.collectedAt).getTime() - new Date(a.collectedAt).getTime()
-    );
+export async function recordMetrics(
+  params: Omit<PostMetrics, "id" | "collectedAt">
+): Promise<PostMetrics> {
+  if (!useDb()) {
+    const record: PostMetrics = {
+      ...params,
+      id: randomUUID(),
+      collectedAt: new Date().toISOString(),
+    };
+
+    const existing = metricsByTenant.get(params.tenantId) ?? [];
+    metricsByTenant.set(params.tenantId, [record, ...existing]);
+    return record;
+  }
+
+  const [created] = await db
+    .insert(postAnalytics)
+    .values({
+      draftId: params.draftId,
+      platform: params.platform,
+      platformPostId: params.platformPostId,
+      collectedAt: new Date(),
+      impressions: params.impressions,
+      reach: params.reach,
+      likes: params.likes,
+      comments: params.comments,
+      shares: params.shares,
+      saves: params.saves,
+      clicks: params.clicks,
+      engagementRate: params.engagementRate.toString(),
+      rawData: null,
+    })
+    .returning();
+
+  return mapMetricRow(created, params.tenantId);
 }
 
-export function getLatestMetricsForDraft(
+export async function getMetricsForDraft(
   tenantId: string,
   draftId: string
-): PostMetrics | null {
-  const metrics = getMetricsForDraft(tenantId, draftId);
+): Promise<PostMetrics[]> {
+  if (!useDb()) {
+    const all = metricsByTenant.get(tenantId) ?? [];
+    return all
+      .filter((m) => m.draftId === draftId)
+      .sort(
+        (a, b) =>
+          new Date(b.collectedAt).getTime() - new Date(a.collectedAt).getTime()
+      );
+  }
+
+  const rows = await db
+    .select({ metric: postAnalytics })
+    .from(postAnalytics)
+    .innerJoin(contentDrafts, eq(postAnalytics.draftId, contentDrafts.id))
+    .where(
+      and(
+        eq(contentDrafts.tenantId, tenantId),
+        eq(postAnalytics.draftId, draftId)
+      )
+    )
+    .orderBy(desc(postAnalytics.collectedAt));
+
+  return rows.map((row) => mapMetricRow(row.metric, tenantId));
+}
+
+export async function getLatestMetricsForDraft(
+  tenantId: string,
+  draftId: string
+): Promise<PostMetrics | null> {
+  const metrics = await getMetricsForDraft(tenantId, draftId);
   return metrics[0] ?? null;
 }
 
@@ -57,9 +125,19 @@ export function getLatestMetricsForDraft(
 // Dashboard aggregation
 // ---------------------------------------------------------------------------
 
-export function getDashboardOverview(tenantId: string): DashboardOverview {
-  const drafts = listDrafts({ tenantId, status: "published" });
-  const allMetrics = metricsByTenant.get(tenantId) ?? [];
+export async function getDashboardOverview(
+  tenantId: string
+): Promise<DashboardOverview> {
+  const drafts = await listDrafts({ tenantId, status: "published" });
+  const allMetrics = useDb()
+    ? (
+        await db
+          .select({ metric: postAnalytics })
+          .from(postAnalytics)
+          .innerJoin(contentDrafts, eq(postAnalytics.draftId, contentDrafts.id))
+          .where(eq(contentDrafts.tenantId, tenantId))
+      ).map((row) => mapMetricRow(row.metric, tenantId))
+    : metricsByTenant.get(tenantId) ?? [];
 
   // Get latest metrics per draft
   const latestByDraft = new Map<string, PostMetrics>();
@@ -145,15 +223,17 @@ export function getDashboardOverview(tenantId: string): DashboardOverview {
 // Variant comparison
 // ---------------------------------------------------------------------------
 
-export function getVariantComparisons(tenantId: string): VariantComparison[] {
-  const publishedDrafts = listDrafts({ tenantId, status: "published" });
+export async function getVariantComparisons(
+  tenantId: string
+): Promise<VariantComparison[]> {
+  const publishedDrafts = await listDrafts({ tenantId, status: "published" });
   const groups = groupVariants(publishedDrafts);
 
-  return groups
-    .map((group) => {
-      const variants: VariantMetrics[] = (group.variants as ContentDraftRecord[])
-        .map((draft) => {
-          const metrics = getLatestMetricsForDraft(tenantId, draft.id);
+  const comparisons = await Promise.all(
+    groups.map(async (group) => {
+      const variants = await Promise.all(
+        (group.variants as ContentDraftRecord[]).map(async (draft) => {
+          const metrics = await getLatestMetricsForDraft(tenantId, draft.id);
           if (!metrics) return null;
           return {
             draftId: draft.id,
@@ -166,31 +246,42 @@ export function getVariantComparisons(tenantId: string): VariantComparison[] {
             saves: metrics.saves,
             clicks: metrics.clicks,
             engagementRate: metrics.engagementRate,
-          };
+          } satisfies VariantMetrics;
         })
-        .filter((v): v is VariantMetrics => v !== null);
+      );
 
-      if (variants.length === 0) return null;
+      const filtered = variants.filter((v): v is VariantMetrics => v !== null);
+      if (filtered.length === 0) return null;
 
       return {
         variantGroup: group.variantGroup,
         platform: group.platform as Platform,
         pillar: group.pillar as string,
-        variants,
-      };
+        variants: filtered,
+      } satisfies VariantComparison;
     })
-    .filter((c): c is VariantComparison => c !== null);
+  );
+
+  return comparisons.filter((c): c is VariantComparison => c !== null);
 }
 
 // ---------------------------------------------------------------------------
 // Trend data
 // ---------------------------------------------------------------------------
 
-export function getTrendData(
+export async function getTrendData(
   tenantId: string,
   days: number = 30
-): TrendPoint[] {
-  const allMetrics = metricsByTenant.get(tenantId) ?? [];
+): Promise<TrendPoint[]> {
+  const allMetrics = useDb()
+    ? (
+        await db
+          .select({ metric: postAnalytics })
+          .from(postAnalytics)
+          .innerJoin(contentDrafts, eq(postAnalytics.draftId, contentDrafts.id))
+          .where(eq(contentDrafts.tenantId, tenantId))
+      ).map((row) => mapMetricRow(row.metric, tenantId))
+    : metricsByTenant.get(tenantId) ?? [];
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
 

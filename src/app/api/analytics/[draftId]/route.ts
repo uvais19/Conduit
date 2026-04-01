@@ -12,12 +12,12 @@ export async function GET(
     const tenantId = session.user.tenantId;
     const { draftId } = await context.params;
 
-    const draft = getDraftById(tenantId, draftId);
+    const draft = await getDraftById(tenantId, draftId);
     if (!draft) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
 
-    const metrics = getMetricsForDraft(tenantId, draftId);
+    const metrics = await getMetricsForDraft(tenantId, draftId);
     return NextResponse.json({ draft, metrics });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

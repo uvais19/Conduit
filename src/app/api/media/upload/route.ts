@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Image file is required" }, { status: 400 });
     }
 
-    const draft = getDraftById(tenantId, draftId);
+    const draft = await getDraftById(tenantId, draftId);
     if (!draft) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       ? await uploadFile(key, buffer, file.type || "application/octet-stream")
       : `local-preview://${key}`;
 
-    const updated = appendDraftMediaUrl(tenantId, draftId, imageUrl, "image");
+    const updated = await appendDraftMediaUrl(tenantId, draftId, imageUrl, "image");
 
     return NextResponse.json({ imageUrl, draft: updated });
   } catch (error) {

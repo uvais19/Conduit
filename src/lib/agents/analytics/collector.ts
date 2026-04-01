@@ -161,7 +161,7 @@ export async function collectMetricsForDraft(
     metrics = simulateMetrics(draft.platform, hoursAfterPublish);
   }
 
-  return recordMetrics({
+  return await recordMetrics({
     draftId: draft.id,
     tenantId,
     platform: draft.platform,
@@ -180,7 +180,7 @@ export async function collectAllMetrics(
 ): Promise<number> {
   // Import here to avoid circular dependency at module level
   const { listDrafts } = await import("@/lib/content/store");
-  const published = listDrafts({ tenantId, status: "published" });
+  const published = await listDrafts({ tenantId, status: "published" });
 
   let count = 0;
   for (const draft of published) {

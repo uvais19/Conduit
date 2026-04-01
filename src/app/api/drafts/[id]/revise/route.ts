@@ -30,7 +30,7 @@ export async function POST(
 
     const { notes } = parsed.data;
 
-    const draft = getDraftById(tenantId, id);
+    const draft = await getDraftById(tenantId, id);
     if (!draft) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
@@ -43,7 +43,7 @@ export async function POST(
       );
     }
 
-    const updated = updateDraft(tenantId, id, { status: toStatus });
+    const updated = await updateDraft(tenantId, id, { status: toStatus });
 
     recordAuditEvent({
       draftId: id,
