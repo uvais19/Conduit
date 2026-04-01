@@ -6,6 +6,7 @@ import type { ContentDraftRecord } from "@/lib/content/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
+import { DraftTimeline } from "@/components/draft-timeline";
 
 type DraftFilters = {
   platform: "all" | (typeof PLATFORMS)[number];
@@ -40,6 +41,7 @@ export function DraftsEditor() {
   const [selectedId, setSelectedId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const selectedDraft = useMemo(
@@ -81,6 +83,35 @@ export function DraftsEditor() {
     void fetchDrafts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.platform, filters.status, filters.pillar]);
+
+  async function submitForReview() {
+    if (!selectedDraft) return;
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/drafts/${selectedDraft.id}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: "" }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to submit draft");
+      }
+
+      setDrafts((current) =>
+        current.map((draft) =>
+          draft.id === selectedDraft.id ? (data.draft as ContentDraftRecord) : draft
+        )
+      );
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to submit draft");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function saveDraft() {
     if (!selectedDraft) return;
@@ -285,14 +316,27 @@ export function DraftsEditor() {
                   <pre className="whitespace-pre-wrap text-sm">{renderPreview(selectedDraft)}</pre>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={saveDraft}
-                  disabled={saving}
-                  className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
-                >
-                  {saving ? "Saving..." : "Save Draft"}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={saveDraft}
+                    disabled={saving || submitting}
+                    className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save Draft"}
+                  </button>
+
+                  {(selectedDraft.status === "draft" || selectedDraft.status === "revision-requested") && (
+                    <button
+                      type="button"
+                      onClick={submitForReview}
+                      disabled={saving || submitting}
+                      className="inline-flex h-9 items-center rounded-md border border-primary px-4 text-sm font-medium text-primary disabled:opacity-50"
+                    >
+                      {submitting ? "Submitting..." : "Submit for Review"}
+                    </button>
+                  )}
+                </div>
 
                 <DraftVisualEditor
                   draft={selectedDraft}
@@ -304,6 +348,13 @@ export function DraftsEditor() {
                     );
                   }}
                 />
+
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Activity Timeline
+                  </p>
+                  <DraftTimeline draftId={selectedDraft.id} />
+                </div>
               </>
             )}
           </CardContent>
