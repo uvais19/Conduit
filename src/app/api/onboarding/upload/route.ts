@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { uploadedDocuments } from "@/lib/db/schema";
+import { extractDocumentText } from "@/lib/documents/extract-text";
 import { uploadFile } from "@/lib/storage/r2";
 
 function resolveFileType(fileName: string, mimeType: string): "pdf" | "docx" | "image" {
@@ -45,9 +46,12 @@ export async function POST(request: Request) {
       ? await uploadFile(key, buffer, file.type || "application/octet-stream")
       : `local-preview://${key}`;
 
-    const extractedText = file.type.startsWith("text/")
-      ? buffer.toString("utf8").slice(0, 5000)
-      : undefined;
+    const extraction = await extractDocumentText({
+      buffer,
+      fileName: file.name,
+      fileType,
+      mimeType: file.type || "application/octet-stream",
+    });
 
     const [savedDocument] = await db
       .insert(uploadedDocuments)
@@ -56,12 +60,14 @@ export async function POST(request: Request) {
         fileName: file.name,
         fileUrl,
         fileType,
-        processed: Boolean(extractedText),
+        processed: extraction.processed,
         extractedData: {
           notes,
           mimeType: file.type,
           size: file.size,
-          extractedText,
+          extractedText: extraction.extractedText,
+          extractionMethod: extraction.method,
+          extractionSummary: extraction.summary,
           storedInR2: canUseR2(),
         },
         uploadedBy: session.user.id,
@@ -75,7 +81,9 @@ export async function POST(request: Request) {
         fileType: savedDocument.fileType,
         fileUrl: savedDocument.fileUrl,
         notes,
-        extractedText,
+        extractedText: extraction.extractedText,
+        extractionMethod: extraction.method,
+        extractionSummary: extraction.summary,
       },
     });
   } catch (error) {
