@@ -6,6 +6,10 @@ import { db } from "@/lib/db";
 import { users, tenants } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
+const authSecret =
+  process.env.AUTH_SECRET ??
+  (process.env.NODE_ENV !== "production" ? "conduit-dev-secret" : undefined);
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Google,
@@ -108,6 +112,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     signIn: "/login",
     error: "/login",
   },
+  secret: authSecret,
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
