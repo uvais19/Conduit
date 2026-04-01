@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const session = await requireAuth();
     const tenantId = session.user.tenantId;
-    const proposals = listProposals(tenantId);
+    const proposals = await listProposals(tenantId);
 
     return NextResponse.json({ proposals });
   } catch (error) {

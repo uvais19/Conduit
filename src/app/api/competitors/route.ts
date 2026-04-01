@@ -27,7 +27,7 @@ export async function GET() {
   try {
     const session = await requireAuth();
     const tenantId = session.user.tenantId;
-    const competitors = listCompetitors(tenantId);
+    const competitors = await listCompetitors(tenantId);
 
     return NextResponse.json({ competitors });
   } catch (error) {
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const competitor = addCompetitor({
+    const competitor = await addCompetitor({
       tenantId,
       name: parsed.data.name,
       platform: parsed.data.platform as Platform,

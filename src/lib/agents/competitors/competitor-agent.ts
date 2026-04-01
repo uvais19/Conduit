@@ -1,8 +1,9 @@
 import { generateJson } from "@/lib/ai/clients";
 import {
   addCompetitor,
-  updateCompetitorAnalysis,
+  getCompetitorById,
   listCompetitors,
+  updateCompetitorAnalysis,
 } from "@/lib/optimization/store";
 import type { CompetitorAnalysis } from "@/lib/optimization/types";
 import type { Platform } from "@/lib/types";
@@ -28,7 +29,7 @@ export async function discoverCompetitors(
   industry: string,
   location: string
 ): Promise<DiscoveredCompetitor[]> {
-  const existing = listCompetitors(tenantId);
+  const existing = await listCompetitors(tenantId);
   const existingNames = existing.map((c) => c.name.toLowerCase());
 
   const fallback: DiscoveredCompetitor[] = [];
@@ -75,15 +76,17 @@ export async function discoverCompetitors(
       !existingNames.includes(c.name.toLowerCase())
   );
 
-  for (const c of valid) {
-    addCompetitor({
-      tenantId,
-      name: c.name,
-      platform: c.platform,
-      profileUrl: c.profileUrl,
-      discoveryMethod: "ai-discovered",
-    });
-  }
+  await Promise.all(
+    valid.map((c) =>
+      addCompetitor({
+        tenantId,
+        name: c.name,
+        platform: c.platform,
+        profileUrl: c.profileUrl,
+        discoveryMethod: "ai-discovered",
+      })
+    )
+  );
 
   return valid;
 }
@@ -92,8 +95,7 @@ export async function analyzeCompetitor(
   tenantId: string,
   competitorId: string
 ): Promise<CompetitorAnalysis | null> {
-  const competitors = listCompetitors(tenantId);
-  const competitor = competitors.find((c) => c.id === competitorId);
+  const competitor = await getCompetitorById(tenantId, competitorId);
   if (!competitor) return null;
 
   const analysis = await generateJson<CompetitorAnalysis>({
@@ -122,6 +124,6 @@ export async function analyzeCompetitor(
     fallback: DEFAULT_ANALYSIS,
   });
 
-  updateCompetitorAnalysis(tenantId, competitorId, analysis);
+  await updateCompetitorAnalysis(tenantId, competitorId, analysis);
   return analysis;
 }

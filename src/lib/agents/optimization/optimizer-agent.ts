@@ -66,9 +66,8 @@ export async function runOptimizerAgent(
         p.reasoning
     );
 
-  const created: OptimizationProposal[] = [];
-  for (const p of validProposals) {
-    created.push(
+  const created = await Promise.all(
+    validProposals.map((p) =>
       createProposal({
         tenantId,
         proposalType: p.proposalType,
@@ -77,8 +76,8 @@ export async function runOptimizerAgent(
         reasoning: p.reasoning,
         data: p.data ?? {},
       })
-    );
-  }
+    )
+  );
 
   return created;
 }

@@ -16,7 +16,7 @@ export async function POST(
     const { id } = await params;
     const tenantId = session.user.tenantId;
 
-    const existing = getProposalById(tenantId, id);
+    const existing = await getProposalById(tenantId, id);
     if (!existing) {
       return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
     }
@@ -30,7 +30,7 @@ export async function POST(
       );
     }
 
-    const resolved = resolveProposal(
+    const resolved = await resolveProposal(
       tenantId,
       id,
       parsed.data.action,
