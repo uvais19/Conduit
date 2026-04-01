@@ -1,0 +1,127 @@
+import { generateJson } from "@/lib/ai/clients";
+import {
+  addCompetitor,
+  updateCompetitorAnalysis,
+  listCompetitors,
+} from "@/lib/optimization/store";
+import type { CompetitorAnalysis } from "@/lib/optimization/types";
+import type { Platform } from "@/lib/types";
+
+type DiscoveredCompetitor = {
+  name: string;
+  platform: Platform;
+  profileUrl: string;
+};
+
+const DEFAULT_ANALYSIS: CompetitorAnalysis = {
+  postingFrequency: "Unknown",
+  schedulePatterns: "Unknown",
+  contentTypes: [],
+  engagementRate: 0,
+  hashtagStrategy: [],
+  topThemes: [],
+  summary: "Analysis pending",
+};
+
+export async function discoverCompetitors(
+  tenantId: string,
+  industry: string,
+  location: string
+): Promise<DiscoveredCompetitor[]> {
+  const existing = listCompetitors(tenantId);
+  const existingNames = existing.map((c) => c.name.toLowerCase());
+
+  const fallback: DiscoveredCompetitor[] = [];
+
+  const discovered = await generateJson<DiscoveredCompetitor[]>({
+    systemPrompt: [
+      "You are the Competitor Agent for Conduit, an AI social media manager.",
+      "Discover potential competitors for a business based on their industry and location.",
+      "Return businesses that would be active on social media and compete for the same audience.",
+      "Return a JSON array of competitor objects.",
+    ].join(" "),
+    userPrompt: [
+      `Industry: ${industry}`,
+      `Location: ${location}`,
+      "",
+      "Already tracked competitors (do not include these):",
+      existingNames.length > 0 ? existingNames.join(", ") : "None",
+      "",
+      "Return up to 5 competitors. Each must have:",
+      '- name: business name',
+      '- platform: one of "instagram", "facebook", "linkedin", "x", "gbp"',
+      '- profileUrl: a plausible social media profile URL',
+      "",
+      "Return JSON array only. Return [] if you cannot identify competitors.",
+    ].join("\n"),
+    temperature: 0.4,
+    fallback,
+  });
+
+  const VALID_PLATFORMS: Platform[] = [
+    "instagram",
+    "facebook",
+    "linkedin",
+    "x",
+    "gbp",
+  ];
+
+  const valid = (Array.isArray(discovered) ? discovered : []).filter(
+    (c) =>
+      c.name &&
+      c.platform &&
+      VALID_PLATFORMS.includes(c.platform) &&
+      c.profileUrl &&
+      !existingNames.includes(c.name.toLowerCase())
+  );
+
+  for (const c of valid) {
+    addCompetitor({
+      tenantId,
+      name: c.name,
+      platform: c.platform,
+      profileUrl: c.profileUrl,
+      discoveryMethod: "ai-discovered",
+    });
+  }
+
+  return valid;
+}
+
+export async function analyzeCompetitor(
+  tenantId: string,
+  competitorId: string
+): Promise<CompetitorAnalysis | null> {
+  const competitors = listCompetitors(tenantId);
+  const competitor = competitors.find((c) => c.id === competitorId);
+  if (!competitor) return null;
+
+  const analysis = await generateJson<CompetitorAnalysis>({
+    systemPrompt: [
+      "You are the Competitor Agent for Conduit, an AI social media manager.",
+      "Analyze a competitor's social media presence and provide insights.",
+      "Return a JSON object with the analysis.",
+    ].join(" "),
+    userPrompt: [
+      `Competitor: ${competitor.name}`,
+      `Platform: ${competitor.platform}`,
+      `Profile URL: ${competitor.profileUrl}`,
+      "",
+      "Analyze and return:",
+      '- postingFrequency: e.g. "3-4 times per week"',
+      '- schedulePatterns: e.g. "Weekday mornings 8-10 AM"',
+      "- contentTypes: array of types like [\"carousels\", \"reels\", \"stories\"]",
+      "- engagementRate: estimated engagement rate as decimal",
+      "- hashtagStrategy: array of commonly used hashtags",
+      "- topThemes: array of content themes they focus on",
+      "- summary: 2-3 sentence overview of their social presence",
+      "",
+      "Return JSON only.",
+    ].join("\n"),
+    temperature: 0.3,
+    fallback: DEFAULT_ANALYSIS,
+  });
+
+  updateCompetitorAnalysis(tenantId, competitorId, analysis);
+  return analysis;
+}
