@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Sparkles, Upload, Wand2 } from "lucide-react";
+import { Info, Sparkles, Upload, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -14,7 +14,37 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { BrandManifesto } from "@/lib/types";
+
+function FieldLabel({
+  htmlFor,
+  label,
+  hint,
+}: {
+  htmlFor: string;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Label htmlFor={htmlFor}>{label}</Label>
+      <Tooltip>
+        <TooltipTrigger type="button" className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+          <Info className="size-3.5" />
+          <span className="sr-only">More info about {label}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-64 text-xs">
+          {hint}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
 
 type UploadedDocument = {
   id?: string;
@@ -175,7 +205,7 @@ export function OnboardingWizard() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="businessName">Business name</Label>
+              <FieldLabel htmlFor="businessName" label="Business name" hint="The official name of your business as it should appear in content and your brand identity." />
               <Input
                 id="businessName"
                 value={form.businessName}
@@ -185,7 +215,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="industry">Industry</Label>
+              <FieldLabel htmlFor="industry" label="Industry" hint="The sector your business operates in — be specific (e.g. B2B SaaS, Independent Retail, Healthcare Consulting). This shapes tone and content strategy." />
               <Input
                 id="industry"
                 value={form.industry}
@@ -195,7 +225,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="targetAudience">Target audience</Label>
+              <FieldLabel htmlFor="targetAudience" label="Target audience" hint="Describe your ideal customers — their job titles, demographics, goals, and pain points. The more specific, the better the content will resonate." />
               <textarea
                 id="targetAudience"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -206,7 +236,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="goals">Social media goals</Label>
+              <FieldLabel htmlFor="goals" label="Social media goals" hint="What you want social media to achieve for your business — e.g. brand awareness, lead generation, driving website traffic, thought leadership, or local foot traffic." />
               <textarea
                 id="goals"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -228,7 +258,7 @@ export function OnboardingWizard() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="websiteUrl">Website URL</Label>
+              <FieldLabel htmlFor="websiteUrl" label="Website URL" hint="Your public website homepage. Conduit's Scraper Agent will crawl it to extract brand language, messaging, products, and tone of voice automatically." />
               <Input
                 id="websiteUrl"
                 value={form.websiteUrl}
@@ -237,7 +267,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="offerings">Products or services</Label>
+              <FieldLabel htmlFor="offerings" label="Products or services" hint="List what you sell or deliver — one item per line. Include key features or pricing tiers if relevant. This helps the AI write accurate, specific content about your offers." />
               <textarea
                 id="offerings"
                 className="min-h-28 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -248,7 +278,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="differentiators">Differentiators / USPs</Label>
+              <FieldLabel htmlFor="differentiators" label="Differentiators / USPs" hint="What makes you different from competitors? Think about your unique methodology, turnaround time, pricing model, expertise, or the specific problem only you solve." />
               <textarea
                 id="differentiators"
                 className="min-h-28 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -258,7 +288,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="brandTone">Brand tone / adjectives</Label>
+              <FieldLabel htmlFor="brandTone" label="Brand tone / adjectives" hint="3–6 words that describe how your brand should sound. Examples: confident, approachable, witty, premium, no-nonsense, warm. This directly shapes the writing style of every post." />
               <textarea
                 id="brandTone"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -268,7 +298,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="notes">Extra notes</Label>
+              <FieldLabel htmlFor="notes" label="Extra notes" hint="Anything else worth knowing — competitor names to be aware of, market positioning, customer pain points, pricing philosophy, or seasonal context. Treat this as a brain dump." />
               <textarea
                 id="notes"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -278,7 +308,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="contentDos">Content do&apos;s</Label>
+              <FieldLabel htmlFor="contentDos" label="Content do's" hint="Approaches, formats, or topics you want the AI to actively use — e.g. 'use customer success stories', 'always cite a stat', 'ask a question at the end', 'include a clear CTA'." />
               <textarea
                 id="contentDos"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -288,7 +318,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="contentDonts">Content don&apos;ts</Label>
+              <FieldLabel htmlFor="contentDonts" label="Content don'ts" hint="Hard rules for the AI to follow — topics to avoid, phrases that feel off-brand, or styles that don't fit. E.g. 'no jargon', 'don't mention competitors by name', 'never use clickbait'." />
               <textarea
                 id="contentDonts"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -309,7 +339,7 @@ export function OnboardingWizard() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="uploadNotes">Notes for uploaded files</Label>
+              <FieldLabel htmlFor="uploadNotes" label="Notes for uploaded files" hint="Tell the Document Analyst what these files are and how to use them — e.g. 'this is our brand guidelines deck', 'this PDF has our target customer research', 'these are old ad scripts for tone reference'." />
               <textarea
                 id="uploadNotes"
                 className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
