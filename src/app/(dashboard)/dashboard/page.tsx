@@ -5,7 +5,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { BarChart3, Calendar, FileText, TrendingUp } from "lucide-react";
+import { BarChart3, Calendar, FileText, TrendingUp, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 export default function DashboardPage() {
   return (
@@ -76,50 +77,54 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-lg border p-3">
-                <div className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+              <Link href="/onboarding" className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
                   1
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="font-medium">Onboard your business</p>
                   <p className="text-sm text-muted-foreground">
                     Add your website, documents, and business info
                   </p>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg border p-3">
-                <div className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">
+                <ChevronRight className="size-4 text-muted-foreground" />
+              </Link>
+              <Link href="/settings/platforms" className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">
                   2
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="font-medium">Connect platforms</p>
                   <p className="text-sm text-muted-foreground">
                     Link Instagram, Facebook, LinkedIn, X, and GBP
                   </p>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg border p-3">
-                <div className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">
+                <ChevronRight className="size-4 text-muted-foreground" />
+              </Link>
+              <Link href="/strategy" className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">
                   3
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="font-medium">Generate your strategy</p>
                   <p className="text-sm text-muted-foreground">
                     AI creates content pillars, schedule, and calendar
                   </p>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg border p-3">
-                <div className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">
+                <ChevronRight className="size-4 text-muted-foreground" />
+              </Link>
+              <Link href="/content/drafts" className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">
                   4
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="font-medium">Create and approve content</p>
                   <p className="text-sm text-muted-foreground">
                     AI writes platform-native posts for your review
                   </p>
                 </div>
-              </div>
+                <ChevronRight className="size-4 text-muted-foreground" />
+              </Link>
             </div>
           </CardContent>
         </Card>

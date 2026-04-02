@@ -14,6 +14,7 @@ import {
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function DashboardLayout({
   children,
@@ -36,6 +37,7 @@ export default function DashboardLayout({
               </BreadcrumbList>
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="size-4" />
                 <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
