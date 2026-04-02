@@ -21,16 +21,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { ChevronsUpDownIcon, BadgeCheckIcon, BellIcon, LogOutIcon } from "lucide-react"
-import { useSession, signOut } from "next-auth/react"
+import { useClerk, useUser } from "@clerk/nextjs"
 
 export function NavUser() {
   const { isMobile } = useSidebar()
-  const { data: session } = useSession()
+  const { user: clerkUser, isLoaded } = useUser()
+  const { signOut } = useClerk()
 
   const user = {
-    name: session?.user?.name ?? "User",
-    email: session?.user?.email ?? "user@example.com",
-    avatar: session?.user?.image ?? "",
+    name: clerkUser?.fullName ?? clerkUser?.firstName ?? "User",
+    email: clerkUser?.primaryEmailAddress?.emailAddress ?? "user@example.com",
+    avatar: clerkUser?.imageUrl ?? "",
   }
 
   const initials = user.name
@@ -91,7 +92,15 @@ export function NavUser() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/login" })}>
+            <DropdownMenuItem
+              onSelect={() => {
+                if (!isLoaded) {
+                  return
+                }
+
+                void signOut({ redirectUrl: "/login" })
+              }}
+            >
               <LogOutIcon />
               Log out
             </DropdownMenuItem>
