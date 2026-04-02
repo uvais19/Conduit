@@ -99,15 +99,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<a href="/dashboard" />}>
-                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Sparkles className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Conduit</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    Social Media Manager
-                  </span>
-                </div>
+              <div className="flex aspect-square size-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-sm">
+                <Sparkles className="size-4" />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold tracking-tight">
+                  Conduit
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  Social Media Manager
+                </span>
+              </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

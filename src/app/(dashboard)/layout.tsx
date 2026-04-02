@@ -26,21 +26,23 @@ export default function DashboardLayout({
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-md">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Conduit</BreadcrumbPage>
+                  <BreadcrumbPage className="text-sm font-medium">
+                    Conduit
+                  </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-1">
               <ThemeToggle />
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="size-4" />
-                <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
+                <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
                   0
                 </span>
               </Button>
