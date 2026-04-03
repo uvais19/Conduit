@@ -46,6 +46,7 @@ export function BrandManifestoEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm>("idle");
+  const isDeleting = deleteConfirm === "deleting";
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -168,13 +169,13 @@ export function BrandManifestoEditor() {
                 setMessage("");
                 setError("");
               }}
-              disabled={deleteConfirm === "deleting" || saving}
+              disabled={isDeleting || saving}
             >
               <Trash2 className="mr-1.5 size-3.5" />
               Delete manifesto
             </Button>
           )}
-          <Button onClick={handleSave} disabled={saving || deleteConfirm === "deleting"}>
+          <Button onClick={handleSave} disabled={saving || isDeleting}>
             <Save className="mr-2 size-4" />
             {saving ? "Saving..." : "Save manifesto"}
           </Button>
@@ -197,7 +198,7 @@ export function BrandManifestoEditor() {
                   size="sm"
                   variant="outline"
                   onClick={() => handleDelete("current")}
-                  disabled={deleteConfirm === "deleting"}
+                  disabled={isDeleting}
                 >
                   Delete version {version} only
                 </Button>
@@ -205,7 +206,7 @@ export function BrandManifestoEditor() {
                   size="sm"
                   variant="destructive"
                   onClick={() => handleDelete("all")}
-                  disabled={deleteConfirm === "deleting"}
+                  disabled={isDeleting}
                 >
                   Delete all {versionCount} versions
                 </Button>
@@ -213,7 +214,7 @@ export function BrandManifestoEditor() {
                   size="sm"
                   variant="ghost"
                   onClick={() => setDeleteConfirm("idle")}
-                  disabled={deleteConfirm === "deleting"}
+                  disabled={isDeleting}
                 >
                   Cancel
                 </Button>
@@ -229,15 +230,15 @@ export function BrandManifestoEditor() {
                   size="sm"
                   variant="destructive"
                   onClick={() => handleDelete("all")}
-                  disabled={deleteConfirm === "deleting"}
+                  disabled={isDeleting}
                 >
-                  {deleteConfirm === "deleting" ? "Deleting..." : "Yes, delete it"}
+                  {isDeleting ? "Deleting..." : "Yes, delete it"}
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => setDeleteConfirm("idle")}
-                  disabled={deleteConfirm === "deleting"}
+                  disabled={isDeleting}
                 >
                   Cancel
                 </Button>
