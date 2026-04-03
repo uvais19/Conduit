@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save } from "lucide-react";
+import { Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -37,11 +37,15 @@ function productsFromText(value: string, audience: string) {
   });
 }
 
+type DeleteConfirm = "idle" | "prompt" | "deleting";
+
 export function BrandManifestoEditor() {
   const [manifesto, setManifesto] = useState<BrandManifesto>(createEmptyBrandManifesto());
   const [version, setVersion] = useState<number | null>(null);
+  const [versionCount, setVersionCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm>("idle");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -59,6 +63,7 @@ export function BrandManifestoEditor() {
           setManifesto(createEmptyBrandManifesto(data.manifesto));
           setVersion(data.version);
         }
+        setVersionCount(data.versionCount ?? 0);
       } catch (loadError) {
         setError(
           loadError instanceof Error ? loadError.message : "Unable to load brand manifesto"
@@ -100,6 +105,46 @@ export function BrandManifestoEditor() {
     }
   }
 
+  async function handleDelete(scope: "current" | "all") {
+    setDeleteConfirm("deleting");
+    setMessage("");
+    setError("");
+
+    try {
+      const response = await fetch(`/api/brand?scope=${scope}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to delete manifesto");
+      }
+
+      if (scope === "all") {
+        setManifesto(createEmptyBrandManifesto());
+        setVersion(null);
+        setVersionCount(0);
+        setMessage("All versions deleted. Go to onboarding to recreate your manifesto.");
+      } else {
+        // Reload to get the previous version (if any)
+        const reload = await fetch("/api/brand");
+        const reloadData = await reload.json();
+        if (reloadData.manifesto) {
+          setManifesto(createEmptyBrandManifesto(reloadData.manifesto));
+          setVersion(reloadData.version);
+          setVersionCount(reloadData.versionCount ?? 0);
+          setMessage(`Version deleted. Now on version ${reloadData.version}.`);
+        } else {
+          setManifesto(createEmptyBrandManifesto());
+          setVersion(null);
+          setVersionCount(0);
+          setMessage("Manifesto deleted. Go to onboarding to recreate it.");
+        }
+      }
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete manifesto");
+    } finally {
+      setDeleteConfirm("idle");
+    }
+  }
+
   if (loading) {
     return <div className="text-sm text-muted-foreground">Loading your manifesto...</div>;
   }
@@ -113,15 +158,95 @@ export function BrandManifestoEditor() {
             Review and refine the AI-generated identity for your business.
           </p>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
-          <Save className="mr-2 size-4" />
-          {saving ? "Saving..." : "Save manifesto"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {version && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDeleteConfirm("prompt");
+                setMessage("");
+                setError("");
+              }}
+              disabled={deleteConfirm === "deleting" || saving}
+            >
+              <Trash2 className="mr-1.5 size-3.5" />
+              Delete manifesto
+            </Button>
+          )}
+          <Button onClick={handleSave} disabled={saving || deleteConfirm === "deleting"}>
+            <Save className="mr-2 size-4" />
+            {saving ? "Saving..." : "Save manifesto"}
+          </Button>
+        </div>
       </div>
 
       {version && (
         <p className="text-sm text-muted-foreground">Current saved version: {version}</p>
       )}
+
+      {deleteConfirm === "prompt" && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+          {versionCount > 1 ? (
+            <>
+              <p className="text-sm font-medium text-destructive">
+                You have {versionCount} saved versions. What would you like to delete?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleDelete("current")}
+                  disabled={deleteConfirm === "deleting"}
+                >
+                  Delete version {version} only
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDelete("all")}
+                  disabled={deleteConfirm === "deleting"}
+                >
+                  Delete all {versionCount} versions
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDeleteConfirm("idle")}
+                  disabled={deleteConfirm === "deleting"}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-destructive">
+                Are you sure you want to delete your brand manifesto? This cannot be undone.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDelete("all")}
+                  disabled={deleteConfirm === "deleting"}
+                >
+                  {deleteConfirm === "deleting" ? "Deleting..." : "Yes, delete it"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDeleteConfirm("idle")}
+                  disabled={deleteConfirm === "deleting"}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {message && <div className="rounded-lg border border-green-600/30 bg-green-600/5 p-3 text-sm text-green-700">{message}</div>}
       {error && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
 

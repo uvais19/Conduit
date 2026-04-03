@@ -10,12 +10,21 @@ import {
   Calendar,
   FileText,
   TrendingUp,
-  ChevronRight,
   Sparkles,
   Zap,
   ArrowUpRight,
+  CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
+import { requireAuth } from "@/lib/auth/permissions";
+import { db } from "@/lib/db";
+import {
+  brandManifestos,
+  platformConnections,
+  contentStrategies,
+  contentDrafts,
+} from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 const stats = [
   {
@@ -52,14 +61,13 @@ const stats = [
   },
 ];
 
-const steps = [
+const STEPS = [
   {
     href: "/onboarding",
     step: 1,
     title: "Onboard your business",
     description: "Add your website, documents, and business info",
     icon: Sparkles,
-    active: true,
   },
   {
     href: "/settings/platforms",
@@ -67,7 +75,6 @@ const steps = [
     title: "Connect platforms",
     description: "Link Instagram, Facebook, LinkedIn, X, and GBP",
     icon: Zap,
-    active: false,
   },
   {
     href: "/strategy",
@@ -75,7 +82,6 @@ const steps = [
     title: "Generate your strategy",
     description: "AI creates content pillars, schedule, and calendar",
     icon: TrendingUp,
-    active: false,
   },
   {
     href: "/content/drafts",
@@ -83,11 +89,45 @@ const steps = [
     title: "Create and approve content",
     description: "AI writes platform-native posts for your review",
     icon: FileText,
-    active: false,
   },
 ];
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const { user } = await requireAuth();
+  const tenantId = user.tenantId;
+
+  const [manifesto, platform, strategy, draft] = await Promise.all([
+    db
+      .select({ id: brandManifestos.id })
+      .from(brandManifestos)
+      .where(eq(brandManifestos.tenantId, tenantId))
+      .limit(1),
+    db
+      .select({ id: platformConnections.id })
+      .from(platformConnections)
+      .where(eq(platformConnections.tenantId, tenantId))
+      .limit(1),
+    db
+      .select({ id: contentStrategies.id })
+      .from(contentStrategies)
+      .where(eq(contentStrategies.tenantId, tenantId))
+      .limit(1),
+    db
+      .select({ id: contentDrafts.id })
+      .from(contentDrafts)
+      .where(eq(contentDrafts.tenantId, tenantId))
+      .limit(1),
+  ]);
+
+  const completed = [
+    manifesto.length > 0,
+    platform.length > 0,
+    strategy.length > 0,
+    draft.length > 0,
+  ];
+
+  // The active step is the first incomplete one; -1 means all done
+  const activeIndex = completed.findIndex((done) => !done);
   return (
     <div className="space-y-8">
       {/* Page header */}
@@ -140,30 +180,69 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {steps.map((step) => (
-                <Link
-                  key={step.step}
-                  href={step.href}
-                  className="group flex items-center gap-4 rounded-xl border p-3.5 transition-all hover:border-primary/20 hover:bg-accent/50"
-                >
-                  <div
-                    className={`flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
-                      step.active
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
+              {STEPS.map((step, i) => {
+                const isDone = completed[i];
+                const isActive = i === activeIndex;
+                const isUpcoming = !isDone && !isActive;
+
+                return (
+                  <Link
+                    key={step.step}
+                    href={step.href}
+                    className={`group flex items-center gap-4 rounded-xl border p-3.5 transition-all ${
+                      isDone
+                        ? "border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10"
+                        : isActive
+                        ? "border-primary/30 bg-primary/5 ring-1 ring-primary/20 hover:bg-primary/10"
+                        : "opacity-50 hover:opacity-70 hover:border-primary/20 hover:bg-accent/50"
                     }`}
                   >
-                    <step.icon className="size-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{step.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {step.description}
-                    </p>
-                  </div>
-                  <ArrowUpRight className="size-4 text-muted-foreground/50 transition-all group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                </Link>
-              ))}
+                    <div
+                      className={`flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                        isDone
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                          : isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {isDone ? (
+                        <CheckCircle2 className="size-4" />
+                      ) : (
+                        <step.icon className="size-4" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p
+                          className={`text-sm font-medium ${
+                            isDone ? "line-through text-muted-foreground" : ""
+                          }`}
+                        >
+                          {step.title}
+                        </p>
+                        {isActive && (
+                          <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                            Next
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {step.description}
+                      </p>
+                    </div>
+                    <ArrowUpRight
+                      className={`size-4 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 ${
+                        isDone
+                          ? "text-emerald-500/50"
+                          : isActive
+                          ? "text-primary/60 group-hover:text-primary"
+                          : "text-muted-foreground/50 group-hover:text-primary"
+                      }`}
+                    />
+                  </Link>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

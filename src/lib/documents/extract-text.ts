@@ -2,6 +2,7 @@ type ExtractionMethod =
   | "plain-text"
   | "pdf"
   | "docx"
+  | "pptx"
   | "image-metadata"
   | "unsupported"
   | "failed";
@@ -30,7 +31,7 @@ export async function extractDocumentText({
 }: {
   buffer: Buffer;
   fileName: string;
-  fileType: "pdf" | "docx" | "image";
+  fileType: "pdf" | "docx" | "pptx" | "image";
   mimeType: string;
 }): Promise<ExtractedDocumentText> {
   const lowerName = fileName.toLowerCase();
@@ -60,6 +61,21 @@ export async function extractDocumentText({
         summary: extractedText
           ? "DOCX text extracted successfully."
           : "The DOCX file was processed but no readable text was found.",
+      };
+    }
+
+    if (fileType === "pptx" || lowerName.endsWith(".pptx") || lowerName.endsWith(".ppt")) {
+      const { parseOffice } = await import("officeparser");
+      const ast = await parseOffice(buffer, { outputErrorToConsole: false });
+      const extractedText = normalizeText(ast.toText()?.slice(0, 20000));
+
+      return {
+        extractedText,
+        processed: Boolean(extractedText),
+        method: "pptx",
+        summary: extractedText
+          ? "PowerPoint slide text extracted successfully."
+          : "The presentation was processed but contained no readable text (slides may be image-only).",
       };
     }
 

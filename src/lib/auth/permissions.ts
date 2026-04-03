@@ -60,24 +60,32 @@ function getPrimaryEmail(user: Awaited<ReturnType<typeof currentUser>>) {
   );
 }
 
-async function ensureAppUser(email: string, name: string, image?: string | null) {
+async function ensureAppUser(
+  clerkId: string,
+  email: string,
+  name: string,
+  image?: string | null
+) {
+  const selectFields = {
+    id: users.id,
+    role: users.role,
+    tenantId: users.tenantId,
+    email: users.email,
+    name: users.name,
+    avatarUrl: users.avatarUrl,
+  };
+
   const [existing] = await db
-    .select({
-      id: users.id,
-      role: users.role,
-      tenantId: users.tenantId,
-      email: users.email,
-      name: users.name,
-      avatarUrl: users.avatarUrl,
-    })
+    .select(selectFields)
     .from(users)
-    .where(eq(users.email, email))
+    .where(eq(users.clerkId, clerkId))
     .limit(1);
 
   if (existing) {
     return existing;
   }
 
+  // First login: provision a tenant and create the user
   const [tenant] = await db
     .insert(tenants)
     .values({ name: "My Business" })
@@ -86,21 +94,14 @@ async function ensureAppUser(email: string, name: string, image?: string | null)
   const [createdUser] = await db
     .insert(users)
     .values({
+      clerkId,
       tenantId: tenant.id,
       email,
       name,
       avatarUrl: image ?? undefined,
       role: "admin",
-      emailVerified: new Date(),
     })
-    .returning({
-      id: users.id,
-      role: users.role,
-      tenantId: users.tenantId,
-      email: users.email,
-      name: users.name,
-      avatarUrl: users.avatarUrl,
-    });
+    .returning(selectFields);
 
   return createdUser;
 }
@@ -127,7 +128,7 @@ export async function requireAuth(): Promise<AuthSession> {
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") ??
     "User";
 
-  const appUser = await ensureAppUser(email, name, clerkUser.imageUrl);
+  const appUser = await ensureAppUser(userId, email, name, clerkUser.imageUrl);
 
   return {
     user: {

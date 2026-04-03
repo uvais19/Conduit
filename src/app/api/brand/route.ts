@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { brandManifestos } from "@/lib/db/schema";
@@ -17,13 +17,59 @@ export async function GET() {
       .orderBy(desc(brandManifestos.createdAt))
       .limit(1);
 
+    const [{ value: versionCount }] = await db
+      .select({ value: count() })
+      .from(brandManifestos)
+      .where(eq(brandManifestos.tenantId, tenantId));
+
     return NextResponse.json({
+      id: latestManifesto?.id ?? null,
       manifesto: latestManifesto?.data ?? null,
       version: latestManifesto?.version ?? null,
+      versionCount,
     });
   } catch (error) {
     console.error("Failed to fetch brand manifesto:", error);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const session = await requireAuth();
+    const tenantId = session.user.tenantId;
+
+    const { searchParams } = new URL(request.url);
+    const scope = searchParams.get("scope");
+
+    if (scope === "all") {
+      await db
+        .delete(brandManifestos)
+        .where(eq(brandManifestos.tenantId, tenantId));
+
+      return NextResponse.json({ deleted: "all" });
+    }
+
+    // scope=current — delete the latest version only
+    const [latest] = await db
+      .select({ id: brandManifestos.id })
+      .from(brandManifestos)
+      .where(eq(brandManifestos.tenantId, tenantId))
+      .orderBy(desc(brandManifestos.createdAt))
+      .limit(1);
+
+    if (!latest) {
+      return NextResponse.json({ error: "No manifesto found" }, { status: 404 });
+    }
+
+    await db
+      .delete(brandManifestos)
+      .where(eq(brandManifestos.id, latest.id));
+
+    return NextResponse.json({ deleted: "current", id: latest.id });
+  } catch (error) {
+    console.error("Failed to delete brand manifesto:", error);
+    return NextResponse.json({ error: "Unable to delete brand manifesto" }, { status: 500 });
   }
 }
 

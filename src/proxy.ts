@@ -32,16 +32,7 @@ export default clerkMiddleware(async (auth, request: NextRequest) => {
 
 export const config = {
   matcher: [
-    "/dashboard/:path*",
-    "/calendar/:path*",
-    "/content/:path*",
-    "/approval/:path*",
-    "/analytics/:path*",
-    "/strategy/:path*",
-    "/brand/:path*",
-    "/settings/:path*",
-    "/onboarding/:path*",
-    "/login",
-    "/register",
+    // Run on all routes except Next.js internals and static files
+    "/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)",
   ],
 };

@@ -4,7 +4,7 @@ import type { BrandManifesto } from "@/lib/types";
 export const discoveryDocumentSchema = z.object({
   id: z.string().optional(),
   fileName: z.string().min(1, "File name is required"),
-  fileType: z.enum(["pdf", "docx", "image"]),
+  fileType: z.enum(["pdf", "docx", "pptx", "image"]),
   fileUrl: z.string().optional(),
   notes: z.string().optional(),
   extractedText: z.string().optional(),

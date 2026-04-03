@@ -79,7 +79,7 @@ export const discoveryMethodEnum = pgEnum("discovery_method", [
   "manual",
 ]);
 
-export const fileTypeEnum = pgEnum("file_type", ["pdf", "docx", "image"]);
+export const fileTypeEnum = pgEnum("file_type", ["pdf", "docx", "pptx", "image"]);
 
 export const notificationTypeEnum = pgEnum("notification_type", [
   "draft_ready",
@@ -106,49 +106,16 @@ export const tenants = pgTable("tenants", {
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
+  clerkId: text("clerk_id").unique(),
   tenantId: uuid("tenant_id")
     .references(() => tenants.id, { onDelete: "cascade" })
     .notNull(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
-  passwordHash: text("password_hash"),
   role: userRoleEnum("role").notNull().default("creator"),
   avatarUrl: text("avatar_url"),
-  emailVerified: timestamp("email_verified"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const accounts = pgTable("accounts", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id")
-    .references(() => users.id, { onDelete: "cascade" })
-    .notNull(),
-  type: text("type").notNull(),
-  provider: text("provider").notNull(),
-  providerAccountId: text("provider_account_id").notNull(),
-  refreshToken: text("refresh_token"),
-  accessToken: text("access_token"),
-  expiresAt: integer("expires_at"),
-  tokenType: text("token_type"),
-  scope: text("scope"),
-  idToken: text("id_token"),
-  sessionState: text("session_state"),
-});
-
-export const sessions = pgTable("sessions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  sessionToken: text("session_token").notNull().unique(),
-  userId: uuid("user_id")
-    .references(() => users.id, { onDelete: "cascade" })
-    .notNull(),
-  expires: timestamp("expires").notNull(),
-});
-
-export const verificationTokens = pgTable("verification_tokens", {
-  identifier: text("identifier").notNull(),
-  token: text("token").notNull().unique(),
-  expires: timestamp("expires").notNull(),
 });
 
 export const brandManifestos = pgTable("brand_manifestos", {

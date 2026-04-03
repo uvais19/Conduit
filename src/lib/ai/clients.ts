@@ -10,7 +10,7 @@ async function callGemini({
   systemPrompt,
   userPrompt,
   temperature = 0.4,
-  geminiModel = "gemini-2.0-flash",
+  geminiModel = process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
 }: GenerateTextOptions): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -36,8 +36,13 @@ async function callGemini({
     }
   );
 
+  if (response.status === 429) {
+    return null;
+  }
+
   if (!response.ok) {
-    throw new Error(`Gemini request failed: ${response.status}`);
+    const body = await response.text().catch(() => "(unreadable)");
+    throw new Error(`Gemini request failed: ${response.status} — ${body}`);
   }
 
   const data = (await response.json()) as {

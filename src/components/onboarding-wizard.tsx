@@ -25,14 +25,27 @@ function FieldLabel({
   htmlFor,
   label,
   hint,
+  aiSuggested,
 }: {
   htmlFor: string;
   label: string;
   hint: string;
+  aiSuggested?: boolean;
 }) {
   return (
     <div className="flex items-center gap-1.5">
       <Label htmlFor={htmlFor}>{label}</Label>
+      {aiSuggested && (
+        <Tooltip>
+          <TooltipTrigger type="button" className="text-violet-500 hover:text-violet-600 transition-colors">
+            <Sparkles className="size-3" />
+            <span className="sr-only">AI suggested</span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            AI suggested — edit to customise
+          </TooltipContent>
+        </Tooltip>
+      )}
       <Tooltip>
         <TooltipTrigger type="button" className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
           <Info className="size-3.5" />
@@ -49,7 +62,7 @@ function FieldLabel({
 type UploadedDocument = {
   id?: string;
   fileName: string;
-  fileType: "pdf" | "docx" | "image";
+  fileType: "pdf" | "docx" | "pptx" | "image";
   fileUrl?: string;
   notes?: string;
   extractedText?: string;
@@ -69,6 +82,28 @@ type DiscoveryResponse = {
     documentCount: number;
   };
 };
+
+type PrefillSuggestions = {
+  industry: string;
+  targetAudience: string;
+  goals: string;
+  offerings: string;
+  differentiators: string;
+  brandTone: string;
+  contentDos: string;
+  contentDonts: string;
+};
+
+const PREFILL_FIELDS = [
+  "industry",
+  "targetAudience",
+  "goals",
+  "offerings",
+  "differentiators",
+  "brandTone",
+  "contentDos",
+  "contentDonts",
+] as const;
 
 const initialForm = {
   websiteUrl: "",
@@ -90,11 +125,69 @@ export function OnboardingWizard() {
   const [uploadNotes, setUploadNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [prefilling, setPrefilling] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<DiscoveryResponse | null>(null);
+  const [aiSuggestedFields, setAiSuggestedFields] = useState<Set<string>>(new Set());
+
+  const canPrefill = form.websiteUrl.trim().length > 0 && form.businessName.trim().length > 0;
 
   function updateField(name: string, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
+    if (aiSuggestedFields.has(name)) {
+      setAiSuggestedFields((current) => {
+        const next = new Set(current);
+        next.delete(name);
+        return next;
+      });
+    }
+  }
+
+  async function handlePrefill() {
+    setPrefilling(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/onboarding/prefill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          websiteUrl: form.websiteUrl,
+          businessName: form.businessName,
+          industry: form.industry,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to generate suggestions");
+      }
+
+      const suggestions = data.suggestions as PrefillSuggestions;
+      const filledFields = new Set<string>();
+
+      setForm((current) => {
+        const next = { ...current };
+        for (const key of PREFILL_FIELDS) {
+          const value = suggestions[key];
+          if (value?.trim()) {
+            next[key] = value.trim();
+            filledFields.add(key);
+          }
+        }
+        return next;
+      });
+
+      setAiSuggestedFields(filledFields);
+    } catch (prefillError) {
+      setError(
+        prefillError instanceof Error
+          ? prefillError.message
+          : "Unable to generate suggestions"
+      );
+    } finally {
+      setPrefilling(false);
+    }
   }
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -196,26 +289,75 @@ export function OnboardingWizard() {
       )}
 
       <form className="space-y-6" onSubmit={handleSubmit}>
+        {/* Card 1: minimum inputs + AI trigger — all co-located */}
         <Card>
           <CardHeader>
-            <CardTitle>1. Business Basics</CardTitle>
+            <CardTitle>1. Getting Started</CardTitle>
             <CardDescription>
-              Give Conduit the minimum context it needs to understand your brand.
+              Enter your business name and website — then let AI suggest the rest, or fill in the cards below yourself.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <FieldLabel htmlFor="businessName" label="Business name" hint="The official name of your business as it should appear in content and your brand identity." />
+                <Input
+                  id="businessName"
+                  value={form.businessName}
+                  onChange={(event) => updateField("businessName", event.target.value)}
+                  placeholder="Acme Marketing"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel htmlFor="websiteUrl" label="Website URL" hint="Your public website homepage. Conduit's Scraper Agent will crawl it to extract brand language, messaging, products, and tone of voice automatically." />
+                <Input
+                  id="websiteUrl"
+                  value={form.websiteUrl}
+                  onChange={(event) => updateField("websiteUrl", event.target.value)}
+                  placeholder="https://example.com"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border border-dashed p-4">
+              <Sparkles className="size-5 shrink-0 text-violet-500" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Let AI fill in the details</p>
+                <p className="text-xs text-muted-foreground">
+                  Conduit will scrape your website and suggest your industry, audience, offerings, tone, and content rules.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!canPrefill || prefilling}
+                onClick={handlePrefill}
+                className="shrink-0 gap-1.5"
+              >
+                <Sparkles className="size-3.5 text-violet-500" />
+                {prefilling ? "Analyzing..." : "Suggest with AI"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: factual business data — what AI infers from the website */}
+        <Card>
+          <CardHeader>
+            <CardTitle>2. Your Business</CardTitle>
+            <CardDescription>
+              Describe what you do, who you serve, and what sets you apart.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <FieldLabel htmlFor="businessName" label="Business name" hint="The official name of your business as it should appear in content and your brand identity." />
-              <Input
-                id="businessName"
-                value={form.businessName}
-                onChange={(event) => updateField("businessName", event.target.value)}
-                placeholder="Acme Marketing"
-                required
+              <FieldLabel
+                htmlFor="industry"
+                label="Industry"
+                hint="The sector your business operates in — be specific (e.g. B2B SaaS, Independent Retail, Healthcare Consulting). This shapes tone and content strategy."
+                aiSuggested={aiSuggestedFields.has("industry")}
               />
-            </div>
-            <div className="space-y-2">
-              <FieldLabel htmlFor="industry" label="Industry" hint="The sector your business operates in — be specific (e.g. B2B SaaS, Independent Retail, Healthcare Consulting). This shapes tone and content strategy." />
               <Input
                 id="industry"
                 value={form.industry}
@@ -224,8 +366,29 @@ export function OnboardingWizard() {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="differentiators" label="Differentiators / USPs" hint="What makes you different from competitors? Think about your unique methodology, turnaround time, pricing model, expertise, or the specific problem only you solve." aiSuggested={aiSuggestedFields.has("differentiators")} />
+              <textarea
+                id="differentiators"
+                className="min-h-[5.5rem] w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                value={form.differentiators}
+                onChange={(event) => updateField("differentiators", event.target.value)}
+                placeholder="What makes you different?"
+              />
+            </div>
             <div className="space-y-2 md:col-span-2">
-              <FieldLabel htmlFor="targetAudience" label="Target audience" hint="Describe your ideal customers — their job titles, demographics, goals, and pain points. The more specific, the better the content will resonate." />
+              <FieldLabel htmlFor="offerings" label="Products or services" hint="List what you sell or deliver — one item per line. Include key features or pricing tiers if relevant. This helps the AI write accurate, specific content about your offers." aiSuggested={aiSuggestedFields.has("offerings")} />
+              <textarea
+                id="offerings"
+                className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                value={form.offerings}
+                onChange={(event) => updateField("offerings", event.target.value)}
+                placeholder="List your main offers, one per line."
+                required
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <FieldLabel htmlFor="targetAudience" label="Target audience" hint="Describe your ideal customers — their job titles, demographics, goals, and pain points. The more specific, the better the content will resonate." aiSuggested={aiSuggestedFields.has("targetAudience")} />
               <textarea
                 id="targetAudience"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -235,8 +398,20 @@ export function OnboardingWizard() {
                 required
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: opinionated strategy fields — AI suggests, user refines */}
+        <Card>
+          <CardHeader>
+            <CardTitle>3. Content Strategy</CardTitle>
+            <CardDescription>
+              Define your goals, brand voice, and the rules that will guide every post Conduit writes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2 md:col-span-2">
-              <FieldLabel htmlFor="goals" label="Social media goals" hint="What you want social media to achieve for your business — e.g. brand awareness, lead generation, driving website traffic, thought leadership, or local foot traffic." />
+              <FieldLabel htmlFor="goals" label="Social media goals" hint="What you want social media to achieve for your business — e.g. brand awareness, lead generation, driving website traffic, thought leadership, or local foot traffic." aiSuggested={aiSuggestedFields.has("goals")} />
               <textarea
                 id="goals"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -246,49 +421,8 @@ export function OnboardingWizard() {
                 required
               />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>2. Discovery Inputs</CardTitle>
-            <CardDescription>
-              Add a website and some manual notes so the agents can synthesize your identity.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
-              <FieldLabel htmlFor="websiteUrl" label="Website URL" hint="Your public website homepage. Conduit's Scraper Agent will crawl it to extract brand language, messaging, products, and tone of voice automatically." />
-              <Input
-                id="websiteUrl"
-                value={form.websiteUrl}
-                onChange={(event) => updateField("websiteUrl", event.target.value)}
-                placeholder="https://example.com"
-              />
-            </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="offerings" label="Products or services" hint="List what you sell or deliver — one item per line. Include key features or pricing tiers if relevant. This helps the AI write accurate, specific content about your offers." />
-              <textarea
-                id="offerings"
-                className="min-h-28 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.offerings}
-                onChange={(event) => updateField("offerings", event.target.value)}
-                placeholder="List your main offers, one per line."
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <FieldLabel htmlFor="differentiators" label="Differentiators / USPs" hint="What makes you different from competitors? Think about your unique methodology, turnaround time, pricing model, expertise, or the specific problem only you solve." />
-              <textarea
-                id="differentiators"
-                className="min-h-28 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.differentiators}
-                onChange={(event) => updateField("differentiators", event.target.value)}
-                placeholder="What makes you different?"
-              />
-            </div>
-            <div className="space-y-2">
-              <FieldLabel htmlFor="brandTone" label="Brand tone / adjectives" hint="3–6 words that describe how your brand should sound. Examples: confident, approachable, witty, premium, no-nonsense, warm. This directly shapes the writing style of every post." />
+              <FieldLabel htmlFor="brandTone" label="Brand tone / adjectives" hint="3–6 words that describe how your brand should sound. Examples: confident, approachable, witty, premium, no-nonsense, warm. This directly shapes the writing style of every post." aiSuggested={aiSuggestedFields.has("brandTone")} />
               <textarea
                 id="brandTone"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -308,7 +442,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="contentDos" label="Content do's" hint="Approaches, formats, or topics you want the AI to actively use — e.g. 'use customer success stories', 'always cite a stat', 'ask a question at the end', 'include a clear CTA'." />
+              <FieldLabel htmlFor="contentDos" label="Content do's" hint="Approaches, formats, or topics you want the AI to actively use — e.g. 'use customer success stories', 'always cite a stat', 'ask a question at the end', 'include a clear CTA'." aiSuggested={aiSuggestedFields.has("contentDos")} />
               <textarea
                 id="contentDos"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -318,7 +452,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="contentDonts" label="Content don'ts" hint="Hard rules for the AI to follow — topics to avoid, phrases that feel off-brand, or styles that don't fit. E.g. 'no jargon', 'don't mention competitors by name', 'never use clickbait'." />
+              <FieldLabel htmlFor="contentDonts" label="Content don'ts" hint="Hard rules for the AI to follow — topics to avoid, phrases that feel off-brand, or styles that don't fit. E.g. 'no jargon', 'don't mention competitors by name', 'never use clickbait'." aiSuggested={aiSuggestedFields.has("contentDonts")} />
               <textarea
                 id="contentDonts"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -332,7 +466,7 @@ export function OnboardingWizard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>3. Supporting Documents</CardTitle>
+            <CardTitle>4. Supporting Documents</CardTitle>
             <CardDescription>
               Upload brand guidelines, decks, PDFs, or visual references to strengthen the analysis.
             </CardDescription>

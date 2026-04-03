@@ -5,13 +5,21 @@ import { uploadedDocuments } from "@/lib/db/schema";
 import { extractDocumentText } from "@/lib/documents/extract-text";
 import { uploadFile } from "@/lib/storage/r2";
 
-function resolveFileType(fileName: string, mimeType: string): "pdf" | "docx" | "image" {
+function resolveFileType(fileName: string, mimeType: string): "pdf" | "docx" | "pptx" | "image" {
   const lowerName = fileName.toLowerCase();
   if (mimeType.includes("image") || /\.(png|jpg|jpeg|webp|gif|svg)$/.test(lowerName)) {
     return "image";
   }
   if (mimeType.includes("word") || lowerName.endsWith(".docx")) {
     return "docx";
+  }
+  if (
+    mimeType.includes("presentationml") ||
+    mimeType.includes("powerpoint") ||
+    lowerName.endsWith(".pptx") ||
+    lowerName.endsWith(".ppt")
+  ) {
+    return "pptx";
   }
   return "pdf";
 }

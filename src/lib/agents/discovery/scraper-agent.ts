@@ -18,11 +18,12 @@ function extractMeta(html: string, name: string): string | undefined {
 }
 
 async function tryJinaReader(url: string): Promise<string | null> {
-  const normalized = url.replace(/^https?:\/\//, "");
-  const response = await fetch(`https://r.jina.ai/http://${normalized}`, {
+  const apiKey = process.env.JINA_API_KEY;
+  const response = await fetch(`https://r.jina.ai/${url}`, {
     signal: AbortSignal.timeout(10000),
     headers: {
       Accept: "text/plain",
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
     },
   });
 
@@ -30,8 +31,7 @@ async function tryJinaReader(url: string): Promise<string | null> {
     return null;
   }
 
-  const text = await response.text();
-  return text.trim() || null;
+  return (await response.text()).trim() || null;
 }
 
 export async function runScraperAgent(

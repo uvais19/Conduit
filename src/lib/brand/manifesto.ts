@@ -15,6 +15,14 @@ export function textToList(value: string): string[] {
     .filter(Boolean);
 }
 
+/** Split only on newlines — use for fields where commas are part of the text (e.g. offerings, differentiators). */
+export function textToListByLine(value: string): string[] {
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export function listToText(value: string[] | undefined): string {
   return (value ?? []).join("\n");
 }
@@ -73,12 +81,13 @@ export function createEmptyBrandManifesto(
       ]),
     },
     secondaryAudiences:
-      partial.secondaryAudiences?.map((audience) => ({
-        demographics: audience.demographics,
-        psychographics: audience.psychographics,
-        painPoints: audience.painPoints,
-        desires: audience.desires,
-      })) ?? [],
+      partial.secondaryAudiences
+        ?.map((audience) => ({
+          demographics: audience.demographics?.trim() || "Secondary audience segment.",
+          psychographics: audience.psychographics?.trim() || "They share goals and challenges similar to the primary audience.",
+          painPoints: audience.painPoints,
+          desires: audience.desires,
+        })) ?? [],
     voiceAttributes: normalizeList(partial.voiceAttributes, [
       "Helpful",
       "Confident",
@@ -92,10 +101,18 @@ export function createEmptyBrandManifesto(
       provocative: partial.toneSpectrum?.provocative ?? 3,
     },
     languageStyle: {
-      sentenceLength: partial.languageStyle?.sentenceLength ?? "medium",
-      vocabulary: partial.languageStyle?.vocabulary ?? "professional",
-      perspective: partial.languageStyle?.perspective ?? "mixed",
-      emojiUsage: partial.languageStyle?.emojiUsage ?? "minimal",
+      sentenceLength: (["short", "medium", "long", "varied"] as const).includes(partial.languageStyle?.sentenceLength as never)
+        ? partial.languageStyle!.sentenceLength
+        : "medium",
+      vocabulary: (["simple", "professional", "technical", "mixed"] as const).includes(partial.languageStyle?.vocabulary as never)
+        ? partial.languageStyle!.vocabulary
+        : "professional",
+      perspective: (["first-person", "third-person", "mixed"] as const).includes(partial.languageStyle?.perspective as never)
+        ? partial.languageStyle!.perspective
+        : "mixed",
+      emojiUsage: (["none", "minimal", "moderate", "heavy"] as const).includes(partial.languageStyle?.emojiUsage as never)
+        ? partial.languageStyle!.emojiUsage
+        : "minimal",
     },
     contentDos: normalizeList(partial.contentDos, [
       "Be clear and useful",

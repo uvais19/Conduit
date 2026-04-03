@@ -22,16 +22,18 @@ import {
 } from "@/components/ui/sidebar"
 import { ChevronsUpDownIcon, BadgeCheckIcon, BellIcon, LogOutIcon } from "lucide-react"
 import { useClerk, useUser } from "@clerk/nextjs"
+import { useRouter } from "next/navigation"
 
 export function NavUser() {
   const { isMobile } = useSidebar()
   const { user: clerkUser, isLoaded } = useUser()
   const { signOut } = useClerk()
+  const router = useRouter()
 
   const user = {
     name: clerkUser?.fullName ?? clerkUser?.firstName ?? "User",
     email: clerkUser?.primaryEmailAddress?.emailAddress ?? "user@example.com",
-    avatar: clerkUser?.imageUrl ?? "",
+    avatar: clerkUser?.imageUrl || undefined,
   }
 
   const initials = user.name
@@ -82,22 +84,19 @@ export function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/settings")}>
                 <BadgeCheckIcon />
                 Account
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/settings")}>
                 <BellIcon />
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={() => {
-                if (!isLoaded) {
-                  return
-                }
-
+              onClick={() => {
+                if (!isLoaded) return
                 void signOut({ redirectUrl: "/login" })
               }}
             >
