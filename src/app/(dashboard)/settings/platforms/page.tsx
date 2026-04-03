@@ -45,6 +45,8 @@ export default function PlatformsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [analysing, setAnalysing] = useState(false);
+  const [analysisMessage, setAnalysisMessage] = useState("");
 
   // Connect form state
   const [connectPlatform, setConnectPlatform] = useState<Platform | "">("");
@@ -70,6 +72,28 @@ export default function PlatformsPage() {
     void fetchConnections();
   }, []);
 
+  function triggerAnalysis() {
+    setAnalysing(true);
+    setAnalysisMessage("Analysing your existing posts...");
+    fetch("/api/platforms/analyse", { method: "POST" })
+      .then(async (res) => {
+        if (res.ok) {
+          setAnalysisMessage("Analysis complete! View results on your dashboard.");
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setAnalysisMessage(
+            (data as { error?: string }).error ?? "Analysis could not be completed."
+          );
+        }
+      })
+      .catch(() => {
+        setAnalysisMessage("Analysis failed. Try again later.");
+      })
+      .finally(() => {
+        setAnalysing(false);
+      });
+  }
+
   async function handleConnect() {
     if (!connectPlatform || !accessToken.trim() || !displayName.trim()) return;
     setActionLoading(true);
@@ -93,6 +117,9 @@ export default function PlatformsPage() {
       setAccessToken("");
       setPageId("");
       await fetchConnections();
+
+      // Auto-trigger post analysis in the background
+      triggerAnalysis();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to connect");
     } finally {
@@ -128,11 +155,51 @@ export default function PlatformsPage() {
         <p className="text-muted-foreground">
           Connect your social media accounts to publish content directly from Conduit.
         </p>
+        <p className="text-sm text-muted-foreground mt-1">
+          You can skip this for now — your drafts and strategy are ready to use.
+          Connect a platform whenever you&#39;re ready to publish directly from Conduit.
+        </p>
       </div>
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {/* Analysis status */}
+      {analysisMessage && (
+        <div
+          className={`rounded-lg border p-3 text-sm ${
+            analysing
+              ? "border-primary/30 bg-primary/5 text-primary"
+              : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"
+          }`}
+        >
+          {analysing && (
+            <span className="mr-2 inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          )}
+          {analysisMessage}
+        </div>
+      )}
+
+      {/* Re-analyse button */}
+      {!loading && connections.length > 0 && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={analysing}
+            onClick={triggerAnalysis}
+            className="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-accent disabled:opacity-50"
+          >
+            {analysing ? "Analysing..." : "Re-analyse posts"}
+          </button>
+          <a
+            href="/analysis"
+            className="text-sm text-primary hover:underline"
+          >
+            View analysis results
+          </a>
         </div>
       )}
 

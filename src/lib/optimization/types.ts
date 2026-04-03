@@ -4,7 +4,8 @@ export type ProposalType =
   | "pillar_change"
   | "schedule_change"
   | "tone_change"
-  | "format_change";
+  | "format_change"
+  | "platform_format_shift";
 
 export type ProposalStatus = "pending" | "approved" | "rejected";
 

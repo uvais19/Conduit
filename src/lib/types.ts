@@ -152,6 +152,169 @@ export const draftStatus = z.enum([
 export type DraftStatus = z.infer<typeof draftStatus>;
 
 // ============================================================
+// Platform Post Analysis
+// ============================================================
+
+export type FetchedPost = {
+  platformPostId: string;
+  platform: Platform;
+  content: string;
+  mediaType?: string;
+  postedAt: string;
+  impressions: number;
+  reach: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves?: number;
+  clicks?: number;
+  engagementRate: number;
+};
+
+export type PerformanceByType = {
+  type: string;
+  postCount: number;
+  avgEngagementRate: number;
+  avgReach: number;
+  verdict: "high" | "medium" | "low";
+};
+
+export type PerformanceByTopic = {
+  topic: string;
+  avgEngagementRate: number;
+  avgReach: number;
+  examplePost: string;
+};
+
+export type BestPostingTime = {
+  day: string;
+  timeRange: string;
+  avgEngagementRate: number;
+};
+
+export type PostHighlight = {
+  content: string;
+  type: string;
+  engagementRate: number;
+  impressions: number;
+  explanation: string;
+};
+
+export type GapItem = {
+  area: string;
+  current: string;
+  desired: string;
+  suggestion: string;
+};
+
+export type PostAnalysis = {
+  detectedTone: string[];
+  contentMix: { type: string; percentage: number }[];
+  postingFrequency: {
+    postsPerWeek: number;
+    mostActiveDay: string;
+    mostActiveTime: string;
+  };
+  performanceByType: PerformanceByType[];
+  performanceByTopic: PerformanceByTopic[];
+  bestPostingTimes: BestPostingTime[];
+  topPosts: PostHighlight[];
+  underperformingPosts: PostHighlight[];
+  engagementSummary: {
+    avgEngagementRate: number;
+    totalReach: number;
+    totalImpressions: number;
+    bestPostType: string;
+    worstPostType: string;
+  };
+  gapsVsManifesto: GapItem[];
+  gapsVsStrategy: GapItem[];
+  overallScore: number;
+  keyInsights: string[];
+  recommendations: string[];
+  summary: string;
+};
+
+export const postAnalysisSchema = z.object({
+  detectedTone: z.array(z.string()),
+  contentMix: z.array(z.object({ type: z.string(), percentage: z.number() })),
+  postingFrequency: z.object({
+    postsPerWeek: z.number(),
+    mostActiveDay: z.string(),
+    mostActiveTime: z.string(),
+  }),
+  performanceByType: z.array(
+    z.object({
+      type: z.string(),
+      postCount: z.number(),
+      avgEngagementRate: z.number(),
+      avgReach: z.number(),
+      verdict: z.enum(["high", "medium", "low"]),
+    })
+  ),
+  performanceByTopic: z.array(
+    z.object({
+      topic: z.string(),
+      avgEngagementRate: z.number(),
+      avgReach: z.number(),
+      examplePost: z.string(),
+    })
+  ),
+  bestPostingTimes: z.array(
+    z.object({
+      day: z.string(),
+      timeRange: z.string(),
+      avgEngagementRate: z.number(),
+    })
+  ),
+  topPosts: z.array(
+    z.object({
+      content: z.string(),
+      type: z.string(),
+      engagementRate: z.number(),
+      impressions: z.number(),
+      explanation: z.string(),
+    })
+  ),
+  underperformingPosts: z.array(
+    z.object({
+      content: z.string(),
+      type: z.string(),
+      engagementRate: z.number(),
+      impressions: z.number(),
+      explanation: z.string(),
+    })
+  ),
+  engagementSummary: z.object({
+    avgEngagementRate: z.number(),
+    totalReach: z.number(),
+    totalImpressions: z.number(),
+    bestPostType: z.string(),
+    worstPostType: z.string(),
+  }),
+  gapsVsManifesto: z.array(
+    z.object({
+      area: z.string(),
+      current: z.string(),
+      desired: z.string(),
+      suggestion: z.string(),
+    })
+  ),
+  gapsVsStrategy: z.array(
+    z.object({
+      area: z.string(),
+      current: z.string(),
+      desired: z.string(),
+      suggestion: z.string(),
+    })
+  ),
+  overallScore: z.number().min(0).max(100),
+  keyInsights: z.array(z.string()),
+  recommendations: z.array(z.string()),
+  summary: z.string(),
+});
+
+// ============================================================
 // API Request/Response Types
 // ============================================================
 

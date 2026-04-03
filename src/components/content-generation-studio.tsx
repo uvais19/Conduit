@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { ContentDraftRecord } from "@/lib/content/types";
+import type { BrandManifesto } from "@/lib/types";
+import { deriveFieldsForPlatform } from "@/lib/content/platform-defaults";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
@@ -30,11 +33,60 @@ const initialPayload: GenerationPayload = {
 };
 
 export function ContentGenerationStudio() {
+  const searchParams = useSearchParams();
   const [payload, setPayload] = useState<GenerationPayload>(initialPayload);
+  const [manifesto, setManifesto] = useState<BrandManifesto | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<ContentDraftRecord[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [generatingVariant, setGeneratingVariant] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadManifesto() {
+      try {
+        const response = await fetch("/api/brand");
+        const data = await response.json();
+        if (response.ok && data.manifesto) {
+          const loaded = data.manifesto as BrandManifesto;
+          setManifesto(loaded);
+          const audience = [
+            loaded.primaryAudience.demographics,
+            loaded.primaryAudience.psychographics,
+          ]
+            .filter(Boolean)
+            .join("; ");
+          const derived = deriveFieldsForPlatform(loaded, payload.platform);
+          setPayload((current) => ({ ...current, audience, ...derived }));
+        }
+      } catch {
+        // Manifesto is optional — ignore errors
+      }
+    }
+    void loadManifesto();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!manifesto) return;
+    const derived = deriveFieldsForPlatform(manifesto, payload.platform);
+    setPayload((current) => ({ ...current, ...derived }));
+  }, [payload.platform, manifesto]);
+
+  useEffect(() => {
+    const platform = searchParams.get("platform");
+    const pillar = searchParams.get("pillar");
+    const topic = searchParams.get("topic");
+
+    if (platform || pillar || topic) {
+      setPayload((current) => ({
+        ...current,
+        ...(platform && PLATFORMS.includes(platform as (typeof PLATFORMS)[number]) && { platform: platform as (typeof PLATFORMS)[number] }),
+        ...(pillar && { pillar }),
+        ...(topic && { topic }),
+      }));
+    }
+  }, [searchParams]);
 
   const grouped = useMemo(() => {
     return drafts.sort((a, b) => a.variantLabel.localeCompare(b.variantLabel));
@@ -48,6 +100,8 @@ export function ContentGenerationStudio() {
   async function handleGenerate() {
     setLoading(true);
     setError("");
+    setDrafts([]);
+    setGeneratingVariant(null);
 
     try {
       const response = await fetch("/api/content/generate", {
@@ -56,13 +110,47 @@ export function ContentGenerationStudio() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
       if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.error || "Failed to generate content");
       }
 
-      setDrafts(data.drafts as ContentDraftRecord[]);
-      setSelectedId((data.drafts as ContentDraftRecord[])[0]?.id ?? "");
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ") && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (currentEvent === "progress") {
+                setGeneratingVariant(data.variant as string);
+              } else if (currentEvent === "done") {
+                setDrafts(data.drafts as ContentDraftRecord[]);
+                setSelectedId((data.drafts as ContentDraftRecord[])[0]?.id ?? "");
+              } else if (currentEvent === "error") {
+                throw new Error(data.error as string);
+              }
+            } catch (parseError) {
+              if (parseError instanceof Error && parseError.message !== "Unexpected end of JSON input") {
+                throw parseError;
+              }
+            }
+            currentEvent = "";
+          }
+        }
+      }
     } catch (generationError) {
       setError(
         generationError instanceof Error
@@ -71,6 +159,7 @@ export function ContentGenerationStudio() {
       );
     } finally {
       setLoading(false);
+      setGeneratingVariant(null);
     }
   }
 
@@ -195,7 +284,11 @@ export function ContentGenerationStudio() {
               disabled={loading}
               className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
-              {loading ? "Generating..." : "Generate Drafts"}
+              {loading
+                ? generatingVariant
+                  ? `Generating variant ${generatingVariant}...`
+                  : "Generating..."
+                : "Generate Drafts"}
             </button>
           </div>
         </CardContent>

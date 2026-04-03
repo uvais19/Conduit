@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { runVisualDesignerAgent } from "@/lib/agents/content/visual-designer";
+import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { visualPlanRequestSchema } from "@/lib/content/types";
 
@@ -37,9 +38,10 @@ export async function POST(
     });
 
     const updated = await updateDraft(tenantId, id, {
-      carousel: plan.carousel,
-      storyTemplate: plan.storyTemplate,
-      mediaType: "carousel",
+      ...(plan.carousel && { carousel: plan.carousel }),
+      ...(plan.storyTemplate && { storyTemplate: plan.storyTemplate }),
+      mediaType: plan.carousel?.length ? "carousel" :
+                 plan.storyTemplate ? "story" : "image",
     });
 
     return NextResponse.json({ plan, draft: updated });

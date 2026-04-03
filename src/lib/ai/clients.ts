@@ -119,6 +119,73 @@ export async function generateText(options: GenerateTextOptions): Promise<string
   return null;
 }
 
+export async function generateTextStream(
+  options: GenerateTextOptions
+): Promise<ReadableStream<string>> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const geminiModel = options.geminiModel ?? process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+
+  if (apiKey) {
+    const prompt = [options.systemPrompt, options.userPrompt].filter(Boolean).join("\n\n");
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: options.temperature ?? 0.4,
+            responseMimeType: "text/plain",
+          },
+        }),
+      }
+    );
+
+    if (response.ok && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      return new ReadableStream<string>({
+        async pull(controller) {
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.close();
+            return;
+          }
+          const chunk = decoder.decode(value, { stream: true });
+          // Parse SSE lines from Gemini streaming
+          for (const line of chunk.split("\n")) {
+            if (line.startsWith("data: ")) {
+              try {
+                const json = JSON.parse(line.slice(6)) as {
+                  candidates?: Array<{
+                    content?: { parts?: Array<{ text?: string }> };
+                  }>;
+                };
+                const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) controller.enqueue(text);
+              } catch {
+                // Ignore malformed SSE chunks
+              }
+            }
+          }
+        },
+      });
+    }
+  }
+
+  // Fallback: wrap non-streaming result in a single-chunk stream
+  const text = await generateText(options);
+  return new ReadableStream<string>({
+    start(controller) {
+      if (text) controller.enqueue(text);
+      controller.close();
+    },
+  });
+}
+
 function extractJsonBlock(text: string): string {
   const fenced = text.match(/```json\s*([\s\S]*?)```/i);
   if (fenced?.[1]) {

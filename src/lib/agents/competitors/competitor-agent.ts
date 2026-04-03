@@ -127,3 +127,25 @@ export async function analyzeCompetitor(
   await updateCompetitorAnalysis(tenantId, competitorId, analysis);
   return analysis;
 }
+
+export async function getCompetitorInsightsForStrategy(
+  tenantId: string
+): Promise<string | null> {
+  const competitors = await listCompetitors(tenantId);
+  const analyzed = competitors.filter((c) => c.analysisData);
+
+  if (analyzed.length === 0) return null;
+
+  return analyzed
+    .map((c) =>
+      [
+        `Competitor: ${c.name} (${c.platform})`,
+        `Posting: ${c.analysisData!.postingFrequency}`,
+        `Content types: ${c.analysisData!.contentTypes.join(", ")}`,
+        `Top themes: ${c.analysisData!.topThemes.join(", ")}`,
+        `Engagement: ${c.analysisData!.engagementRate}`,
+        `Summary: ${c.analysisData!.summary}`,
+      ].join("\n")
+    )
+    .join("\n\n");
+}

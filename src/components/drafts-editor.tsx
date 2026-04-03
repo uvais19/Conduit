@@ -1,12 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { ContentDraftRecord } from "@/lib/content/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ContentStrategy } from "@/lib/types";
+import { buildCalendarPreview, type CalendarPreviewItem } from "@/lib/strategy/defaults";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { buttonVariants } from "@/components/ui/button";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
 import { DraftTimeline } from "@/components/draft-timeline";
+import { ContentRefiner } from "@/components/content-refiner";
 
 type DraftFilters = {
   platform: "all" | (typeof PLATFORMS)[number];
@@ -43,10 +48,30 @@ export function DraftsEditor() {
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [strategy, setStrategy] = useState<ContentStrategy | null>(null);
+  const [strategyLoading, setStrategyLoading] = useState(true);
 
   const selectedDraft = useMemo(
     () => drafts.find((draft) => draft.id === selectedId) ?? null,
     [drafts, selectedId]
+  );
+
+  const plannedItems = useMemo(() => {
+    if (!strategy) return [];
+    const items = buildCalendarPreview(strategy);
+    return items.filter((item) => {
+      if (filters.platform !== "all" && item.platform !== filters.platform) return false;
+      if (filters.pillar.trim() && !item.pillar.toLowerCase().includes(filters.pillar.trim().toLowerCase())) return false;
+      return true;
+    });
+  }, [strategy, filters.platform, filters.pillar]);
+
+  const showPlannedContent = drafts.length === 0 && !loading && plannedItems.length > 0;
+  const [selectedPlannedId, setSelectedPlannedId] = useState<string>("");
+
+  const selectedPlanned = useMemo(
+    () => plannedItems.find((item) => item.id === selectedPlannedId) ?? null,
+    [plannedItems, selectedPlannedId]
   );
 
   async function fetchDrafts() {
@@ -83,6 +108,23 @@ export function DraftsEditor() {
     void fetchDrafts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.platform, filters.status, filters.pillar]);
+
+  useEffect(() => {
+    async function loadStrategy() {
+      try {
+        const response = await fetch("/api/strategy");
+        const data = await response.json();
+        if (response.ok && data.strategy) {
+          setStrategy(data.strategy as ContentStrategy);
+        }
+      } catch {
+        // Strategy is optional — ignore errors
+      } finally {
+        setStrategyLoading(false);
+      }
+    }
+    void loadStrategy();
+  }, []);
 
   async function submitForReview() {
     if (!selectedDraft) return;
@@ -239,11 +281,36 @@ export function DraftsEditor() {
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Draft List</CardTitle>
+            <CardTitle>{showPlannedContent ? "Planned Content" : "Draft List"}</CardTitle>
+            {showPlannedContent && (
+              <CardDescription>
+                From your content strategy. Go to{" "}
+                <Link href="/content/generate" className="underline">
+                  Generate
+                </Link>{" "}
+                to create editable drafts.
+              </CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-2">
-            {loading ? (
+            {loading || strategyLoading ? (
               <p className="text-sm text-muted-foreground">Loading drafts...</p>
+            ) : showPlannedContent ? (
+              plannedItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedPlannedId(item.id)}
+                  className={`w-full rounded-md border p-2 text-left text-sm ${
+                    selectedPlannedId === item.id ? "border-primary bg-primary/5" : ""
+                  }`}
+                >
+                  <p className="font-medium">
+                    {item.theme} · {PLATFORM_LABELS[item.platform]}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{item.pillar} · {item.day} {item.time}</p>
+                </button>
+              ))
             ) : drafts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No drafts found.</p>
             ) : (
@@ -271,7 +338,51 @@ export function DraftsEditor() {
             <CardTitle>Editor & Preview</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!selectedDraft ? (
+            {showPlannedContent ? (
+              !selectedPlanned ? (
+                <p className="text-sm text-muted-foreground">Select a planned item to preview.</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Platform</p>
+                      <p className="text-sm font-medium capitalize">{PLATFORM_LABELS[selectedPlanned.platform]}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Content Type</p>
+                      <p className="text-sm font-medium capitalize">{selectedPlanned.contentType}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Scheduled</p>
+                      <p className="text-sm font-medium">{selectedPlanned.day} at {selectedPlanned.time}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pillar</p>
+                      <p className="text-sm font-medium">{selectedPlanned.pillar}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Theme</p>
+                    <p className="text-sm font-medium">{selectedPlanned.theme}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Summary</p>
+                    <p className="text-sm">{selectedPlanned.summary}</p>
+                  </div>
+                  <div className="rounded-md border border-dashed bg-muted/30 p-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      This is a planned post from your strategy. Generate a draft to edit and customize it.
+                    </p>
+                    <Link
+                      href={`/content/generate?platform=${selectedPlanned.platform}&pillar=${encodeURIComponent(selectedPlanned.pillar)}&topic=${encodeURIComponent(selectedPlanned.theme)}&contentType=${encodeURIComponent(selectedPlanned.contentType)}`}
+                      className={buttonVariants({ className: "mt-3" })}
+                    >
+                      Generate Draft
+                    </Link>
+                  </div>
+                </div>
+              )
+            ) : !selectedDraft ? (
               <p className="text-sm text-muted-foreground">Select a draft to edit.</p>
             ) : (
               <>
@@ -344,6 +455,18 @@ export function DraftsEditor() {
                     setDrafts((current) =>
                       current.map((draft) =>
                         draft.id === nextDraft.id ? nextDraft : draft
+                      )
+                    );
+                  }}
+                />
+
+                <ContentRefiner
+                  draft={selectedDraft}
+                  onApply={(update) => {
+                    const patched = { ...selectedDraft, ...update };
+                    setDrafts((current) =>
+                      current.map((draft) =>
+                        draft.id === patched.id ? patched : draft
                       )
                     );
                   }}

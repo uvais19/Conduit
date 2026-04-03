@@ -8,6 +8,7 @@ import {
   integer,
   jsonb,
   decimal,
+  real,
 } from "drizzle-orm/pg-core";
 
 // ============================================================
@@ -66,6 +67,7 @@ export const proposalTypeEnum = pgEnum("proposal_type", [
   "schedule_change",
   "tone_change",
   "format_change",
+  "platform_format_shift",
 ]);
 
 export const proposalStatusEnum = pgEnum("proposal_status", [
@@ -267,6 +269,37 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const platformPosts = pgTable("platform_posts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  platform: platformEnum("platform").notNull(),
+  platformPostId: text("platform_post_id").notNull(),
+  content: text("content"),
+  mediaType: mediaTypeEnum("media_type"),
+  postedAt: timestamp("posted_at"),
+  impressions: integer("impressions"),
+  reach: integer("reach"),
+  likes: integer("likes"),
+  comments: integer("comments"),
+  shares: integer("shares"),
+  engagementRate: decimal("engagement_rate", { precision: 5, scale: 4 }),
+  rawData: jsonb("raw_data"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const platformAnalyses = pgTable("platform_analyses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  platform: platformEnum("platform").notNull(),
+  data: jsonb("data").notNull(),
+  postsAnalysed: integer("posts_analysed").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const uploadedDocuments = pgTable("uploaded_documents", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id")
@@ -280,5 +313,21 @@ export const uploadedDocuments = pgTable("uploaded_documents", {
   uploadedBy: uuid("uploaded_by")
     .references(() => users.id)
     .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ============================================================
+// Variant Learnings (A/B test results)
+// ============================================================
+
+export const variantLearnings = pgTable("variant_learnings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  platform: platformEnum("platform").notNull(),
+  winningAngle: text("winning_angle").notNull(),
+  margin: real("margin").notNull(),
+  sampleSize: integer("sample_size").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

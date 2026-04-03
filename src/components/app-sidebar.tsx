@@ -58,6 +58,7 @@ const navData = {
       icon: <BarChart3 />,
       items: [
         { title: "Overview", url: "/analytics" },
+        { title: "Post Analysis", url: "/analysis" },
         { title: "Competitors", url: "/analytics/competitors" },
       ],
     },

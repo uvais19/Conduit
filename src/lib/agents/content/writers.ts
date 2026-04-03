@@ -1,119 +1,78 @@
-import { randomUUID } from "crypto";
-import { PLATFORM_CHAR_LIMITS } from "@/lib/constants";
-import type { Platform } from "@/lib/types";
-import {
-  suggestHashtags,
-} from "@/lib/content/hashtags";
+import { generateJson } from "@/lib/ai/clients";
+import { getPlatformPromptContext, PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type {
   ContentGenerationRequest,
   GeneratedVariant,
   VariantLabel,
 } from "@/lib/content/types";
 
-function truncateForPlatform(platform: Platform, text: string): string {
-  const limit = PLATFORM_CHAR_LIMITS[platform];
-  if (text.length <= limit) {
-    return text;
-  }
-  return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}...`;
-}
+const VARIANT_ANGLES: Record<VariantLabel, string> = {
+  A: "educational -- lead with a surprising fact, teach something actionable",
+  B: "story-driven -- use a narrative arc, relatable scenario, or case study",
+  C: "results-first -- lead with outcomes/numbers, then explain the method",
+};
 
-function styleForPlatform(platform: Platform): {
-  opener: string;
-  body: string;
-  structure: "paragraph" | "thread";
-} {
-  switch (platform) {
-    case "linkedin":
-      return {
-        opener: "A practical insight for leaders:",
-        body: "Use a concise story + takeaway format.",
-        structure: "paragraph",
-      };
-    case "instagram":
-      return {
-        opener: "Save this for later:",
-        body: "Lead with a hook and a skimmable mini-story.",
-        structure: "paragraph",
-      };
-    case "facebook":
-      return {
-        opener: "Quick community question:",
-        body: "Keep it conversational and invite comments.",
-        structure: "paragraph",
-      };
-    case "x":
-      return {
-        opener: "Hot take:",
-        body: "Keep it crisp and provocative but useful.",
-        structure: "thread",
-      };
-    case "gbp":
-      return {
-        opener: "Business update:",
-        body: "Keep it clear, local, and action-oriented.",
-        structure: "paragraph",
-      };
-  }
-}
-
-function buildCaption(
+export async function runPlatformWriterAgent(
   input: ContentGenerationRequest,
   variantLabel: VariantLabel
-): string {
-  const style = styleForPlatform(input.platform);
-  const nuanceByVariant: Record<VariantLabel, string> = {
-    A: "educational",
-    B: "story-driven",
-    C: "results-first",
-  };
+): Promise<GeneratedVariant> {
+  const platformContext = getPlatformPromptContext(input.platform);
+  const pk = PLATFORM_KNOWLEDGE[input.platform];
 
-  const base = `${style.opener}\n${input.topic} (${nuanceByVariant[variantLabel]} angle).\nPillar: ${input.pillar}.\nAudience: ${input.audience}.\nObjective: ${input.objective}.\n${style.body}`;
-
-  if (input.platform === "x") {
-    return truncateForPlatform(
-      input.platform,
-      `${style.opener} ${input.topic} | ${nuanceByVariant[variantLabel]} | ${input.cta}`
-    );
-  }
-
-  return truncateForPlatform(input.platform, `${base}\n\n${input.cta}`);
-}
-
-export function runPlatformWriterAgent(
-  input: ContentGenerationRequest,
-  variantLabel: VariantLabel
-): GeneratedVariant {
-  const hashtags = suggestHashtags({
-    platform: input.platform,
-    pillar: input.pillar,
-    topic: input.topic,
-    objective: input.objective,
+  const result = await generateJson<{ caption: string; hashtags: string[]; cta: string }>({
+    systemPrompt: [
+      `You are a ${input.platform} content writing specialist for Conduit, an AI social media manager.`,
+      `Write content that is native to ${input.platform} and follows its specific rules and best practices.`,
+      "",
+      platformContext,
+      "",
+      "Return valid JSON only with: { caption, hashtags, cta }",
+    ].join("\n"),
+    userPrompt: [
+      `Write a ${input.platform} post with a ${VARIANT_ANGLES[variantLabel]} angle.`,
+      "",
+      `Topic: ${input.topic}`,
+      `Content pillar: ${input.pillar}`,
+      `Target audience: ${input.audience}`,
+      `Objective: ${input.objective}`,
+      `Brand voice: ${input.voice}`,
+      `CTA direction: ${input.cta}`,
+      "",
+      "Requirements:",
+      `- Stay within ${pk.charLimit} characters`,
+      `- Include ${pk.hashtagLimits.min}-${pk.hashtagLimits.max} hashtags (0 if platform doesn't use them)`,
+      `- Follow the platform content rules above exactly`,
+      `- Match the brand voice while adapting to the platform tone`,
+      `- The CTA should feel natural to ${input.platform}`,
+      "",
+      'Return JSON: { "caption": "...", "hashtags": ["#tag1", ...], "cta": "..." }',
+    ].join("\n"),
+    temperature: 0.45,
+    fallback: null as unknown as { caption: string; hashtags: string[]; cta: string },
   });
 
-  const cta =
-    variantLabel === "A"
-      ? input.cta
-      : variantLabel === "B"
-        ? `${input.cta} and share your take.`
-        : `${input.cta} to get the full playbook.`;
+  if (!result || !result.caption) {
+    throw new Error(`Content generation failed for ${input.platform} variant ${variantLabel}`);
+  }
 
   return {
     variantLabel,
-    caption: buildCaption(input, variantLabel),
-    hashtags,
-    cta,
+    caption: result.caption,
+    hashtags: result.hashtags ?? [],
+    cta: result.cta ?? input.cta,
   };
 }
 
-export function generatePlatformVariants(input: ContentGenerationRequest): {
+export async function generatePlatformVariants(input: ContentGenerationRequest): Promise<{
   variantGroup: string;
   variants: GeneratedVariant[];
-} {
+}> {
   const labels: VariantLabel[] = input.generateVariants ? ["A", "B", "C"] : ["A"];
-
+  const variants = await Promise.all(
+    labels.map((label) => runPlatformWriterAgent(input, label))
+  );
   return {
-    variantGroup: randomUUID(),
-    variants: labels.map((label) => runPlatformWriterAgent(input, label)),
+    variantGroup: crypto.randomUUID(),
+    variants,
   };
 }

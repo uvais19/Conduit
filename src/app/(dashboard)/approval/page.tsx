@@ -42,6 +42,14 @@ export default function ApprovalPage() {
   const [showRevisionForm, setShowRevisionForm] = useState(false);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
+  const [aiRevising, setAiRevising] = useState(false);
+  const [aiRevision, setAiRevision] = useState<{
+    revisedCaption: string;
+    revisedHashtags: string[];
+    revisedCta: string;
+    changesSummary: string;
+    changesApplied: Array<{ what: string; why: string }>;
+  } | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<"all" | ContentDraftRecord["status"]>("in-review");
@@ -191,6 +199,58 @@ export default function ApprovalPage() {
       setNotice(data.message ?? "Analytics collected successfully.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to collect analytics");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleAiRevise() {
+    if (!selectedDraft) return;
+    setAiRevising(true);
+    setAiRevision(null);
+    setError("");
+    try {
+      const response = await fetch(`/api/drafts/${selectedDraft.id}/ai-revise`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: revisionNotes || "Improve this content based on platform best practices" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to generate AI revision");
+      setAiRevision(data.revision);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to generate AI revision");
+    } finally {
+      setAiRevising(false);
+    }
+  }
+
+  async function applyAiRevision() {
+    if (!selectedDraft || !aiRevision) return;
+    setActionLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/drafts/${selectedDraft.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caption: aiRevision.revisedCaption,
+          hashtags: aiRevision.revisedHashtags,
+          cta: aiRevision.revisedCta,
+          status: "in-review",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to apply revision");
+
+      const updated = data.draft as ContentDraftRecord;
+      setDrafts((current) =>
+        current.map((d) => (d.id === updated.id ? updated : d))
+      );
+      setAiRevision(null);
+      setNotice("AI revision applied. Draft moved back to review.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to apply revision");
     } finally {
       setActionLoading(false);
     }
@@ -433,6 +493,77 @@ export default function ApprovalPage() {
                           Cancel
                         </button>
                       </div>
+                    </div>
+                  )}
+
+                  {/* AI Revise — shown when draft has revision-requested status */}
+                  {selectedDraft.status === "revision-requested" && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={aiRevising || actionLoading}
+                          onClick={() => void handleAiRevise()}
+                          className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                        >
+                          {aiRevising ? "AI Revising..." : "AI Revise"}
+                        </button>
+                      </div>
+
+                      {aiRevision && (
+                        <div className="space-y-3 rounded-md border p-3">
+                          <p className="text-sm font-medium">AI Revision Preview</p>
+                          <p className="text-xs text-muted-foreground">{aiRevision.changesSummary}</p>
+
+                          <div>
+                            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Revised Caption</p>
+                            <p className="whitespace-pre-wrap text-sm">{aiRevision.revisedCaption}</p>
+                          </div>
+
+                          {aiRevision.revisedHashtags.length > 0 && (
+                            <div>
+                              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Revised Hashtags</p>
+                              <p className="text-sm text-muted-foreground">{aiRevision.revisedHashtags.join(" ")}</p>
+                            </div>
+                          )}
+
+                          <div>
+                            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Revised CTA</p>
+                            <p className="text-sm">{aiRevision.revisedCta}</p>
+                          </div>
+
+                          {aiRevision.changesApplied.length > 0 && (
+                            <div>
+                              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Changes Applied</p>
+                              <ul className="space-y-1">
+                                {aiRevision.changesApplied.map((change, i) => (
+                                  <li key={i} className="text-xs text-muted-foreground">
+                                    <span className="font-medium">{change.what}:</span> {change.why}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={() => void applyAiRevision()}
+                              className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                            >
+                              Apply Revision
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAiRevision(null)}
+                              className="inline-flex h-8 items-center rounded-md border px-3 text-sm"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
