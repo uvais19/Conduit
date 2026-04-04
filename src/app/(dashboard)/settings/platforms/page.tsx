@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { Platform } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,7 +41,11 @@ const PLATFORM_GUIDES: Record<Platform, { tokenLabel: string; hint: string }> = 
   },
 };
 
+const PLATFORM_ADVANCE_MS = 1500;
+
 export default function PlatformsPage() {
+  const router = useRouter();
+  const platformAdvanceTimerRef = useRef<number | null>(null);
   const [connections, setConnections] = useState<ConnectionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -72,6 +77,14 @@ export default function PlatformsPage() {
     void fetchConnections();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (platformAdvanceTimerRef.current) {
+        window.clearTimeout(platformAdvanceTimerRef.current);
+      }
+    };
+  }, []);
+
   function triggerAnalysis() {
     setAnalysing(true);
     setAnalysisMessage("Analysing your existing posts...");
@@ -96,6 +109,7 @@ export default function PlatformsPage() {
 
   async function handleConnect() {
     if (!connectPlatform || !accessToken.trim() || !displayName.trim()) return;
+    const wasFirstPlatform = connections.length === 0;
     setActionLoading(true);
     setError("");
     try {
@@ -120,6 +134,17 @@ export default function PlatformsPage() {
 
       // Auto-trigger post analysis in the background
       triggerAnalysis();
+
+      if (wasFirstPlatform) {
+        if (platformAdvanceTimerRef.current) {
+          window.clearTimeout(platformAdvanceTimerRef.current);
+        }
+        platformAdvanceTimerRef.current = window.setTimeout(() => {
+          platformAdvanceTimerRef.current = null;
+          router.refresh();
+          router.push("/dashboard");
+        }, PLATFORM_ADVANCE_MS);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to connect");
     } finally {

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { runVisualDesignerAgent } from "@/lib/agents/content/visual-designer";
-import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { visualPlanRequestSchema } from "@/lib/content/types";
 
@@ -31,20 +30,20 @@ export async function POST(
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
 
-    const plan = await runVisualDesignerAgent({
+    const result = await runVisualDesignerAgent({
       draft,
       objective: parsed.data.objective,
       styleHint: parsed.data.styleHint,
     });
 
     const updated = await updateDraft(tenantId, id, {
-      ...(plan.carousel && { carousel: plan.carousel }),
-      ...(plan.storyTemplate && { storyTemplate: plan.storyTemplate }),
-      mediaType: plan.carousel?.length ? "carousel" :
-                 plan.storyTemplate ? "story" : "image",
+      carousel: result.draftFields.carousel,
+      storyTemplate: result.draftFields.storyTemplate,
+      mediaType: result.draftFields.mediaType,
+      visualPlanData: result.visualPlanData,
     });
 
-    return NextResponse.json({ plan, draft: updated });
+    return NextResponse.json({ plan: result.plan, draft: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "Unauthorized") {

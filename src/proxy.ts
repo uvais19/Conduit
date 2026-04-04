@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+﻿import { NextResponse, type NextRequest } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isProtectedRoute = createRouteMatcher([
@@ -32,7 +32,9 @@ export default clerkMiddleware(async (auth, request: NextRequest) => {
 
 export const config = {
   matcher: [
-    // Run on all routes except Next.js internals and static files
-    "/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)",
+    // Next internals + favicon only. Do not exclude paths just because they contain
+    // a dot (e.g. `/api/media/local/.../file.svg`) — that skipped Clerk and broke
+    // authenticated `<img>` requests.
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };

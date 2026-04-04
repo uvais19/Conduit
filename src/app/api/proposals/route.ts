@@ -32,7 +32,7 @@ export async function POST() {
         .select({ data: contentStrategies.data })
         .from(contentStrategies)
         .where(eq(contentStrategies.tenantId, tenantId))
-        .orderBy(desc(contentStrategies.createdAt))
+        .orderBy(desc(contentStrategies.createdAt), desc(contentStrategies.id))
         .limit(1),
       getAnalyses(tenantId),
     ]);

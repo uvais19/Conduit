@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Info, Sparkles, Upload, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -120,7 +121,10 @@ const initialForm = {
   documents: [] as UploadedDocument[],
 };
 
+const ADVANCE_MS = 1800;
+
 export function OnboardingWizard() {
+  const router = useRouter();
   const [form, setForm] = useState(initialForm);
   const [uploadNotes, setUploadNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -131,6 +135,29 @@ export function OnboardingWizard() {
   const [aiSuggestedFields, setAiSuggestedFields] = useState<Set<string>>(new Set());
 
   const canPrefill = form.websiteUrl.trim().length > 0 && form.businessName.trim().length > 0;
+  const advanceTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!result) return;
+    advanceTimerRef.current = window.setTimeout(() => {
+      advanceTimerRef.current = null;
+      router.refresh();
+      router.push("/strategy");
+    }, ADVANCE_MS);
+    return () => {
+      if (advanceTimerRef.current) {
+        window.clearTimeout(advanceTimerRef.current);
+        advanceTimerRef.current = null;
+      }
+    };
+  }, [result, router]);
+
+  function cancelAdvanceTimer() {
+    if (advanceTimerRef.current) {
+      window.clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  }
 
   function updateField(name: string, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -524,7 +551,8 @@ export function OnboardingWizard() {
               Manifesto generated successfully
             </CardTitle>
             <CardDescription>
-              Version {result.version} saved. Review it below, then fine-tune it on the Brand pages.
+              Version {result.version} saved. Next: generate your content strategy — we&apos;ll take you
+              there automatically, or continue now.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -569,7 +597,17 @@ export function OnboardingWizard() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Link href="/brand" className={buttonVariants()}>
+              <Link
+                href="/strategy"
+                className={buttonVariants()}
+                onClick={() => {
+                  cancelAdvanceTimer();
+                  router.refresh();
+                }}
+              >
+                Continue to content strategy
+              </Link>
+              <Link href="/brand" className={buttonVariants({ variant: "outline" })}>
                 Review manifesto
               </Link>
               <Link

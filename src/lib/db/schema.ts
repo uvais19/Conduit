@@ -175,6 +175,7 @@ export const contentDrafts = pgTable("content_drafts", {
   mediaType: mediaTypeEnum("media_type").notNull().default("text-only"),
   carouselData: jsonb("carousel_data"), // Array of carousel slides
   threadData: jsonb("thread_data"), // Array of thread tweets
+  visualPlanData: jsonb("visual_plan_data"), // objective, styleHint, imagePrompt, slide prompts, aspect
   variantGroup: uuid("variant_group"),
   variantLabel: variantLabelEnum("variant_label"),
   status: draftStatusEnum("status").notNull().default("draft"),

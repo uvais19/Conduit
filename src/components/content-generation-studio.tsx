@@ -6,8 +6,15 @@ import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import type { BrandManifesto } from "@/lib/types";
 import { deriveFieldsForPlatform } from "@/lib/content/platform-defaults";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DraftMediaGallery } from "@/components/draft-media-gallery";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
 
 type GenerationPayload = {
@@ -135,7 +142,11 @@ export function ContentGenerationStudio() {
             try {
               const data = JSON.parse(line.slice(6));
               if (currentEvent === "progress") {
-                setGeneratingVariant(data.variant as string);
+                if (data.phase === "visual") {
+                  setGeneratingVariant("visual");
+                } else if (data.variant) {
+                  setGeneratingVariant(data.variant as string);
+                }
               } else if (currentEvent === "done") {
                 setDrafts(data.drafts as ContentDraftRecord[]);
                 setSelectedId((data.drafts as ContentDraftRecord[])[0]?.id ?? "");
@@ -285,44 +296,67 @@ export function ContentGenerationStudio() {
               className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
               {loading
-                ? generatingVariant
-                  ? `Generating variant ${generatingVariant}...`
-                  : "Generating..."
+                ? generatingVariant === "visual"
+                  ? "Designing visuals & carousel..."
+                  : generatingVariant
+                    ? `Generating variant ${generatingVariant}...`
+                    : "Generating..."
                 : "Generate Drafts"}
             </button>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {grouped.map((draft) => (
-          <Card
-            key={draft.id}
-            className={selectedId === draft.id ? "border-primary" : undefined}
-          >
-            <CardHeader>
-              <CardTitle className="text-base">
-                Variant {draft.variantLabel} · {PLATFORM_LABELS[draft.platform]}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <button
-                type="button"
-                onClick={() => setSelectedId(draft.id)}
-                className="rounded border px-2 py-1 text-xs"
-              >
-                Edit visuals
-              </button>
-              <p className="whitespace-pre-wrap">{draft.caption}</p>
-              <p className="text-muted-foreground">{draft.hashtags.join(" ")}</p>
-              <p className="font-medium">CTA: {draft.cta}</p>
-              {draft.mediaUrls[0] && (
-                <p className="text-xs text-muted-foreground">Image: {draft.mediaUrls[0]}</p>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {grouped.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold leading-snug">
+              {payload.topic.trim() || payload.pillar || "Generated drafts"}
+            </CardTitle>
+            <CardDescription>
+              {payload.pillar}
+              {payload.pillar ? " · " : ""}
+              {PLATFORM_LABELS[payload.platform]}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {grouped.map((draft) => (
+                <div
+                  key={draft.id}
+                  className={`flex flex-col rounded-lg border p-3 text-sm ${
+                    selectedId === draft.id ? "border-primary ring-1 ring-primary/20" : ""
+                  }`}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Variant {draft.variantLabel}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(draft.id)}
+                      className="shrink-0 rounded border px-2 py-1 text-xs"
+                    >
+                      Edit visuals
+                    </button>
+                  </div>
+                  <p className="flex-1 whitespace-pre-wrap text-sm">{draft.caption}</p>
+                  <p className="mt-2 text-muted-foreground text-xs">{draft.hashtags.join(" ")}</p>
+                  <p className="mt-1 text-xs font-medium">CTA: {draft.cta}</p>
+                  {draft.mediaUrls.length > 0 && (
+                    <div className="mt-3">
+                      <DraftMediaGallery
+                        key={draft.mediaUrls.join("|")}
+                        urls={draft.mediaUrls}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {selectedDraft && (
         <DraftVisualEditor

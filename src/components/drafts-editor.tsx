@@ -12,6 +12,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
 import { DraftTimeline } from "@/components/draft-timeline";
 import { ContentRefiner } from "@/components/content-refiner";
+import {
+  groupVariants,
+  sortVariantGroupsByRecent,
+} from "@/lib/content/group-variants";
 
 type DraftFilters = {
   platform: "all" | (typeof PLATFORMS)[number];
@@ -72,6 +76,11 @@ export function DraftsEditor() {
   const selectedPlanned = useMemo(
     () => plannedItems.find((item) => item.id === selectedPlannedId) ?? null,
     [plannedItems, selectedPlannedId]
+  );
+
+  const draftGroups = useMemo(
+    () => sortVariantGroupsByRecent(groupVariants(drafts)),
+    [drafts]
   );
 
   async function fetchDrafts() {
@@ -314,21 +323,69 @@ export function DraftsEditor() {
             ) : drafts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No drafts found.</p>
             ) : (
-              drafts.map((draft) => (
-                <button
-                  key={draft.id}
-                  type="button"
-                  onClick={() => setSelectedId(draft.id)}
-                  className={`w-full rounded-md border p-2 text-left text-sm ${
-                    selectedId === draft.id ? "border-primary bg-primary/5" : ""
-                  }`}
-                >
-                  <p className="font-medium">
-                    {draft.variantLabel} · {PLATFORM_LABELS[draft.platform]}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">{draft.pillar}</p>
-                </button>
-              ))
+              <div className="space-y-3">
+                {draftGroups.map((group) => {
+                  if (group.variants.length === 1) {
+                    const draft = group.variants[0]!;
+                    return (
+                      <button
+                        key={draft.id}
+                        type="button"
+                        onClick={() => setSelectedId(draft.id)}
+                        className={`w-full rounded-md border p-2 text-left text-sm ${
+                          selectedId === draft.id ? "border-primary bg-primary/5" : ""
+                        }`}
+                      >
+                        <p className="font-medium">
+                          {draft.variantLabel} · {PLATFORM_LABELS[draft.platform]}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">{draft.pillar}</p>
+                      </button>
+                    );
+                  }
+
+                  const platformLabel = group.platform
+                    ? PLATFORM_LABELS[group.platform]
+                    : "";
+                  return (
+                    <div
+                      key={group.variantGroup}
+                      className="rounded-lg border border-border/80 bg-muted/15 p-2.5"
+                    >
+                      <div className="mb-2 space-y-0.5 px-0.5">
+                        <p className="text-sm font-medium leading-snug">
+                          {group.pillar?.trim() || "Content set"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {platformLabel}
+                          {platformLabel ? " · " : ""}
+                          {group.variants.length} variant
+                          {group.variants.length === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        {group.variants.map((draft) => (
+                          <button
+                            key={draft.id}
+                            type="button"
+                            onClick={() => setSelectedId(draft.id)}
+                            className={`w-full rounded-md border bg-background px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-muted/40 ${
+                              selectedId === draft.id
+                                ? "border-primary bg-primary/5"
+                                : "border-border/60"
+                            }`}
+                          >
+                            <p className="font-medium">Variant {draft.variantLabel}</p>
+                            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                              {draft.caption.trim() || "No caption yet"}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>

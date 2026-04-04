@@ -26,6 +26,17 @@ export const storyTemplateSchema = z.object({
   backgroundUrl: z.string().optional(),
 });
 
+export const visualPlanPersistedSchema = z.object({
+  objective: z.string(),
+  styleHint: z.string(),
+  imagePrompt: z.string(),
+  slideImagePrompts: z.array(z.string()).optional(),
+  recommendedAspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9"]).optional(),
+  recommendedResolutionNote: z.string().optional(),
+});
+
+export type VisualPlanPersisted = z.infer<typeof visualPlanPersistedSchema>;
+
 export const contentGenerationRequestSchema = z.object({
   platform: platformType,
   pillar: z.string().min(1, "Pillar is required"),
@@ -46,6 +57,7 @@ export const draftUpdateSchema = z.object({
   mediaType: mediaTypeSchema.optional(),
   carousel: z.array(carouselSlideSchema).optional(),
   storyTemplate: storyTemplateSchema.optional(),
+  visualPlanData: visualPlanPersistedSchema.nullable().optional(),
   status: z
     .enum([
       "draft",
@@ -84,6 +96,7 @@ export type ContentDraftRecord = {
   mediaType: z.infer<typeof mediaTypeSchema>;
   carousel: z.infer<typeof carouselSlideSchema>[];
   storyTemplate: z.infer<typeof storyTemplateSchema> | null;
+  visualPlanData: VisualPlanPersisted | null;
   status: "draft" | "in-review" | "revision-requested" | "approved" | "scheduled" | "published" | "failed";
   variantGroup: string;
   variantLabel: VariantLabel;

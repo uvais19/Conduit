@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { generateText } from "@/lib/ai/clients";
+import { writeLocalMediaFile } from "@/lib/storage/local-media";
 import { uploadFile } from "@/lib/storage/r2";
 
 function canUseR2(): boolean {
@@ -65,11 +66,13 @@ export async function generateImageAsset({
   });
 
   const key = `${tenantId}/generated/${randomUUID()}.svg`;
+  const body = Buffer.from(svg);
   if (canUseR2()) {
-    const imageUrl = await uploadFile(key, Buffer.from(svg), "image/svg+xml");
+    const imageUrl = await uploadFile(key, body, "image/svg+xml");
     return { imageUrl, provider: "gemini-prompt+svg", prompt: refinedPrompt };
   }
 
+  await writeLocalMediaFile(key, body);
   return {
     imageUrl: `local-preview://${key}`,
     provider: "local-fallback",

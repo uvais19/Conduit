@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DraftMediaGallery } from "@/components/draft-media-gallery";
+import { InstagramCarouselPreview } from "@/components/instagram-carousel-preview";
 import type { ContentDraftRecord } from "@/lib/content/types";
 
 type Props = {
@@ -19,7 +21,20 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
   const [busy, setBusy] = useState<"none" | "plan" | "generate" | "upload">("none");
   const [error, setError] = useState("");
 
-  const mediaPreview = useMemo(() => draft.mediaUrls[0] ?? "", [draft.mediaUrls]);
+  const visualKey = draft.visualPlanData
+    ? `${draft.visualPlanData.objective}|${draft.visualPlanData.styleHint}|${draft.visualPlanData.imagePrompt.slice(0, 120)}`
+    : "";
+
+  useEffect(() => {
+    const v = draft.visualPlanData;
+    if (v) {
+      setObjective(v.objective);
+      setStyleHint(v.styleHint);
+      setImagePrompt(v.imagePrompt);
+    }
+    // visualKey encodes server-side visual plan updates after variant generation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.id, visualKey]);
 
   async function buildVisualPlan() {
     setBusy("plan");
@@ -65,7 +80,7 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
         body: JSON.stringify({
           draftId: draft.id,
           prompt: imagePrompt,
-          aspectRatio: "1:1",
+          aspectRatio: draft.visualPlanData?.recommendedAspectRatio ?? "1:1",
         }),
       });
 
@@ -192,6 +207,10 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Visual Designer Agent</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Objective, style, carousel, and image prompt are filled automatically when you generate
+            variants. Use “Generate Visual Plan” to refresh from the latest caption and carousel.
+          </p>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           <label className="space-y-2 text-sm">
@@ -223,11 +242,18 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
           <label className="space-y-2 text-sm">
             Image prompt
             <textarea
-              className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2"
+              className="min-h-40 w-full rounded-md border bg-transparent px-3 py-2 text-sm leading-relaxed"
               value={imagePrompt}
               onChange={(event) => setImagePrompt(event.target.value)}
             />
           </label>
+
+          {draft.visualPlanData?.recommendedResolutionNote && (
+            <p className="text-xs text-muted-foreground">
+              {draft.visualPlanData.recommendedResolutionNote} Suggested aspect:{" "}
+              {draft.visualPlanData.recommendedAspectRatio ?? "1:1"}.
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -244,9 +270,15 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
             </label>
           </div>
 
-          {mediaPreview && (
-            <div className="rounded-md border p-2 text-sm text-muted-foreground">
-              Latest media URL: {mediaPreview}
+          {draft.mediaUrls.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {draft.mediaUrls.length > 1 ? "Media carousel" : "Media preview"}
+              </p>
+              <DraftMediaGallery
+                key={draft.mediaUrls.join("|")}
+                urls={draft.mediaUrls}
+              />
             </div>
           )}
         </CardContent>
@@ -304,6 +336,8 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
           >
             Add slide
           </button>
+
+          <InstagramCarouselPreview draft={draft} />
         </CardContent>
       </Card>
 

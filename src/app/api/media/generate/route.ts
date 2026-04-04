@@ -26,10 +26,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
 
+    const aspectRatio =
+      draft.visualPlanData?.recommendedAspectRatio ?? parsed.data.aspectRatio;
+
     const generated = await generateImageAsset({
       tenantId,
       prompt: parsed.data.prompt,
-      aspectRatio: parsed.data.aspectRatio,
+      aspectRatio,
     });
 
     const updated = await appendDraftMediaUrl(

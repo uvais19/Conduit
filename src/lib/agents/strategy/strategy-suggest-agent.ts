@@ -1,20 +1,12 @@
 import { generateJson } from "@/lib/ai/clients";
 import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
-import type { ContentStrategy, PostAnalysis } from "@/lib/types";
+import type {
+  FullStrategySuggestResponse,
+  SuggestResponse,
+} from "@/lib/strategy/suggest-types";
+import type { PostAnalysis } from "@/lib/types";
 
-export type SuggestionItem = {
-  field: string;
-  current: string;
-  suggested: string;
-  reasoning: string;
-};
-
-export type SuggestResponse = {
-  section: string;
-  suggestions: SuggestionItem[];
-  updatedSection: unknown;
-  summary: string;
-};
+export type { FullStrategySuggestResponse, SuggestResponse, SuggestionItem } from "@/lib/strategy/suggest-types";
 
 const SECTION_DESCRIPTIONS: Record<string, string> = {
   pillars: `Content Pillars are the 3-5 core topic categories that all content revolves around. Each pillar has:
@@ -89,15 +81,22 @@ You MUST return valid JSON with this exact shape:
   "section": "${section}",
   "suggestions": [
     {
-      "field": "short label of what changed",
-      "current": "brief description of current value",
-      "suggested": "brief description of the improvement",
-      "reasoning": "1-2 sentence explanation of WHY this change helps"
+      "field": "Exact UI location label the user will recognise, e.g. 'Pillar 2 — Name', 'Instagram — Preferred days', 'Week 3 — Key message'",
+      "current": "The ACTUAL current value as a short string (quote the real text, number, or comma-separated list — not a paraphrase like 'generic description')",
+      "suggested": "The ACTUAL proposed new value the form will show after apply (same specificity as current)",
+      "reasoning": "One short sentence: why this change helps (optional context only — users compare current vs suggested visually)",
+      "target": { "section": "${section}", "rowIndex": 0, "property": "name" }
     }
   ],
   "updatedSection": <the improved section data matching the exact schema of the input>,
   "summary": "2-3 sentence overview of the key improvements made"
-}`,
+}
+
+Every suggestion MUST include "target":
+- section: always "${section}" (same as the section you are editing)
+- rowIndex: 0-based index into the current ${section} array in the JSON (same order as sent)
+- property: for pillars use only "name" | "description" | "percentage"; for schedule use only "postsPerWeek" | "preferredDays" | "preferredTimes" | "contentMix"; for weeklyThemes use only "theme" | "pillar" | "keyMessage". For schedule "contentMix", put human-readable current/suggested strings like "carousel 40%, image 30%, reel 30%" while updatedSection uses the real JSON array.`,
+
 
     userPrompt: `## Brand context
 
@@ -147,6 +146,122 @@ Return JSON only.`,
     temperature: 0.4,
     fallback,
   });
+
+  return result;
+}
+
+const FULL_STRATEGY_JSON_SHAPE = `{
+  "section": "all",
+  "summary": "2-4 sentences across pillars, schedule, and weekly themes",
+  "pillars": {
+    "suggestions": [ { "field": "…", "current": "…", "suggested": "…", "reasoning": "…", "target": { "section": "pillars", "rowIndex": 0, "property": "name" } } ],
+    "updatedSection": <array matching input pillars schema>
+  },
+  "schedule": {
+    "suggestions": [ { "field": "…", "current": "…", "suggested": "…", "reasoning": "…", "target": { "section": "schedule", "rowIndex": 0, "property": "postsPerWeek" } } ],
+    "updatedSection": <array matching input schedule schema (each row includes contentMix)>
+  },
+  "weeklyThemes": {
+    "suggestions": [ { "field": "…", "current": "…", "suggested": "…", "reasoning": "…", "target": { "section": "weeklyThemes", "rowIndex": 0, "property": "theme" } } ],
+    "updatedSection": <array matching input weeklyThemes schema>
+  }
+}`;
+
+export async function runFullStrategySuggestAgent(input: {
+  currentStrategy: { pillars: unknown[]; schedule: unknown[]; weeklyThemes: unknown[]; monthlyGoals: unknown[] };
+  manifesto: Record<string, unknown>;
+  savedStrategy?: Record<string, unknown>;
+  postAnalyses?: PostAnalysis[];
+}): Promise<FullStrategySuggestResponse> {
+  const { currentStrategy, manifesto, savedStrategy, postAnalyses } = input;
+
+  const fallback: FullStrategySuggestResponse = {
+    section: "all",
+    summary: "No suggestions available at this time.",
+    pillars: { suggestions: [], updatedSection: currentStrategy.pillars },
+    schedule: { suggestions: [], updatedSection: currentStrategy.schedule },
+    weeklyThemes: { suggestions: [], updatedSection: currentStrategy.weeklyThemes },
+  };
+
+  const analysisContext = postAnalyses?.length
+    ? `\n\nHistorical performance data from connected platforms:\n${JSON.stringify(postAnalyses, null, 2)}\nUse these insights: lean into what works, fix gaps, maintain what aligns.`
+    : "";
+
+  const savedStrategyContext = savedStrategy
+    ? `\n\nPreviously saved strategy (for reference):\n${JSON.stringify(savedStrategy, null, 2)}`
+    : "";
+
+  const scheduleContext = `\n\n${buildPlatformScheduleContext()}`;
+
+  const result = await generateJson<FullStrategySuggestResponse>({
+    systemPrompt: `You are a senior social media strategist for Conduit. Improve the user's ENTIRE content strategy (pillars, platform schedule, and weekly themes) in one coherent pass so pillars, cadence, and weekly narrative align with each other and the brand.
+
+You MUST return valid JSON with this exact shape:
+${FULL_STRATEGY_JSON_SHAPE}
+
+Rules for every suggestion item:
+- "field": Exact UI label (e.g. "Pillar 1 — Name", "LinkedIn — Posts per week", "Week 2 — Theme").
+- "current" and "suggested": Literal values the user would see in the form (text, numbers, or comma-separated days/times — NOT vague phrases like "more engaging copy").
+- "reasoning": One short sentence of why (supplementary; the user mainly compares current vs suggested).
+- "target": REQUIRED on every suggestion. Maps this row to the form:
+  - "section": must be "pillars", "schedule", or "weeklyThemes" (same subsection this suggestion belongs to).
+  - "rowIndex": 0-based index into that section's array in the input JSON (pillars[0] is first pillar row; schedule[0] first platform row; weeklyThemes[0] first week).
+  - "property": pillars → "name"|"description"|"percentage"; schedule → "postsPerWeek"|"preferredDays"|"preferredTimes"|"contentMix"; weeklyThemes → "theme"|"pillar"|"keyMessage". For "contentMix", use readable current/suggested (e.g. "carousel 40%, reel 35%, image 25%"); updatedSection must still use the real contentMix JSON arrays.
+- Put each suggestion in the matching subsection's "suggestions" array (pillars suggestions in pillars.suggestions, etc.).
+- Provide 3-8 suggestions per section where useful; omit low-value nitpicks.
+- "updatedSection" for each part must match the input JSON schema exactly and reflect all proposed edits.`,
+
+    userPrompt: `## Brand context
+
+Company: ${manifesto.businessName || "Unknown"}
+Industry: ${manifesto.industry || "General"}
+Sub-industry: ${manifesto.subIndustry || "N/A"}
+Mission: ${manifesto.missionStatement || "N/A"}
+Core values: ${JSON.stringify(manifesto.coreValues || [])}
+Target audience: ${JSON.stringify(manifesto.primaryAudience || {})}
+Voice attributes: ${JSON.stringify(manifesto.voiceAttributes || [])}
+Social media goals: ${JSON.stringify(manifesto.socialMediaGoals || [])}
+Key messages: ${JSON.stringify(manifesto.keyMessages || [])}
+USPs: ${JSON.stringify(manifesto.uniqueSellingPropositions || [])}
+Products/Services: ${JSON.stringify(manifesto.productsServices || [])}
+Content dos: ${JSON.stringify(manifesto.contentDos || [])}
+Content don'ts: ${JSON.stringify(manifesto.contentDonts || [])}
+
+## What each section controls
+
+### pillars
+${SECTION_DESCRIPTIONS.pillars}
+
+### schedule
+${SECTION_DESCRIPTIONS.schedule}
+
+### weeklyThemes
+${SECTION_DESCRIPTIONS.weeklyThemes}
+
+## Current strategy (update all three sections consistently)
+
+${JSON.stringify(currentStrategy, null, 2)}
+${savedStrategyContext}
+${analysisContext}
+${scheduleContext}
+
+## Your task
+
+1. Analyse pillars, schedule, and weekly themes together against the manifesto and best practices.
+2. Return improved data in pillars.updatedSection, schedule.updatedSection, and weeklyThemes.updatedSection — same array lengths and field names as input unless you must fix structural issues.
+3. Ensure weekly theme "pillar" strings reference actual pillar names from your updated pillars.
+4. Every entry in pillars.suggestions, schedule.suggestions, and weeklyThemes.suggestions MUST include a correct "target" (section + rowIndex + property) so the UI can show it beside that field.
+5. Keep recommendations pragmatic.
+
+Return JSON only.`,
+
+    temperature: 0.4,
+    fallback,
+  });
+
+  if (result.section !== "all" || !result.pillars || !result.schedule || !result.weeklyThemes) {
+    return fallback;
+  }
 
   return result;
 }

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { appendDraftMediaUrl, getDraftById } from "@/lib/content/store";
+import { writeLocalMediaFile } from "@/lib/storage/local-media";
 import { uploadFile } from "@/lib/storage/r2";
 
 function canUseR2(): boolean {
@@ -39,9 +40,13 @@ export async function POST(request: Request) {
     const extension = file.name.split(".").pop() || "png";
     const key = `${tenantId}/uploads/${randomUUID()}.${extension}`;
 
-    const imageUrl = canUseR2()
-      ? await uploadFile(key, buffer, file.type || "application/octet-stream")
-      : `local-preview://${key}`;
+    let imageUrl: string;
+    if (canUseR2()) {
+      imageUrl = await uploadFile(key, buffer, file.type || "application/octet-stream");
+    } else {
+      await writeLocalMediaFile(key, buffer);
+      imageUrl = `local-preview://${key}`;
+    }
 
     const updated = await appendDraftMediaUrl(tenantId, draftId, imageUrl, "image");
 

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { contentStrategies } from "@/lib/db/schema";
 import { contentStrategySchema } from "@/lib/types";
+
+const latestStrategyOrder = [desc(contentStrategies.createdAt), desc(contentStrategies.id)] as const;
 
 export async function GET() {
   try {
@@ -14,14 +16,17 @@ export async function GET() {
       .select()
       .from(contentStrategies)
       .where(eq(contentStrategies.tenantId, tenantId))
-      .orderBy(desc(contentStrategies.createdAt))
+      .orderBy(...latestStrategyOrder)
       .limit(1);
 
-    return NextResponse.json({
-      strategy: latestStrategy?.data ?? null,
-      version: latestStrategy?.version ?? null,
-      status: latestStrategy?.status ?? null,
-    });
+    return NextResponse.json(
+      {
+        strategy: latestStrategy?.data ?? null,
+        version: latestStrategy?.version ?? null,
+        status: latestStrategy?.status ?? null,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     console.error("Failed to fetch content strategy:", error);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -46,10 +51,10 @@ export async function PUT(request: Request) {
       .select({ version: contentStrategies.version })
       .from(contentStrategies)
       .where(eq(contentStrategies.tenantId, tenantId))
-      .orderBy(desc(contentStrategies.createdAt))
+      .orderBy(...latestStrategyOrder)
       .limit(1);
 
-    const [saved] = await db
+    const [inserted] = await db
       .insert(contentStrategies)
       .values({
         tenantId,
@@ -57,13 +62,36 @@ export async function PUT(request: Request) {
         version: (latestStrategy?.version ?? 0) + 1,
         status: "active",
       })
-      .returning();
+      .returning({ id: contentStrategies.id });
 
-    return NextResponse.json({
-      strategy: saved.data,
-      version: saved.version,
-      status: saved.status,
-    });
+    if (!inserted) {
+      return NextResponse.json({ error: "Unable to save content strategy" }, { status: 500 });
+    }
+
+    const [row] = await db
+      .select({
+        data: contentStrategies.data,
+        version: contentStrategies.version,
+        status: contentStrategies.status,
+      })
+      .from(contentStrategies)
+      .where(
+        and(eq(contentStrategies.id, inserted.id), eq(contentStrategies.tenantId, tenantId))
+      )
+      .limit(1);
+
+    if (!row) {
+      return NextResponse.json({ error: "Unable to load saved strategy" }, { status: 500 });
+    }
+
+    return NextResponse.json(
+      {
+        strategy: row.data,
+        version: row.version,
+        status: row.status,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     console.error("Failed to save content strategy:", error);
     return NextResponse.json(

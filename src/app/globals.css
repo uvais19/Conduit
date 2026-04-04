@@ -163,6 +163,35 @@
   animation: mesh-drift 16s ease infinite;
 }
 
+/* Landing hero: shorter block + tighter mesh so it does not dominate the page */
+.landing-hero-mesh {
+  min-height: clamp(17rem, 44vh, 31rem);
+}
+
+.landing-hero-mesh.auth-gradient-mesh {
+  background-size: 300% 300%;
+  animation-duration: 18s;
+}
+
+.dark .landing-hero-mesh.auth-gradient-mesh {
+  background-size: 300% 300%;
+}
+
+.landing-hero-mesh .orb-1 {
+  width: 220px;
+  height: 220px;
+}
+
+.landing-hero-mesh .orb-2 {
+  width: 180px;
+  height: 180px;
+}
+
+.landing-hero-mesh .orb-3 {
+  width: 160px;
+  height: 160px;
+}
+
 /* Noise texture overlay for auth */
 .noise-overlay::after {
   content: "";

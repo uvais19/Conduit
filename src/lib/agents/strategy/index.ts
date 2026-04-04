@@ -1,2 +1,2 @@
 export { runStrategyAgent } from "./strategy-agent";
-export { runStrategySuggestAgent } from "./strategy-suggest-agent";
+export { runFullStrategySuggestAgent, runStrategySuggestAgent } from "./strategy-suggest-agent";

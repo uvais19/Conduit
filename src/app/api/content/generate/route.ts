@@ -1,6 +1,7 @@
 import { requirePermission } from "@/lib/auth/permissions";
+import { runVisualDesignerAgent } from "@/lib/agents/content/visual-designer";
 import { runPlatformWriterAgent } from "@/lib/agents/content/writers";
-import { createDraftsFromVariants } from "@/lib/content/store";
+import { createDraftsFromVariants, updateDraft } from "@/lib/content/store";
 import { contentGenerationRequestSchema } from "@/lib/content/types";
 import type { VariantLabel, GeneratedVariant } from "@/lib/content/types";
 
@@ -49,7 +50,27 @@ export async function POST(request: Request) {
             variants,
           });
 
-          send("done", { variantGroup, drafts });
+          send("progress", { phase: "visual", status: "designing" });
+
+          const enriched = await Promise.all(
+            drafts.map(async (draft) => {
+              const out = await runVisualDesignerAgent({
+                draft,
+                objective: input.objective,
+                styleHint: input.voice,
+                generationContext: input,
+              });
+              const row = await updateDraft(tenantId, draft.id, {
+                carousel: out.draftFields.carousel,
+                storyTemplate: out.draftFields.storyTemplate,
+                mediaType: out.draftFields.mediaType,
+                visualPlanData: out.visualPlanData,
+              });
+              return row ?? draft;
+            })
+          );
+
+          send("done", { variantGroup, drafts: enriched });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Generation failed";
           send("error", { error: message });

@@ -7,7 +7,10 @@ import type {
   ContentDraftRecord,
   GeneratedVariant,
   VariantLabel,
+  VisualPlanPersisted,
 } from "@/lib/content/types";
+
+export { groupVariants } from "./group-variants";
 
 const draftsByTenant = new Map<string, ContentDraftRecord[]>();
 
@@ -29,6 +32,8 @@ function mapDraftRow(row: typeof contentDrafts.$inferSelect): ContentDraftRecord
     carousel: (row.carouselData as ContentDraftRecord["carousel"]) ?? [],
     storyTemplate:
       (row.threadData as ContentDraftRecord["storyTemplate"]) ?? null,
+    visualPlanData:
+      (row.visualPlanData as VisualPlanPersisted | null | undefined) ?? null,
     status: row.status,
     variantGroup: row.variantGroup ?? row.id,
     variantLabel: (row.variantLabel ?? "A") as VariantLabel,
@@ -68,6 +73,7 @@ export async function createDraftsFromVariants({
       mediaType: "text-only" as const,
       carousel: [],
       storyTemplate: null,
+      visualPlanData: null,
       status: "draft" as const,
       variantGroup,
       variantLabel: variant.variantLabel,
@@ -103,6 +109,7 @@ export async function createDraftsFromVariants({
         mediaType: "text-only" as const,
         carouselData: [] as unknown[],
         threadData: null,
+        visualPlanData: null,
         variantGroup: normalizedGroup,
         variantLabel: variant.variantLabel,
         status: "draft" as const,
@@ -194,6 +201,7 @@ export async function updateDraft(
       | "mediaType"
       | "carousel"
       | "storyTemplate"
+      | "visualPlanData"
       | "scheduledAt"
       | "publishedAt"
       | "platformPostId"
@@ -230,6 +238,7 @@ export async function updateDraft(
       mediaType: patch.mediaType,
       carouselData: patch.carousel,
       threadData: patch.storyTemplate,
+      visualPlanData: patch.visualPlanData,
       scheduledAt: patch.scheduledAt ? new Date(patch.scheduledAt) : undefined,
       publishedAt: patch.publishedAt ? new Date(patch.publishedAt) : undefined,
       platformPostId: patch.platformPostId,
@@ -257,24 +266,4 @@ export async function appendDraftMediaUrl(
     mediaUrls: deduped,
     mediaType,
   });
-}
-
-export function groupVariants(drafts: ContentDraftRecord[]) {
-  const groups = new Map<string, ContentDraftRecord[]>();
-
-  for (const draft of drafts) {
-    const existing = groups.get(draft.variantGroup) ?? [];
-    existing.push(draft);
-    groups.set(draft.variantGroup, existing);
-  }
-
-  return Array.from(groups.entries()).map(([variantGroup, groupDrafts]) => ({
-    variantGroup,
-    platform: groupDrafts[0]?.platform,
-    pillar: groupDrafts[0]?.pillar,
-    createdAt: groupDrafts[0]?.createdAt,
-    variants: (["A", "B", "C"] as VariantLabel[])
-      .map((label) => groupDrafts.find((item) => item.variantLabel === label))
-      .filter(Boolean),
-  }));
 }

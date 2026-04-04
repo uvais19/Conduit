@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Sparkles, Save, Info, Lightbulb, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,8 +20,23 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { listToText, textToList } from "@/lib/brand/manifesto";
+import type { FullStrategySuggestResponse, SuggestionItem } from "@/lib/strategy/suggest-types";
 import { createDefaultStrategy } from "@/lib/strategy/defaults";
 import type { ContentStrategy } from "@/lib/types";
+
+type PlatformScheduleRow = ContentStrategy["schedule"][number];
+type ContentMixEntry = PlatformScheduleRow["contentMix"][number];
+
+const SCHEDULE_CONTENT_TYPES: ContentMixEntry["type"][] = [
+  "image",
+  "carousel",
+  "video",
+  "story",
+  "text-only",
+  "thread",
+  "poll",
+  "reel",
+];
 
 // ============================================================
 // Tooltip descriptions for each field
@@ -41,6 +57,8 @@ const FIELD_HINTS = {
     "Days of the week when your audience is most active on this platform. Enter one day per line.",
   preferredTimes:
     "Optimal posting windows for this platform based on audience timezone and engagement patterns. Enter one time per line (e.g. 09:00).",
+  contentMix:
+    "Target share of each post format (e.g. reels vs carousels). Percentages are planning weights — aim for roughly 100% across rows for that platform.",
   weekNumber: "The week number in the 4-week monthly cycle.",
   weekTheme:
     "The overarching focus for this week's content across all platforms. Keeps messaging cohesive.",
@@ -71,27 +89,238 @@ function FieldLabel({ htmlFor, label, hint }: { htmlFor?: string; label: string;
   );
 }
 
+const STRATEGY_ADVANCE_MS = 2000;
+
+const PILLAR_FIELD_KEYS = new Set(["name", "description", "percentage"]);
+const SCHEDULE_FIELD_KEYS = new Set([
+  "postsPerWeek",
+  "preferredDays",
+  "preferredTimes",
+  "contentMix",
+]);
+const WEEKLY_FIELD_KEYS = new Set(["theme", "pillar", "keyMessage"]);
+
+function propsForSuggestionSection(section: string): Set<string> | null {
+  if (section === "pillars") return PILLAR_FIELD_KEYS;
+  if (section === "schedule") return SCHEDULE_FIELD_KEYS;
+  if (section === "weeklyThemes") return WEEKLY_FIELD_KEYS;
+  return null;
+}
+
+function rowCountForSection(
+  section: string,
+  counts: { pillars: number; schedule: number; weeklyThemes: number }
+): number {
+  if (section === "pillars") return counts.pillars;
+  if (section === "schedule") return counts.schedule;
+  if (section === "weeklyThemes") return counts.weeklyThemes;
+  return 0;
+}
+
+function suggestionCellKey(
+  section: "pillars" | "schedule" | "weeklyThemes",
+  rowIndex: number,
+  property: string
+) {
+  return `${section}:${rowIndex}:${property}`;
+}
+
+function buildSuggestionLayout(
+  data: FullStrategySuggestResponse,
+  counts: { pillars: number; schedule: number; weeklyThemes: number }
+): { byCell: Map<string, SuggestionItem[]>; unmapped: SuggestionItem[] } {
+  const byCell = new Map<string, SuggestionItem[]>();
+  const unmapped: SuggestionItem[] = [];
+
+  const all = [
+    ...data.pillars.suggestions,
+    ...data.schedule.suggestions,
+    ...data.weeklyThemes.suggestions,
+  ];
+
+  for (const item of all) {
+    const t = item.target;
+    if (!t || typeof t !== "object") {
+      unmapped.push(item);
+      continue;
+    }
+
+    const section = "section" in t && typeof (t as { section: unknown }).section === "string"
+      ? (t as { section: string }).section
+      : "";
+    const rowIndex = "rowIndex" in t && typeof (t as { rowIndex: unknown }).rowIndex === "number"
+      ? (t as { rowIndex: number }).rowIndex
+      : NaN;
+    const property = "property" in t && typeof (t as { property: unknown }).property === "string"
+      ? (t as { property: string }).property
+      : "";
+
+    const props = propsForSuggestionSection(section);
+    const max = rowCountForSection(section, counts);
+
+    if (
+      !props ||
+      !Number.isFinite(rowIndex) ||
+      rowIndex < 0 ||
+      rowIndex >= max ||
+      !property ||
+      !props.has(property)
+    ) {
+      unmapped.push(item);
+      continue;
+    }
+
+    const key = suggestionCellKey(
+      section as "pillars" | "schedule" | "weeklyThemes",
+      rowIndex,
+      property
+    );
+    const list = byCell.get(key) ?? [];
+    list.push(item);
+    byCell.set(key, list);
+  }
+
+  return { byCell, unmapped };
+}
+
 // ============================================================
-// Types for suggestions
+// Full-strategy AI preview (shows literal from → to values)
 // ============================================================
 
-type SuggestionItem = {
-  field: string;
-  current: string;
-  suggested: string;
-  reasoning: string;
-};
+function InlineFieldSuggestions({ items }: { items: SuggestionItem[] }) {
+  if (items.length === 0) return null;
 
-type SectionSuggestion = {
-  section: string;
-  suggestions: SuggestionItem[];
-  updatedSection: unknown;
+  return (
+    <aside className="flex w-full min-w-0 flex-col gap-2 lg:max-w-[13.5rem] lg:shrink-0">
+      {items.map((s, i) => (
+        <div
+          key={`${s.field}-${i}`}
+          className="rounded-md border border-violet-200/90 bg-violet-50/90 p-2.5 text-xs shadow-sm dark:border-violet-800/80 dark:bg-violet-950/35"
+        >
+          <div className="mb-1.5 flex items-center gap-1 font-medium text-violet-800 dark:text-violet-200">
+            <Sparkles className="size-3 shrink-0" />
+            <span className="leading-tight">AI suggestion</span>
+          </div>
+          <div className="space-y-1.5">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">From</span>
+              <p className="mt-0.5 rounded bg-muted/60 px-1.5 py-1 line-through decoration-muted-foreground/60">
+                {s.current?.trim() ? s.current : "—"}
+              </p>
+            </div>
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">To</span>
+              <p className="mt-0.5 rounded border border-violet-200/80 bg-white/90 px-1.5 py-1 font-medium text-violet-950 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-50">
+                {s.suggested?.trim() ? s.suggested : "—"}
+              </p>
+            </div>
+          </div>
+          {s.reasoning?.trim() ? (
+            <p className="mt-2 border-t border-violet-200/70 pt-2 text-[11px] leading-snug text-muted-foreground dark:border-violet-800/60">
+              {s.reasoning}
+            </p>
+          ) : null}
+        </div>
+      ))}
+    </aside>
+  );
+}
+
+function SuggestionDiffList({ items }: { items: SuggestionItem[] }) {
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground italic">
+        No line-by-line diff for this block — values may still be updated holistically when you apply.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {items.map((s, i) => (
+        <li
+          key={`${s.field}-${i}`}
+          className="rounded-md border border-violet-200/80 bg-white p-3 text-sm dark:border-violet-800/80 dark:bg-violet-950/25"
+        >
+          <div className="font-medium text-violet-800 dark:text-violet-200">{s.field}</div>
+          <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">From</span>
+            <span className="min-w-0 flex-1 rounded bg-muted/50 px-2 py-1 text-sm line-through decoration-muted-foreground/50">
+              {s.current?.trim() ? s.current : "—"}
+            </span>
+            <span className="hidden text-muted-foreground sm:inline" aria-hidden>
+              →
+            </span>
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:ml-0">To</span>
+            <span className="min-w-0 flex-1 rounded border border-violet-200 bg-violet-50/80 px-2 py-1 text-sm font-medium text-violet-950 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-100">
+              {s.suggested?.trim() ? s.suggested : "—"}
+            </span>
+          </div>
+          {s.reasoning?.trim() ? (
+            <p className="mt-2 border-t border-violet-100 pt-2 text-xs text-muted-foreground dark:border-violet-800/60">
+              {s.reasoning}
+            </p>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function FullStrategySuggestionPanel({
+  summary,
+  unmapped,
+  onApply,
+  onDismiss,
+}: {
   summary: string;
-};
-
-type SuggestingSection = "pillars" | "schedule" | "weeklyThemes" | null;
+  unmapped: SuggestionItem[];
+  onApply: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-violet-300 bg-violet-50/50 p-4 dark:border-violet-800 dark:bg-violet-950/20">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium text-violet-800 dark:text-violet-200">
+          <Sparkles className="size-4 shrink-0" />
+          <span>Suggested updates (full strategy)</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 border-violet-300 text-violet-800 hover:bg-violet-100 dark:border-violet-700 dark:text-violet-200 dark:hover:bg-violet-950/50"
+            onClick={onApply}
+          >
+            <Check className="mr-1 size-3.5" />
+            Apply to all sections
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={onDismiss}>
+            <X className="mr-1 size-3.5" />
+            Dismiss
+          </Button>
+        </div>
+      </div>
+      <p className="text-sm text-muted-foreground">{summary}</p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Detailed changes appear beside each field below. Use Apply to update every section at once.
+      </p>
+      {unmapped.length > 0 ? (
+        <div className="mt-4 border-t border-violet-200/80 pt-4 dark:border-violet-800/60">
+          <h3 className="mb-2 text-sm font-semibold text-foreground">Other suggestions</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            These could not be matched to a specific field automatically — review before applying.
+          </p>
+          <SuggestionDiffList items={unmapped} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function StrategyBuilder() {
+  const router = useRouter();
+  const strategyAdvanceTimerRef = useRef<number | null>(null);
   const [strategy, setStrategy] = useState<ContentStrategy>(createDefaultStrategy());
   const [version, setVersion] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,15 +330,12 @@ export function StrategyBuilder() {
   const [error, setError] = useState("");
   const [generationStep, setGenerationStep] = useState("");
 
-  // Suggest with AI state
-  const [suggestingSection, setSuggestingSection] = useState<SuggestingSection>(null);
-  const [sectionSuggestion, setSectionSuggestion] = useState<SectionSuggestion | null>(null);
-  const [suggestionTarget, setSuggestionTarget] = useState<SuggestingSection>(null);
+  const [suggestingStrategy, setSuggestingStrategy] = useState(false);
+  const [fullSuggestion, setFullSuggestion] = useState<FullStrategySuggestResponse | null>(null);
 
-  const handleSuggest = useCallback(async (section: "pillars" | "schedule" | "weeklyThemes") => {
-    setSuggestingSection(section);
-    setSectionSuggestion(null);
-    setSuggestionTarget(section);
+  const handleSuggestFullStrategy = useCallback(async () => {
+    setSuggestingStrategy(true);
+    setFullSuggestion(null);
     setMessage("");
     setError("");
 
@@ -117,7 +343,7 @@ export function StrategyBuilder() {
       const response = await fetch("/api/strategy/suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section, currentStrategy: strategy }),
+        body: JSON.stringify({ section: "all", currentStrategy: strategy }),
       });
       const data = await response.json();
 
@@ -125,46 +351,49 @@ export function StrategyBuilder() {
         throw new Error(data.error || "Unable to get suggestions");
       }
 
-      setSectionSuggestion(data as SectionSuggestion);
+      if (data.section !== "all" || !data.pillars || !data.schedule || !data.weeklyThemes) {
+        throw new Error("Unexpected response from suggestion service");
+      }
+
+      setFullSuggestion(data as FullStrategySuggestResponse);
     } catch (suggestError) {
       setError(suggestError instanceof Error ? suggestError.message : "Unable to get suggestions");
     } finally {
-      setSuggestingSection(null);
+      setSuggestingStrategy(false);
     }
   }, [strategy]);
 
-  const applySuggestion = useCallback(() => {
-    if (!sectionSuggestion || !suggestionTarget) return;
+  const applyFullSuggestion = useCallback(() => {
+    if (!fullSuggestion) return;
 
-    const updatedSection = sectionSuggestion.updatedSection;
+    setStrategy((current) => ({
+      ...current,
+      pillars: fullSuggestion.pillars.updatedSection as ContentStrategy["pillars"],
+      schedule: fullSuggestion.schedule.updatedSection as ContentStrategy["schedule"],
+      weeklyThemes: fullSuggestion.weeklyThemes.updatedSection as ContentStrategy["weeklyThemes"],
+    }));
 
-    setStrategy((current) => {
-      if (suggestionTarget === "pillars" && Array.isArray(updatedSection)) {
-        return { ...current, pillars: updatedSection as ContentStrategy["pillars"] };
-      }
-      if (suggestionTarget === "schedule" && Array.isArray(updatedSection)) {
-        return { ...current, schedule: updatedSection as ContentStrategy["schedule"] };
-      }
-      if (suggestionTarget === "weeklyThemes" && Array.isArray(updatedSection)) {
-        return { ...current, weeklyThemes: updatedSection as ContentStrategy["weeklyThemes"] };
-      }
-      return current;
-    });
+    setMessage("AI suggestions applied across pillars, schedule, and weekly themes. Review and save when ready.");
+    setFullSuggestion(null);
+  }, [fullSuggestion]);
 
-    setMessage("AI suggestions applied. Review the changes and save when ready.");
-    setSectionSuggestion(null);
-    setSuggestionTarget(null);
-  }, [sectionSuggestion, suggestionTarget]);
-
-  const dismissSuggestion = useCallback(() => {
-    setSectionSuggestion(null);
-    setSuggestionTarget(null);
+  const dismissFullSuggestion = useCallback(() => {
+    setFullSuggestion(null);
   }, []);
+
+  const suggestionLayout = useMemo(() => {
+    if (!fullSuggestion) return null;
+    return buildSuggestionLayout(fullSuggestion, {
+      pillars: strategy.pillars.length,
+      schedule: strategy.schedule.length,
+      weeklyThemes: strategy.weeklyThemes.length,
+    });
+  }, [fullSuggestion, strategy.pillars.length, strategy.schedule.length, strategy.weeklyThemes.length]);
 
   useEffect(() => {
     async function loadStrategy() {
       try {
-        const response = await fetch("/api/strategy");
+        const response = await fetch("/api/strategy", { cache: "no-store" });
         const data = await response.json();
 
         if (!response.ok) {
@@ -183,6 +412,14 @@ export function StrategyBuilder() {
     }
 
     void loadStrategy();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (strategyAdvanceTimerRef.current) {
+        window.clearTimeout(strategyAdvanceTimerRef.current);
+      }
+    };
   }, []);
 
   async function handleGenerate() {
@@ -223,7 +460,17 @@ export function StrategyBuilder() {
               } else if (currentEvent === "done") {
                 setStrategy(data.strategy as ContentStrategy);
                 setVersion(data.version as number);
-                setMessage(`Strategy generated successfully as version ${data.version}.`);
+                setMessage(
+                  `Strategy generated successfully as version ${data.version}. Opening drafts in a moment…`
+                );
+                if (strategyAdvanceTimerRef.current) {
+                  window.clearTimeout(strategyAdvanceTimerRef.current);
+                }
+                strategyAdvanceTimerRef.current = window.setTimeout(() => {
+                  strategyAdvanceTimerRef.current = null;
+                  router.refresh();
+                  router.push("/content/drafts");
+                }, STRATEGY_ADVANCE_MS);
               } else if (currentEvent === "error") {
                 throw new Error(data.error as string);
               }
@@ -254,6 +501,7 @@ export function StrategyBuilder() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(strategy),
+        cache: "no-store",
       });
       const data = await response.json();
 
@@ -261,9 +509,18 @@ export function StrategyBuilder() {
         throw new Error(data.error || "Unable to save strategy");
       }
 
-      setStrategy(data.strategy as ContentStrategy);
-      setVersion(data.version as number);
-      setMessage(`Strategy saved successfully as version ${data.version}.`);
+      // Reload via GET so the form matches exactly what GET returns (same ordering / row as DB).
+      const reload = await fetch(`/api/strategy?_=${Date.now()}`, { cache: "no-store" });
+      const reloaded = await reload.json();
+      if (reload.ok && reloaded.strategy) {
+        setStrategy(reloaded.strategy as ContentStrategy);
+        setVersion(reloaded.version);
+        setMessage(`Strategy saved successfully as version ${reloaded.version}.`);
+      } else {
+        setStrategy(data.strategy as ContentStrategy);
+        setVersion(data.version as number);
+        setMessage(`Strategy saved successfully as version ${data.version}.`);
+      }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save strategy");
     } finally {
@@ -290,6 +547,15 @@ export function StrategyBuilder() {
             <Sparkles className="mr-2 size-4" />
             {generating ? (generationStep || "Generating...") : "Generate strategy"}
           </Button>
+          <Button
+            variant="outline"
+            className="border-violet-300 text-violet-800 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200 dark:hover:bg-violet-950/40"
+            disabled={generating || suggestingStrategy}
+            onClick={() => void handleSuggestFullStrategy()}
+          >
+            <Lightbulb className="mr-2 size-4" />
+            {suggestingStrategy ? "Analysing strategy..." : "Suggest with AI"}
+          </Button>
           <Button variant="outline" onClick={handleSave} disabled={saving}>
             <Save className="mr-2 size-4" />
             {saving ? "Saving..." : "Save strategy"}
@@ -300,106 +566,96 @@ export function StrategyBuilder() {
       {message && <div className="rounded-lg border border-green-600/30 bg-green-600/5 p-3 text-sm text-green-700">{message}</div>}
       {error && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
 
+      {fullSuggestion && suggestionLayout && (
+        <FullStrategySuggestionPanel
+          summary={fullSuggestion.summary}
+          unmapped={suggestionLayout.unmapped}
+          onApply={applyFullSuggestion}
+          onDismiss={dismissFullSuggestion}
+        />
+      )}
+
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Content pillars</CardTitle>
-              <CardDescription>
-                The 3-5 core topic categories all your content revolves around. Good pillars are distinct, audience-aligned, and cover the full buyer journey.
-              </CardDescription>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/30 shrink-0"
-              disabled={suggestingSection !== null}
-              onClick={() => handleSuggest("pillars")}
-            >
-              <Lightbulb className="mr-1.5 size-4" />
-              {suggestingSection === "pillars" ? "Analysing..." : "Suggest with AI"}
-            </Button>
+          <div>
+            <CardTitle>Content pillars</CardTitle>
+            <CardDescription>
+              The 3-5 core topic categories all your content revolves around. Good pillars are distinct, audience-aligned, and cover the full buyer journey.
+            </CardDescription>
           </div>
         </CardHeader>
-
-        {suggestionTarget === "pillars" && sectionSuggestion && (
-          <div className="mx-6 mb-2 rounded-lg border border-violet-300 bg-violet-50/60 p-4 dark:border-violet-800 dark:bg-violet-950/20">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300">
-                <Sparkles className="size-4" />
-                AI Suggestions
-              </div>
-              <div className="flex gap-1.5">
-                <Button size="sm" variant="outline" className="h-7 text-xs border-violet-300 text-violet-700 hover:bg-violet-100 dark:border-violet-700 dark:text-violet-300" onClick={applySuggestion}>
-                  <Check className="mr-1 size-3" /> Apply all
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={dismissSuggestion}>
-                  <X className="mr-1 size-3" /> Dismiss
-                </Button>
-              </div>
-            </div>
-            <p className="mb-3 text-sm text-muted-foreground">{sectionSuggestion.summary}</p>
-            <ul className="space-y-2">
-              {sectionSuggestion.suggestions.map((s, i) => (
-                <li key={i} className="rounded-md border border-violet-200 bg-white p-3 text-sm dark:border-violet-800 dark:bg-violet-950/30">
-                  <span className="font-medium text-violet-700 dark:text-violet-300">{s.field}:</span>{" "}
-                  <span className="text-muted-foreground">{s.reasoning}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         <CardContent className="space-y-4">
           {strategy.pillars.map((pillar, index) => (
             <div key={`${pillar.name}-${index}`} className="grid gap-3 rounded-lg border p-4 md:grid-cols-[1.2fr_2fr_120px]">
               <div className="space-y-2">
                 <FieldLabel label="Pillar name" hint={FIELD_HINTS.pillarName} />
-                <Input
-                  value={pillar.name}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      pillars: current.pillars.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, name: event.target.value } : item
-                      ),
-                    }))
-                  }
-                />
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      value={pillar.name}
+                      onChange={(event) =>
+                        setStrategy((current) => ({
+                          ...current,
+                          pillars: current.pillars.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, name: event.target.value } : item
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  <InlineFieldSuggestions
+                    items={suggestionLayout?.byCell.get(suggestionCellKey("pillars", index, "name")) ?? []}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <FieldLabel label="Description" hint={FIELD_HINTS.pillarDescription} />
-                <textarea
-                  className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                  value={pillar.description}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      pillars: current.pillars.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, description: event.target.value } : item
-                      ),
-                    }))
-                  }
-                />
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <textarea
+                      className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                      value={pillar.description}
+                      onChange={(event) =>
+                        setStrategy((current) => ({
+                          ...current,
+                          pillars: current.pillars.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, description: event.target.value } : item
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  <InlineFieldSuggestions
+                    items={suggestionLayout?.byCell.get(suggestionCellKey("pillars", index, "description")) ?? []}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <FieldLabel label="Percentage" hint={FIELD_HINTS.pillarPercentage} />
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={pillar.percentage}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      pillars: current.pillars.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? { ...item, percentage: Number(event.target.value) || 0 }
-                          : item
-                      ),
-                    }))
-                  }
-                />
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={pillar.percentage}
+                      onChange={(event) =>
+                        setStrategy((current) => ({
+                          ...current,
+                          pillars: current.pillars.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, percentage: Number(event.target.value) || 0 }
+                              : item
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  <InlineFieldSuggestions
+                    items={suggestionLayout?.byCell.get(suggestionCellKey("pillars", index, "percentage")) ?? []}
+                  />
+                </div>
               </div>
             </div>
           ))}
@@ -408,113 +664,211 @@ export function StrategyBuilder() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Platform schedule</CardTitle>
-              <CardDescription>
-                Control posting frequency, preferred days, and content format mix per platform. Best practices vary by channel.
-              </CardDescription>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/30 shrink-0"
-              disabled={suggestingSection !== null}
-              onClick={() => handleSuggest("schedule")}
-            >
-              <Lightbulb className="mr-1.5 size-4" />
-              {suggestingSection === "schedule" ? "Analysing..." : "Suggest with AI"}
-            </Button>
+          <div>
+            <CardTitle>Platform schedule</CardTitle>
+            <CardDescription>
+              Control posting frequency, preferred days, and content format mix per platform. Best practices vary by channel.
+            </CardDescription>
           </div>
         </CardHeader>
-
-        {suggestionTarget === "schedule" && sectionSuggestion && (
-          <div className="mx-6 mb-2 rounded-lg border border-violet-300 bg-violet-50/60 p-4 dark:border-violet-800 dark:bg-violet-950/20">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300">
-                <Sparkles className="size-4" />
-                AI Suggestions
-              </div>
-              <div className="flex gap-1.5">
-                <Button size="sm" variant="outline" className="h-7 text-xs border-violet-300 text-violet-700 hover:bg-violet-100 dark:border-violet-700 dark:text-violet-300" onClick={applySuggestion}>
-                  <Check className="mr-1 size-3" /> Apply all
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={dismissSuggestion}>
-                  <X className="mr-1 size-3" /> Dismiss
-                </Button>
-              </div>
-            </div>
-            <p className="mb-3 text-sm text-muted-foreground">{sectionSuggestion.summary}</p>
-            <ul className="space-y-2">
-              {sectionSuggestion.suggestions.map((s, i) => (
-                <li key={i} className="rounded-md border border-violet-200 bg-white p-3 text-sm dark:border-violet-800 dark:bg-violet-950/30">
-                  <span className="font-medium text-violet-700 dark:text-violet-300">{s.field}:</span>{" "}
-                  <span className="text-muted-foreground">{s.reasoning}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         <CardContent className="space-y-4">
           {strategy.schedule.map((schedule, index) => (
-            <div key={`${schedule.platform}-${index}`} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-              <div className="space-y-2">
-                <FieldLabel label="Platform" hint={FIELD_HINTS.platform} />
-                <Input value={schedule.platform} disabled />
+            <div key={`${schedule.platform}-${index}`} className="space-y-4 rounded-lg border p-4">
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="space-y-2">
+                  <FieldLabel label="Platform" hint={FIELD_HINTS.platform} />
+                  <Input value={schedule.platform} disabled />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel label="Posts per week" hint={FIELD_HINTS.postsPerWeek} />
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                    <div className="min-w-0 flex-1">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={21}
+                        value={schedule.postsPerWeek}
+                        onChange={(event) =>
+                          setStrategy((current) => ({
+                            ...current,
+                            schedule: current.schedule.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, postsPerWeek: Number(event.target.value) || 1 }
+                                : item
+                            ),
+                          }))
+                        }
+                      />
+                    </div>
+                    <InlineFieldSuggestions
+                      items={suggestionLayout?.byCell.get(suggestionCellKey("schedule", index, "postsPerWeek")) ?? []}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel label="Preferred days" hint={FIELD_HINTS.preferredDays} />
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                    <div className="min-w-0 flex-1">
+                      <textarea
+                        className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                        value={listToText(schedule.preferredDays)}
+                        onChange={(event) =>
+                          setStrategy((current) => ({
+                            ...current,
+                            schedule: current.schedule.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, preferredDays: textToList(event.target.value) }
+                                : item
+                            ),
+                          }))
+                        }
+                      />
+                    </div>
+                    <InlineFieldSuggestions
+                      items={suggestionLayout?.byCell.get(suggestionCellKey("schedule", index, "preferredDays")) ?? []}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel label="Preferred times" hint={FIELD_HINTS.preferredTimes} />
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                    <div className="min-w-0 flex-1">
+                      <textarea
+                        className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                        value={listToText(schedule.preferredTimes)}
+                        onChange={(event) =>
+                          setStrategy((current) => ({
+                            ...current,
+                            schedule: current.schedule.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, preferredTimes: textToList(event.target.value) }
+                                : item
+                            ),
+                          }))
+                        }
+                      />
+                    </div>
+                    <InlineFieldSuggestions
+                      items={suggestionLayout?.byCell.get(suggestionCellKey("schedule", index, "preferredTimes")) ?? []}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <FieldLabel label="Posts per week" hint={FIELD_HINTS.postsPerWeek} />
-                <Input
-                  type="number"
-                  min={1}
-                  max={21}
-                  value={schedule.postsPerWeek}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      schedule: current.schedule.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? { ...item, postsPerWeek: Number(event.target.value) || 1 }
-                          : item
-                      ),
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel label="Preferred days" hint={FIELD_HINTS.preferredDays} />
-                <textarea
-                  className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                  value={listToText(schedule.preferredDays)}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      schedule: current.schedule.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? { ...item, preferredDays: textToList(event.target.value) }
-                          : item
-                      ),
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel label="Preferred times" hint={FIELD_HINTS.preferredTimes} />
-                <textarea
-                  className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                  value={listToText(schedule.preferredTimes)}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      schedule: current.schedule.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? { ...item, preferredTimes: textToList(event.target.value) }
-                          : item
-                      ),
-                    }))
-                  }
-                />
+
+              <div className="border-t pt-4">
+                <FieldLabel label="Content format mix" hint={FIELD_HINTS.contentMix} />
+                <div className="mt-2 flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    {schedule.contentMix.map((mixRow, mixIndex) => (
+                      <div
+                        key={`${schedule.platform}-mix-${mixIndex}`}
+                        className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-2 py-2"
+                      >
+                        <select
+                          className="h-9 min-w-[8.5rem] flex-1 rounded-md border bg-background px-2 text-sm md:max-w-[11rem]"
+                          value={mixRow.type}
+                          onChange={(event) => {
+                            const value = event.target.value as ContentMixEntry["type"];
+                            setStrategy((current) => ({
+                              ...current,
+                              schedule: current.schedule.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      contentMix: item.contentMix.map((row, j) =>
+                                        j === mixIndex ? { ...row, type: value } : row
+                                      ),
+                                    }
+                                  : item
+                              ),
+                            }));
+                          }}
+                        >
+                          {SCHEDULE_CONTENT_TYPES.map((t) => (
+                            <option key={t} value={t}>
+                              {t.replace(/-/g, " ")}
+                            </option>
+                          ))}
+                        </select>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          className="h-9 w-20"
+                          value={mixRow.percentage}
+                          onChange={(event) =>
+                            setStrategy((current) => ({
+                              ...current,
+                              schedule: current.schedule.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      contentMix: item.contentMix.map((row, j) =>
+                                        j === mixIndex
+                                          ? { ...row, percentage: Number(event.target.value) || 0 }
+                                          : row
+                                      ),
+                                    }
+                                  : item
+                              ),
+                            }))
+                          }
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 shrink-0 text-muted-foreground"
+                          disabled={schedule.contentMix.length <= 1}
+                          onClick={() =>
+                            setStrategy((current) => ({
+                              ...current,
+                              schedule: current.schedule.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      contentMix: item.contentMix.filter((_, j) => j !== mixIndex),
+                                    }
+                                  : item
+                              ),
+                            }))
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() =>
+                        setStrategy((current) => ({
+                          ...current,
+                          schedule: current.schedule.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  contentMix: [
+                                    ...item.contentMix,
+                                    { type: "image", percentage: 0 },
+                                  ],
+                                }
+                              : item
+                          ),
+                        }))
+                      }
+                    >
+                      Add format
+                    </Button>
+                  </div>
+                  <InlineFieldSuggestions
+                    items={suggestionLayout?.byCell.get(suggestionCellKey("schedule", index, "contentMix")) ?? []}
+                  />
+                </div>
               </div>
             </div>
           ))}
@@ -523,53 +877,13 @@ export function StrategyBuilder() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Weekly themes</CardTitle>
-              <CardDescription>
-                A 4-week rotating cadence that keeps content cohesive. Effective themes follow a narrative arc: educate → build trust → convert → re-engage.
-              </CardDescription>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/30 shrink-0"
-              disabled={suggestingSection !== null}
-              onClick={() => handleSuggest("weeklyThemes")}
-            >
-              <Lightbulb className="mr-1.5 size-4" />
-              {suggestingSection === "weeklyThemes" ? "Analysing..." : "Suggest with AI"}
-            </Button>
+          <div>
+            <CardTitle>Weekly themes</CardTitle>
+            <CardDescription>
+              A 4-week rotating cadence that keeps content cohesive. Effective themes follow a narrative arc: educate → build trust → convert → re-engage.
+            </CardDescription>
           </div>
         </CardHeader>
-
-        {suggestionTarget === "weeklyThemes" && sectionSuggestion && (
-          <div className="mx-6 mb-2 rounded-lg border border-violet-300 bg-violet-50/60 p-4 dark:border-violet-800 dark:bg-violet-950/20">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300">
-                <Sparkles className="size-4" />
-                AI Suggestions
-              </div>
-              <div className="flex gap-1.5">
-                <Button size="sm" variant="outline" className="h-7 text-xs border-violet-300 text-violet-700 hover:bg-violet-100 dark:border-violet-700 dark:text-violet-300" onClick={applySuggestion}>
-                  <Check className="mr-1 size-3" /> Apply all
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={dismissSuggestion}>
-                  <X className="mr-1 size-3" /> Dismiss
-                </Button>
-              </div>
-            </div>
-            <p className="mb-3 text-sm text-muted-foreground">{sectionSuggestion.summary}</p>
-            <ul className="space-y-2">
-              {sectionSuggestion.suggestions.map((s, i) => (
-                <li key={i} className="rounded-md border border-violet-200 bg-white p-3 text-sm dark:border-violet-800 dark:bg-violet-950/30">
-                  <span className="font-medium text-violet-700 dark:text-violet-300">{s.field}:</span>{" "}
-                  <span className="text-muted-foreground">{s.reasoning}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         <CardContent className="space-y-4">
           {strategy.weeklyThemes.map((theme, index) => (
@@ -580,45 +894,66 @@ export function StrategyBuilder() {
               </div>
               <div className="space-y-2">
                 <FieldLabel label="Theme" hint={FIELD_HINTS.weekTheme} />
-                <Input
-                  value={theme.theme}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, theme: event.target.value } : item
-                      ),
-                    }))
-                  }
-                />
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      value={theme.theme}
+                      onChange={(event) =>
+                        setStrategy((current) => ({
+                          ...current,
+                          weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, theme: event.target.value } : item
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  <InlineFieldSuggestions
+                    items={suggestionLayout?.byCell.get(suggestionCellKey("weeklyThemes", index, "theme")) ?? []}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <FieldLabel label="Pillar" hint={FIELD_HINTS.weekPillar} />
-                <Input
-                  value={theme.pillar}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, pillar: event.target.value } : item
-                      ),
-                    }))
-                  }
-                />
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      value={theme.pillar}
+                      onChange={(event) =>
+                        setStrategy((current) => ({
+                          ...current,
+                          weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, pillar: event.target.value } : item
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  <InlineFieldSuggestions
+                    items={suggestionLayout?.byCell.get(suggestionCellKey("weeklyThemes", index, "pillar")) ?? []}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <FieldLabel label="Key message" hint={FIELD_HINTS.weekKeyMessage} />
-                <Input
-                  value={theme.keyMessage}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, keyMessage: event.target.value } : item
-                      ),
-                    }))
-                  }
-                />
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      value={theme.keyMessage}
+                      onChange={(event) =>
+                        setStrategy((current) => ({
+                          ...current,
+                          weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, keyMessage: event.target.value } : item
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  <InlineFieldSuggestions
+                    items={suggestionLayout?.byCell.get(suggestionCellKey("weeklyThemes", index, "keyMessage")) ?? []}
+                  />
+                </div>
               </div>
             </div>
           ))}

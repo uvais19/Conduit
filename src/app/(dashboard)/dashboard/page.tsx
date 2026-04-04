@@ -29,6 +29,9 @@ import { eq } from "drizzle-orm";
 import type { PostAnalysis, Platform } from "@/lib/types";
 import { PLATFORM_LABELS } from "@/lib/constants";
 
+/** Per-tenant checklist must reflect latest manifesto, strategy, drafts, and connections. */
+export const dynamic = "force-dynamic";
+
 const stats = [
   {
     title: "Total Reach",

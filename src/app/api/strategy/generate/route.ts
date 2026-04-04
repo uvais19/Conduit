@@ -64,7 +64,7 @@ export async function POST() {
             .select({ version: contentStrategies.version })
             .from(contentStrategies)
             .where(eq(contentStrategies.tenantId, tenantId))
-            .orderBy(desc(contentStrategies.createdAt))
+            .orderBy(desc(contentStrategies.createdAt), desc(contentStrategies.id))
             .limit(1);
 
           const [saved] = await db

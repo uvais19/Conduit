@@ -12,22 +12,43 @@ const VARIANT_ANGLES: Record<VariantLabel, string> = {
   C: "results-first -- lead with outcomes/numbers, then explain the method",
 };
 
+const LINKEDIN_WRITER_ADDENDUM = [
+  "LINKEDIN TEXT-FIRST RULES (critical):",
+  "- The first 1–2 lines appear before “see more” — put the entire hook there; no filler.",
+  "- Optimize for dwell time: short paragraphs (1–2 sentences), generous line breaks, scannable structure.",
+  "- Do NOT put URLs in the post body; if a link is implied, say “link in comments” or similar.",
+  "- End with 3–5 professional hashtags on their own line at the bottom (within platform limits).",
+  "- Tone: authoritative, helpful, zero fluff — thought leadership for the stated audience.",
+  "- Encourage comments: end with a sharp question or clear invitation to disagree/share experience.",
+  "- Variants A/B/C must feel meaningfully different in structure and hook while covering the same topic.",
+].join("\n");
+
 export async function runPlatformWriterAgent(
   input: ContentGenerationRequest,
   variantLabel: VariantLabel
 ): Promise<GeneratedVariant> {
   const platformContext = getPlatformPromptContext(input.platform);
   const pk = PLATFORM_KNOWLEDGE[input.platform];
+  const linkedinExtra =
+    input.platform === "linkedin"
+      ? `\n\n${LINKEDIN_WRITER_ADDENDUM}\n`
+      : "";
 
   const result = await generateJson<{ caption: string; hashtags: string[]; cta: string }>({
     systemPrompt: [
       `You are a ${input.platform} content writing specialist for Conduit, an AI social media manager.`,
       `Write content that is native to ${input.platform} and follows its specific rules and best practices.`,
+      input.platform === "linkedin"
+        ? "LinkedIn rewards native text, strong hooks, and comment conversation — visuals are secondary to the written post."
+        : "",
       "",
       platformContext,
+      linkedinExtra,
       "",
       "Return valid JSON only with: { caption, hashtags, cta }",
-    ].join("\n"),
+    ]
+      .filter(Boolean)
+      .join("\n"),
     userPrompt: [
       `Write a ${input.platform} post with a ${VARIANT_ANGLES[variantLabel]} angle.`,
       "",
@@ -44,9 +65,14 @@ export async function runPlatformWriterAgent(
       `- Follow the platform content rules above exactly`,
       `- Match the brand voice while adapting to the platform tone`,
       `- The CTA should feel natural to ${input.platform}`,
+      input.platform === "linkedin"
+        ? "- Caption must be structured for LinkedIn feed: hook → insight/bullets or short sections → CTA/question → hashtags."
+        : "",
       "",
       'Return JSON: { "caption": "...", "hashtags": ["#tag1", ...], "cta": "..." }',
-    ].join("\n"),
+    ]
+      .filter(Boolean)
+      .join("\n"),
     temperature: 0.45,
     fallback: null as unknown as { caption: string; hashtags: string[]; cta: string },
   });

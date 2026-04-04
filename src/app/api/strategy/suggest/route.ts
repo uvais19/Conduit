@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
-import { runStrategySuggestAgent } from "@/lib/agents/strategy/strategy-suggest-agent";
+import {
+  runFullStrategySuggestAgent,
+  runStrategySuggestAgent,
+} from "@/lib/agents/strategy/strategy-suggest-agent";
 import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { brandManifestos, contentStrategies, platformAnalyses } from "@/lib/db/schema";
 import type { PostAnalysis } from "@/lib/types";
 
 const requestSchema = z.object({
-  section: z.enum(["pillars", "schedule", "weeklyThemes"]),
+  section: z.enum(["pillars", "schedule", "weeklyThemes", "all"]),
   currentStrategy: z.object({
     pillars: z.array(z.any()),
     schedule: z.array(z.any()),
@@ -54,7 +57,7 @@ export async function POST(request: Request) {
       .select({ data: contentStrategies.data })
       .from(contentStrategies)
       .where(eq(contentStrategies.tenantId, tenantId))
-      .orderBy(desc(contentStrategies.createdAt))
+      .orderBy(desc(contentStrategies.createdAt), desc(contentStrategies.id))
       .limit(1);
 
     const analysisRows = await db
@@ -65,6 +68,16 @@ export async function POST(request: Request) {
     const postAnalyses = analysisRows.length > 0
       ? analysisRows.map((r) => r.data as PostAnalysis)
       : undefined;
+
+    if (section === "all") {
+      const result = await runFullStrategySuggestAgent({
+        currentStrategy,
+        manifesto,
+        savedStrategy: savedStrategy?.data as Record<string, unknown> | undefined,
+        postAnalyses,
+      });
+      return NextResponse.json(result);
+    }
 
     const result = await runStrategySuggestAgent({
       section,

@@ -20,6 +20,9 @@
 # production
 /build
 
+# local media (R2 fallback)
+.conduit-local-media/
+
 # misc
 .DS_Store
 *.pem
