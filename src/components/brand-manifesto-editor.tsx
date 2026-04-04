@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Save, Trash2 } from "lucide-react";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,7 +12,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   createEmptyBrandManifesto,
   listToText,
@@ -38,6 +38,45 @@ function productsFromText(value: string, audience: string) {
 }
 
 type DeleteConfirm = "idle" | "prompt" | "deleting";
+
+const MANIFESTO_HINTS = {
+  businessName:
+    "The name writers and strategists should use in captions, bios, and campaigns. Keep it consistent with how customers know you.",
+  tagline:
+    "A short phrase that captures your value proposition. Often appears under your logo or in the first line of bios.",
+  industry:
+    "The broad market you operate in (e.g. software, hospitality, professional services). Helps AI pick relevant examples and language.",
+  subIndustry:
+    "Your niche or specialization within the industry. More specific = more tailored content angles.",
+  missionStatement:
+    "Why your organization exists and who it serves today. Grounds messaging in purpose, not just products.",
+  vision:
+    "Where you are headed long term. Useful for aspirational posts and leadership or brand-story content.",
+  demographics:
+    "Factual traits of your primary audience: age ranges, locations, roles, company size, or segments. One clear paragraph or bullet-style text is fine.",
+  psychographics:
+    "How your audience thinks and feels: values, motivations, objections, and lifestyle. Complements demographics for tone and hooks.",
+  painPoints:
+    "Problems or frustrations your audience faces — one per line. Content can speak directly to these pains.",
+  desires:
+    "Outcomes or feelings your audience wants — one per line. Pairs with pain points for before/after storytelling.",
+  productsServices:
+    "What you sell or deliver. Use one line per offer as Name: short description so AI can reference real offerings accurately.",
+  uniqueSellingPropositions:
+    "Claims that set you apart from alternatives — one per line. Feeds differentiation in hooks and CTAs.",
+  voiceAttributes:
+    "Adjectives or short phrases that describe how the brand should sound (e.g. direct, warm, expert). Writers use this as a tone checklist.",
+  keyMessages:
+    "Themes or proof points you want repeated across channels — one per line. Keeps campaigns aligned.",
+  contentDos:
+    "Behaviors, formats, or topics to lean into — one per line. Examples: cite data, use customer quotes, end with a question.",
+  contentDonts:
+    "Topics, phrases, or styles to avoid — one per line. Reduces off-brand or risky output.",
+  socialMediaGoals:
+    "What social should achieve for the business — one per line. Examples: leads, community, employer brand, launches.",
+  visualStyle:
+    "Direction for imagery and design: colors, mood, photography vs illustration, level of polish. Helps briefs stay on-brand.",
+} as const;
 
 export function BrandManifestoEditor() {
   const [manifesto, setManifesto] = useState<BrandManifesto>(createEmptyBrandManifesto());
@@ -258,7 +297,11 @@ export function BrandManifestoEditor() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="businessName">Business name</Label>
+            <FieldLabelWithHint
+              htmlFor="businessName"
+              label="Business name"
+              hint={MANIFESTO_HINTS.businessName}
+            />
             <Input
               id="businessName"
               value={manifesto.businessName}
@@ -268,7 +311,7 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="tagline">Tagline</Label>
+            <FieldLabelWithHint htmlFor="tagline" label="Tagline" hint={MANIFESTO_HINTS.tagline} />
             <Input
               id="tagline"
               value={manifesto.tagline ?? ""}
@@ -278,7 +321,7 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="industry">Industry</Label>
+            <FieldLabelWithHint htmlFor="industry" label="Industry" hint={MANIFESTO_HINTS.industry} />
             <Input
               id="industry"
               value={manifesto.industry}
@@ -288,7 +331,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="subIndustry">Sub-industry</Label>
+            <FieldLabelWithHint
+              htmlFor="subIndustry"
+              label="Sub-industry"
+              hint={MANIFESTO_HINTS.subIndustry}
+            />
             <Input
               id="subIndustry"
               value={manifesto.subIndustry ?? ""}
@@ -298,7 +345,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="missionStatement">Mission statement</Label>
+            <FieldLabelWithHint
+              htmlFor="missionStatement"
+              label="Mission statement"
+              hint={MANIFESTO_HINTS.missionStatement}
+            />
             <textarea
               id="missionStatement"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -309,7 +360,7 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="vision">Vision</Label>
+            <FieldLabelWithHint htmlFor="vision" label="Vision" hint={MANIFESTO_HINTS.vision} />
             <textarea
               id="vision"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -329,7 +380,11 @@ export function BrandManifestoEditor() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="demographics">Primary audience demographics</Label>
+            <FieldLabelWithHint
+              htmlFor="demographics"
+              label="Primary audience demographics"
+              hint={MANIFESTO_HINTS.demographics}
+            />
             <textarea
               id="demographics"
               className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -346,7 +401,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="psychographics">Primary audience psychographics</Label>
+            <FieldLabelWithHint
+              htmlFor="psychographics"
+              label="Primary audience psychographics"
+              hint={MANIFESTO_HINTS.psychographics}
+            />
             <textarea
               id="psychographics"
               className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -363,7 +422,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="painPoints">Pain points (one per line)</Label>
+            <FieldLabelWithHint
+              htmlFor="painPoints"
+              label="Pain points (one per line)"
+              hint={MANIFESTO_HINTS.painPoints}
+            />
             <textarea
               id="painPoints"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -380,7 +443,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="desires">Desires (one per line)</Label>
+            <FieldLabelWithHint
+              htmlFor="desires"
+              label="Desires (one per line)"
+              hint={MANIFESTO_HINTS.desires}
+            />
             <textarea
               id="desires"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -397,7 +464,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="productsServices">Products / services (format: Name: description)</Label>
+            <FieldLabelWithHint
+              htmlFor="productsServices"
+              label="Products / services (format: Name: description)"
+              hint={MANIFESTO_HINTS.productsServices}
+            />
             <textarea
               id="productsServices"
               className="min-h-28 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -414,7 +485,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="uniqueSellingPropositions">Unique selling propositions (one per line)</Label>
+            <FieldLabelWithHint
+              htmlFor="uniqueSellingPropositions"
+              label="Unique selling propositions (one per line)"
+              hint={MANIFESTO_HINTS.uniqueSellingPropositions}
+            />
             <textarea
               id="uniqueSellingPropositions"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -437,7 +512,11 @@ export function BrandManifestoEditor() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="voiceAttributes">Voice attributes (one per line)</Label>
+            <FieldLabelWithHint
+              htmlFor="voiceAttributes"
+              label="Voice attributes (one per line)"
+              hint={MANIFESTO_HINTS.voiceAttributes}
+            />
             <textarea
               id="voiceAttributes"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -451,7 +530,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="keyMessages">Key messages (one per line)</Label>
+            <FieldLabelWithHint
+              htmlFor="keyMessages"
+              label="Key messages (one per line)"
+              hint={MANIFESTO_HINTS.keyMessages}
+            />
             <textarea
               id="keyMessages"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -465,7 +548,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="contentDos">Content do&apos;s</Label>
+            <FieldLabelWithHint
+              htmlFor="contentDos"
+              label="Content do's"
+              hint={MANIFESTO_HINTS.contentDos}
+            />
             <textarea
               id="contentDos"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -479,7 +566,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="contentDonts">Content don&apos;ts</Label>
+            <FieldLabelWithHint
+              htmlFor="contentDonts"
+              label="Content don'ts"
+              hint={MANIFESTO_HINTS.contentDonts}
+            />
             <textarea
               id="contentDonts"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -493,7 +584,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="socialMediaGoals">Social media goals (one per line)</Label>
+            <FieldLabelWithHint
+              htmlFor="socialMediaGoals"
+              label="Social media goals (one per line)"
+              hint={MANIFESTO_HINTS.socialMediaGoals}
+            />
             <textarea
               id="socialMediaGoals"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -507,7 +602,11 @@ export function BrandManifestoEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="visualStyle">Visual style</Label>
+            <FieldLabelWithHint
+              htmlFor="visualStyle"
+              label="Visual style"
+              hint={MANIFESTO_HINTS.visualStyle}
+            />
             <textarea
               id="visualStyle"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"

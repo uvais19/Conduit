@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Save, Info, Lightbulb, Check, X } from "lucide-react";
+import { Sparkles, Save, Lightbulb, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,13 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { listToText, textToList } from "@/lib/brand/manifesto";
 import type { FullStrategySuggestResponse, SuggestionItem } from "@/lib/strategy/suggest-types";
 import { createDefaultStrategy } from "@/lib/strategy/defaults";
@@ -67,27 +62,6 @@ const FIELD_HINTS = {
   weekKeyMessage:
     "The single takeaway or call-to-action that unifies all posts during this week.",
 } as const;
-
-// ============================================================
-// Reusable label with tooltip
-// ============================================================
-
-function FieldLabel({ htmlFor, label, hint }: { htmlFor?: string; label: string; hint: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
-      <Tooltip>
-        <TooltipTrigger type="button" className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
-          <Info className="size-3.5" />
-          <span className="sr-only">More info about {label}</span>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-64 text-xs">
-          {hint}
-        </TooltipContent>
-      </Tooltip>
-    </div>
-  );
-}
 
 const STRATEGY_ADVANCE_MS = 2000;
 
@@ -589,7 +563,7 @@ export function StrategyBuilder() {
           {strategy.pillars.map((pillar, index) => (
             <div key={`${pillar.name}-${index}`} className="grid gap-3 rounded-lg border p-4 md:grid-cols-[1.2fr_2fr_120px]">
               <div className="space-y-2">
-                <FieldLabel label="Pillar name" hint={FIELD_HINTS.pillarName} />
+                <FieldLabelWithHint label="Pillar name" hint={FIELD_HINTS.pillarName} />
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                   <div className="min-w-0 flex-1">
                     <Input
@@ -610,7 +584,7 @@ export function StrategyBuilder() {
                 </div>
               </div>
               <div className="space-y-2">
-                <FieldLabel label="Description" hint={FIELD_HINTS.pillarDescription} />
+                <FieldLabelWithHint label="Description" hint={FIELD_HINTS.pillarDescription} />
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                   <div className="min-w-0 flex-1">
                     <textarea
@@ -632,7 +606,7 @@ export function StrategyBuilder() {
                 </div>
               </div>
               <div className="space-y-2">
-                <FieldLabel label="Percentage" hint={FIELD_HINTS.pillarPercentage} />
+                <FieldLabelWithHint label="Percentage" hint={FIELD_HINTS.pillarPercentage} />
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                   <div className="min-w-0 flex-1">
                     <Input
@@ -677,11 +651,11 @@ export function StrategyBuilder() {
             <div key={`${schedule.platform}-${index}`} className="space-y-4 rounded-lg border p-4">
               <div className="grid gap-4 md:grid-cols-4">
                 <div className="space-y-2">
-                  <FieldLabel label="Platform" hint={FIELD_HINTS.platform} />
+                  <FieldLabelWithHint label="Platform" hint={FIELD_HINTS.platform} />
                   <Input value={schedule.platform} disabled />
                 </div>
                 <div className="space-y-2">
-                  <FieldLabel label="Posts per week" hint={FIELD_HINTS.postsPerWeek} />
+                  <FieldLabelWithHint label="Posts per week" hint={FIELD_HINTS.postsPerWeek} />
                   <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                     <div className="min-w-0 flex-1">
                       <Input
@@ -707,7 +681,7 @@ export function StrategyBuilder() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <FieldLabel label="Preferred days" hint={FIELD_HINTS.preferredDays} />
+                  <FieldLabelWithHint label="Preferred days" hint={FIELD_HINTS.preferredDays} />
                   <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                     <div className="min-w-0 flex-1">
                       <textarea
@@ -731,7 +705,7 @@ export function StrategyBuilder() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <FieldLabel label="Preferred times" hint={FIELD_HINTS.preferredTimes} />
+                  <FieldLabelWithHint label="Preferred times" hint={FIELD_HINTS.preferredTimes} />
                   <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                     <div className="min-w-0 flex-1">
                       <textarea
@@ -757,7 +731,7 @@ export function StrategyBuilder() {
               </div>
 
               <div className="border-t pt-4">
-                <FieldLabel label="Content format mix" hint={FIELD_HINTS.contentMix} />
+                <FieldLabelWithHint label="Content format mix" hint={FIELD_HINTS.contentMix} />
                 <div className="mt-2 flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                   <div className="min-w-0 flex-1 space-y-2">
                     {schedule.contentMix.map((mixRow, mixIndex) => (
@@ -889,11 +863,11 @@ export function StrategyBuilder() {
           {strategy.weeklyThemes.map((theme, index) => (
             <div key={`${theme.weekNumber}-${index}`} className="grid gap-3 rounded-lg border p-4 md:grid-cols-4">
               <div className="space-y-2">
-                <FieldLabel label="Week" hint={FIELD_HINTS.weekNumber} />
+                <FieldLabelWithHint label="Week" hint={FIELD_HINTS.weekNumber} />
                 <Input value={theme.weekNumber} disabled />
               </div>
               <div className="space-y-2">
-                <FieldLabel label="Theme" hint={FIELD_HINTS.weekTheme} />
+                <FieldLabelWithHint label="Theme" hint={FIELD_HINTS.weekTheme} />
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                   <div className="min-w-0 flex-1">
                     <Input
@@ -914,7 +888,7 @@ export function StrategyBuilder() {
                 </div>
               </div>
               <div className="space-y-2">
-                <FieldLabel label="Pillar" hint={FIELD_HINTS.weekPillar} />
+                <FieldLabelWithHint label="Pillar" hint={FIELD_HINTS.weekPillar} />
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                   <div className="min-w-0 flex-1">
                     <Input
@@ -935,7 +909,7 @@ export function StrategyBuilder() {
                 </div>
               </div>
               <div className="space-y-2">
-                <FieldLabel label="Key message" hint={FIELD_HINTS.weekKeyMessage} />
+                <FieldLabelWithHint label="Key message" hint={FIELD_HINTS.weekKeyMessage} />
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
                   <div className="min-w-0 flex-1">
                     <Input

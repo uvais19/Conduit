@@ -4,6 +4,8 @@ export const landingContent: LandingContent = {
   nav: {
     features: "Features",
     workflow: "How it works",
+    whatYouGet: "What you get",
+    faq: "FAQ",
     logIn: "Log in",
     getStarted: "Get started",
     menuOpen: "Open menu",
@@ -13,8 +15,100 @@ export const landingContent: LandingContent = {
     titleLine2: "from strategy to publish",
     subtitle:
       "Plan, create, approve, and schedule in one place — so you can ship consistent content without living in five tabs.",
+    audienceLine:
+      "Built for marketing teams, founders, and agencies who need one source of truth from strategy to scheduled posts.",
+    proofPoint:
+      "Approvals, brand context, and calendars live together — so nothing goes live by accident.",
     ctaPrimary: "Get started free",
     ctaSecondary: "Log in",
+  },
+  trust: {
+    channelsLabel: "Plan and publish across channels",
+    channelsDescription:
+      "One approval path and calendar for the networks your team already runs — brand context travels with every post.",
+    channels: [
+      { id: "linkedin", name: "LinkedIn" },
+      { id: "x", name: "X" },
+      { id: "instagram", name: "Instagram" },
+      { id: "facebook", name: "Facebook" },
+    ],
+  },
+  today: {
+    sectionTitle: "What you get in Conduit today",
+    sectionSubtitle:
+      "A single product flow — not a patchwork of docs, DMs, and disconnected schedulers.",
+    items: [
+      {
+        title: "Strategy & brand context",
+        description:
+          "Pillars, cadence, and voice in one place so drafts stay aligned with what you promised to ship.",
+      },
+      {
+        title: "AI content studio & drafts",
+        description:
+          "Generate and refine posts with your brand in mind, attach media, and iterate before anyone approves.",
+      },
+      {
+        title: "Calendar & scheduling",
+        description:
+          "See what ships when, adjust timing, and keep channels coordinated from one schedule.",
+      },
+      {
+        title: "Approval workflows",
+        description:
+          "Reviewers comment and sign off so stakeholders stay in the loop without endless threads.",
+      },
+      {
+        title: "Analytics & insights",
+        description:
+          "Track what resonates, learn from top posts, and feed the next cycle with real performance data.",
+      },
+    ],
+  },
+  comparison: {
+    title: "Why teams switch",
+    withLabel: "With Conduit",
+    withConduit: "One conduit — strategy, drafts, approvals, calendar, and analytics together.",
+    withoutLabel: "Typical stack",
+    without: "Five tabs — strategy in docs, copy in chat, approvals in email, scheduling elsewhere.",
+  },
+  ctaBand: {
+    title: "Ship consistent social without the tab shuffle",
+    subtitle:
+      "Create your workspace, connect channels, and run the same rhythm your hero preview just showed — end to end.",
+    ctaPrimary: "Get started free",
+    ctaSecondary: "Log in",
+  },
+  faq: {
+    sectionTitle: "Questions, answered",
+    sectionSubtitle: "Straightforward detail for teams evaluating Conduit.",
+    items: [
+      {
+        question: "How does Conduit use my brand and content with AI?",
+        answer:
+          "You add strategy notes, voice guidelines, and files in the product. The studio uses that context to draft and refine posts. You control what gets sent for review or scheduled — AI suggestions are not auto-published.",
+      },
+      {
+        question: "What does approval look like in practice?",
+        answer:
+          "Drafts move through a review step: teammates can leave feedback, request changes, and explicitly approve before anything hits the calendar or goes live. That keeps legal, founders, or clients in the loop without separate email chains.",
+      },
+      {
+        question: "Which social platforms can I connect?",
+        answer:
+          "Conduit is built around the major networks teams use for B2B and brand marketing — including LinkedIn, X, Instagram, and Facebook. Connect the accounts you need and manage timing from one calendar.",
+      },
+      {
+        question: "Is my data used to train public AI models?",
+        answer:
+          "We do not use your content to train public models unless we run a separate, clearly disclosed program with your consent. See our Privacy Policy for how AI providers process prompts and how we handle retention.",
+      },
+      {
+        question: "Do you offer a free tier?",
+        answer:
+          "You can get started free to explore the workflow. Paid plans typically add seats, higher limits, or advanced features as your team scales — check in-product billing or contact us for current options.",
+      },
+    ],
   },
   features: {
     sectionTitle: "Everything in one conduit",

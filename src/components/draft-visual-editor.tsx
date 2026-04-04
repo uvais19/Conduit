@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DraftMediaGallery } from "@/components/draft-media-gallery";
@@ -11,6 +12,24 @@ type Props = {
   draft: ContentDraftRecord;
   onDraftChange: (nextDraft: ContentDraftRecord) => void;
 };
+
+const VISUAL_HINTS = {
+  objective:
+    "What the visual should optimize for — e.g. engagement, education, or conversion. Steers layout and emphasis in the visual plan.",
+  styleHint:
+    "Art direction short notes — palette, mood, typography feel. Passed to the designer agent with your brand context.",
+  imagePrompt:
+    "Instructions for the image model: subject, setting, and constraints. Edit after “Generate Visual Plan” to refine results.",
+  upload:
+    "Replace or add a slide image from your device. Accepted formats follow the browser’s image/* picker (typically PNG, JPEG, WebP).",
+  carouselHeading: "Short title text for this carousel card — often bold in the preview.",
+  carouselBody: "Supporting copy for this slide; keep scannable for mobile viewers.",
+  storyTemplate:
+    "Layout preset for Instagram Stories — controls structure of headline, subhead, and CTA blocks.",
+  storyHeadline: "Primary story text; largest type in most templates.",
+  storySubheadline: "Secondary line for context, offer detail, or social proof.",
+  storyCta: "Button or sticker text that tells viewers what to do next (e.g. Swipe up, Link in bio).",
+} as const;
 
 export function DraftVisualEditor({ draft, onDraftChange }: Props) {
   const [objective, setObjective] = useState("engagement");
@@ -213,14 +232,30 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
           </p>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-2 text-sm">
-            Objective
-            <Input value={objective} onChange={(event) => setObjective(event.target.value)} />
-          </label>
-          <label className="space-y-2 text-sm">
-            Style hint
-            <Input value={styleHint} onChange={(event) => setStyleHint(event.target.value)} />
-          </label>
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor={`${draft.id}-visual-objective`}
+              label="Objective"
+              hint={VISUAL_HINTS.objective}
+            />
+            <Input
+              id={`${draft.id}-visual-objective`}
+              value={objective}
+              onChange={(event) => setObjective(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor={`${draft.id}-visual-style`}
+              label="Style hint"
+              hint={VISUAL_HINTS.styleHint}
+            />
+            <Input
+              id={`${draft.id}-visual-style`}
+              value={styleHint}
+              onChange={(event) => setStyleHint(event.target.value)}
+            />
+          </div>
           <div className="md:col-span-2">
             <button
               type="button"
@@ -239,14 +274,19 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
           <CardTitle className="text-base">AI Image Generation + Upload</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <label className="space-y-2 text-sm">
-            Image prompt
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor={`${draft.id}-image-prompt`}
+              label="Image prompt"
+              hint={VISUAL_HINTS.imagePrompt}
+            />
             <textarea
+              id={`${draft.id}-image-prompt`}
               className="min-h-40 w-full rounded-md border bg-transparent px-3 py-2 text-sm leading-relaxed"
               value={imagePrompt}
               onChange={(event) => setImagePrompt(event.target.value)}
             />
-          </label>
+          </div>
 
           {draft.visualPlanData?.recommendedResolutionNote && (
             <p className="text-xs text-muted-foreground">
@@ -264,10 +304,26 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
             >
               {busy === "generate" ? "Generating..." : "Generate Image"}
             </button>
-            <label className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm">
-              Upload image
-              <input type="file" accept="image/*" className="hidden" onChange={uploadImage} />
-            </label>
+            <div className="flex flex-col gap-2">
+              <FieldLabelWithHint
+                htmlFor={`${draft.id}-upload-image`}
+                label="Upload image"
+                hint={VISUAL_HINTS.upload}
+              />
+              <label
+                htmlFor={`${draft.id}-upload-image`}
+                className="inline-flex w-fit cursor-pointer items-center rounded-md border px-3 py-2 text-sm"
+              >
+                Choose file
+                <input
+                  id={`${draft.id}-upload-image`}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={uploadImage}
+                />
+              </label>
+            </div>
           </div>
 
           {draft.mediaUrls.length > 0 && (
@@ -317,15 +373,31 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
                   </button>
                 </div>
               </div>
-              <Input
-                value={slide.heading}
-                onChange={(event) => patchCarousel(index, { heading: event.target.value })}
-              />
-              <textarea
-                className="mt-2 min-h-20 w-full rounded-md border bg-transparent px-3 py-2"
-                value={slide.body}
-                onChange={(event) => patchCarousel(index, { body: event.target.value })}
-              />
+              <div className="space-y-1">
+                <FieldLabelWithHint
+                  htmlFor={`${draft.id}-carousel-${index}-heading`}
+                  label="Heading"
+                  hint={VISUAL_HINTS.carouselHeading}
+                />
+                <Input
+                  id={`${draft.id}-carousel-${index}-heading`}
+                  value={slide.heading}
+                  onChange={(event) => patchCarousel(index, { heading: event.target.value })}
+                />
+              </div>
+              <div className="mt-2 space-y-1">
+                <FieldLabelWithHint
+                  htmlFor={`${draft.id}-carousel-${index}-body`}
+                  label="Body"
+                  hint={VISUAL_HINTS.carouselBody}
+                />
+                <textarea
+                  id={`${draft.id}-carousel-${index}-body`}
+                  className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2"
+                  value={slide.body}
+                  onChange={(event) => patchCarousel(index, { body: event.target.value })}
+                />
+              </div>
             </div>
           ))}
 
@@ -346,9 +418,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
           <CardTitle className="text-base">Story Template Editor</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-2 text-sm">
-            Template
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor={`${draft.id}-story-template`}
+              label="Template"
+              hint={VISUAL_HINTS.storyTemplate}
+            />
             <select
+              id={`${draft.id}-story-template`}
               className="h-9 w-full rounded-md border bg-transparent px-3"
               value={draft.storyTemplate?.template ?? "bold-offer"}
               onChange={(event) =>
@@ -363,31 +440,46 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
               <option value="minimal-quote">Minimal quote</option>
               <option value="countdown-launch">Countdown launch</option>
             </select>
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Headline
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor={`${draft.id}-story-headline`}
+              label="Headline"
+              hint={VISUAL_HINTS.storyHeadline}
+            />
             <Input
+              id={`${draft.id}-story-headline`}
               value={draft.storyTemplate?.headline ?? ""}
               onChange={(event) => patchStory({ headline: event.target.value })}
             />
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm md:col-span-2">
-            Subheadline
+          <div className="space-y-2 text-sm md:col-span-2">
+            <FieldLabelWithHint
+              htmlFor={`${draft.id}-story-subheadline`}
+              label="Subheadline"
+              hint={VISUAL_HINTS.storySubheadline}
+            />
             <Input
+              id={`${draft.id}-story-subheadline`}
               value={draft.storyTemplate?.subheadline ?? ""}
               onChange={(event) => patchStory({ subheadline: event.target.value })}
             />
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm md:col-span-2">
-            CTA Text
+          <div className="space-y-2 text-sm md:col-span-2">
+            <FieldLabelWithHint
+              htmlFor={`${draft.id}-story-cta`}
+              label="CTA Text"
+              hint={VISUAL_HINTS.storyCta}
+            />
             <Input
+              id={`${draft.id}-story-cta`}
               value={draft.storyTemplate?.ctaText ?? ""}
               onChange={(event) => patchStory({ ctaText: event.target.value })}
             />
-          </label>
+          </div>
         </CardContent>
       </Card>
     </div>

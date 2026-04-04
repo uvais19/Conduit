@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Info, Sparkles, Upload, Wand2 } from "lucide-react";
+import { Sparkles, Upload, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -13,52 +13,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import type { BrandManifesto } from "@/lib/types";
-
-function FieldLabel({
-  htmlFor,
-  label,
-  hint,
-  aiSuggested,
-}: {
-  htmlFor: string;
-  label: string;
-  hint: string;
-  aiSuggested?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
-      {aiSuggested && (
-        <Tooltip>
-          <TooltipTrigger type="button" className="text-violet-500 hover:text-violet-600 transition-colors">
-            <Sparkles className="size-3" />
-            <span className="sr-only">AI suggested</span>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            AI suggested — edit to customise
-          </TooltipContent>
-        </Tooltip>
-      )}
-      <Tooltip>
-        <TooltipTrigger type="button" className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
-          <Info className="size-3.5" />
-          <span className="sr-only">More info about {label}</span>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-64 text-xs">
-          {hint}
-        </TooltipContent>
-      </Tooltip>
-    </div>
-  );
-}
 
 type UploadedDocument = {
   id?: string;
@@ -327,7 +284,7 @@ export function OnboardingWizard() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <FieldLabel htmlFor="businessName" label="Business name" hint="The official name of your business as it should appear in content and your brand identity." />
+                <FieldLabelWithHint htmlFor="businessName" label="Business name" hint="The official name of your business as it should appear in content and your brand identity." />
                 <Input
                   id="businessName"
                   value={form.businessName}
@@ -337,7 +294,7 @@ export function OnboardingWizard() {
                 />
               </div>
               <div className="space-y-2">
-                <FieldLabel htmlFor="websiteUrl" label="Website URL" hint="Your public website homepage. Conduit's Scraper Agent will crawl it to extract brand language, messaging, products, and tone of voice automatically." />
+                <FieldLabelWithHint htmlFor="websiteUrl" label="Website URL" hint="Your public website homepage. Conduit's Scraper Agent will crawl it to extract brand language, messaging, products, and tone of voice automatically." />
                 <Input
                   id="websiteUrl"
                   value={form.websiteUrl}
@@ -379,7 +336,7 @@ export function OnboardingWizard() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <FieldLabel
+              <FieldLabelWithHint
                 htmlFor="industry"
                 label="Industry"
                 hint="The sector your business operates in — be specific (e.g. B2B SaaS, Independent Retail, Healthcare Consulting). This shapes tone and content strategy."
@@ -394,7 +351,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="differentiators" label="Differentiators / USPs" hint="What makes you different from competitors? Think about your unique methodology, turnaround time, pricing model, expertise, or the specific problem only you solve." aiSuggested={aiSuggestedFields.has("differentiators")} />
+              <FieldLabelWithHint htmlFor="differentiators" label="Differentiators / USPs" hint="What makes you different from competitors? Think about your unique methodology, turnaround time, pricing model, expertise, or the specific problem only you solve." aiSuggested={aiSuggestedFields.has("differentiators")} />
               <textarea
                 id="differentiators"
                 className="min-h-[5.5rem] w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -404,7 +361,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <FieldLabel htmlFor="offerings" label="Products or services" hint="List what you sell or deliver — one item per line. Include key features or pricing tiers if relevant. This helps the AI write accurate, specific content about your offers." aiSuggested={aiSuggestedFields.has("offerings")} />
+              <FieldLabelWithHint htmlFor="offerings" label="Products or services" hint="List what you sell or deliver — one item per line. Include key features or pricing tiers if relevant. This helps the AI write accurate, specific content about your offers." aiSuggested={aiSuggestedFields.has("offerings")} />
               <textarea
                 id="offerings"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -415,7 +372,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <FieldLabel htmlFor="targetAudience" label="Target audience" hint="Describe your ideal customers — their job titles, demographics, goals, and pain points. The more specific, the better the content will resonate." aiSuggested={aiSuggestedFields.has("targetAudience")} />
+              <FieldLabelWithHint htmlFor="targetAudience" label="Target audience" hint="Describe your ideal customers — their job titles, demographics, goals, and pain points. The more specific, the better the content will resonate." aiSuggested={aiSuggestedFields.has("targetAudience")} />
               <textarea
                 id="targetAudience"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -438,7 +395,7 @@ export function OnboardingWizard() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2 md:col-span-2">
-              <FieldLabel htmlFor="goals" label="Social media goals" hint="What you want social media to achieve for your business — e.g. brand awareness, lead generation, driving website traffic, thought leadership, or local foot traffic." aiSuggested={aiSuggestedFields.has("goals")} />
+              <FieldLabelWithHint htmlFor="goals" label="Social media goals" hint="What you want social media to achieve for your business — e.g. brand awareness, lead generation, driving website traffic, thought leadership, or local foot traffic." aiSuggested={aiSuggestedFields.has("goals")} />
               <textarea
                 id="goals"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -449,7 +406,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="brandTone" label="Brand tone / adjectives" hint="3–6 words that describe how your brand should sound. Examples: confident, approachable, witty, premium, no-nonsense, warm. This directly shapes the writing style of every post." aiSuggested={aiSuggestedFields.has("brandTone")} />
+              <FieldLabelWithHint htmlFor="brandTone" label="Brand tone / adjectives" hint="3–6 words that describe how your brand should sound. Examples: confident, approachable, witty, premium, no-nonsense, warm. This directly shapes the writing style of every post." aiSuggested={aiSuggestedFields.has("brandTone")} />
               <textarea
                 id="brandTone"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -459,7 +416,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="notes" label="Extra notes" hint="Anything else worth knowing — competitor names to be aware of, market positioning, customer pain points, pricing philosophy, or seasonal context. Treat this as a brain dump." />
+              <FieldLabelWithHint htmlFor="notes" label="Extra notes" hint="Anything else worth knowing — competitor names to be aware of, market positioning, customer pain points, pricing philosophy, or seasonal context. Treat this as a brain dump." />
               <textarea
                 id="notes"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -469,7 +426,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="contentDos" label="Content do's" hint="Approaches, formats, or topics you want the AI to actively use — e.g. 'use customer success stories', 'always cite a stat', 'ask a question at the end', 'include a clear CTA'." aiSuggested={aiSuggestedFields.has("contentDos")} />
+              <FieldLabelWithHint htmlFor="contentDos" label="Content do's" hint="Approaches, formats, or topics you want the AI to actively use — e.g. 'use customer success stories', 'always cite a stat', 'ask a question at the end', 'include a clear CTA'." aiSuggested={aiSuggestedFields.has("contentDos")} />
               <textarea
                 id="contentDos"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -479,7 +436,7 @@ export function OnboardingWizard() {
               />
             </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="contentDonts" label="Content don'ts" hint="Hard rules for the AI to follow — topics to avoid, phrases that feel off-brand, or styles that don't fit. E.g. 'no jargon', 'don't mention competitors by name', 'never use clickbait'." aiSuggested={aiSuggestedFields.has("contentDonts")} />
+              <FieldLabelWithHint htmlFor="contentDonts" label="Content don'ts" hint="Hard rules for the AI to follow — topics to avoid, phrases that feel off-brand, or styles that don't fit. E.g. 'no jargon', 'don't mention competitors by name', 'never use clickbait'." aiSuggested={aiSuggestedFields.has("contentDonts")} />
               <textarea
                 id="contentDonts"
                 className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -500,7 +457,7 @@ export function OnboardingWizard() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <FieldLabel htmlFor="uploadNotes" label="Notes for uploaded files" hint="Tell the Document Analyst what these files are and how to use them — e.g. 'this is our brand guidelines deck', 'this PDF has our target customer research', 'these are old ad scripts for tone reference'." />
+              <FieldLabelWithHint htmlFor="uploadNotes" label="Notes for uploaded files" hint="Tell the Document Analyst what these files are and how to use them — e.g. 'this is our brand guidelines deck', 'this PDF has our target customer research', 'these are old ad scripts for tone reference'." />
               <textarea
                 id="uploadNotes"
                 className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"

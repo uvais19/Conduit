@@ -5,10 +5,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { PLATFORM_LABELS } from "@/lib/constants";
 import type { CompetitorProfile, CompetitorAnalysis } from "@/lib/optimization/types";
 import type { Platform } from "@/lib/types";
+
+const COMPETITOR_HINTS = {
+  discoverIndustry:
+    "The market or vertical to search in (e.g. specialty coffee, dental practices). AI uses this to find comparable accounts.",
+  discoverLocation:
+    "Geographic focus for discovery — city, region, or country. Narrows results to businesses serving or located there.",
+  addName:
+    "Display name for this competitor in your workspace. It does not need to match their handle exactly.",
+  addPlatform:
+    "Which network this profile lives on. Analysis and benchmarks are scoped to that platform's norms.",
+  addUrl:
+    "Direct link to their public profile or page. Use the canonical URL from the address bar so scraping and analysis stay accurate.",
+} as const;
 
 export default function CompetitorsPage() {
   const [competitors, setCompetitors] = useState<CompetitorProfile[]>([]);
@@ -164,7 +177,11 @@ export default function CompetitorsPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="industry">Industry</Label>
+                <FieldLabelWithHint
+                  htmlFor="industry"
+                  label="Industry"
+                  hint={COMPETITOR_HINTS.discoverIndustry}
+                />
                 <Input
                   id="industry"
                   placeholder="e.g. Coffee Shops"
@@ -173,7 +190,11 @@ export default function CompetitorsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
+                <FieldLabelWithHint
+                  htmlFor="location"
+                  label="Location"
+                  hint={COMPETITOR_HINTS.discoverLocation}
+                />
                 <Input
                   id="location"
                   placeholder="e.g. Austin, TX"
@@ -201,7 +222,11 @@ export default function CompetitorsPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="comp-name">Name</Label>
+                <FieldLabelWithHint
+                  htmlFor="comp-name"
+                  label="Name"
+                  hint={COMPETITOR_HINTS.addName}
+                />
                 <Input
                   id="comp-name"
                   placeholder="Business name"
@@ -210,7 +235,11 @@ export default function CompetitorsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="comp-platform">Platform</Label>
+                <FieldLabelWithHint
+                  htmlFor="comp-platform"
+                  label="Platform"
+                  hint={COMPETITOR_HINTS.addPlatform}
+                />
                 <select
                   id="comp-platform"
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
@@ -227,7 +256,11 @@ export default function CompetitorsPage() {
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="comp-url">Profile URL</Label>
+                <FieldLabelWithHint
+                  htmlFor="comp-url"
+                  label="Profile URL"
+                  hint={COMPETITOR_HINTS.addUrl}
+                />
                 <Input
                   id="comp-url"
                   placeholder="https://..."

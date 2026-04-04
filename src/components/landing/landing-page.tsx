@@ -1,8 +1,13 @@
 ﻿import Link from "next/link";
 import type { LandingContent } from "@/content/landing";
+import { LandingJsonLd } from "./landing-json-ld";
+import { LandingComparison } from "./landing-comparison";
+import { LandingCtaBand } from "./landing-cta-band";
+import { LandingFaq } from "./landing-faq";
 import { LandingFeatures } from "./landing-features";
 import { LandingHeader } from "./landing-header";
 import { LandingHero } from "./landing-hero";
+import { LandingToday } from "./landing-today";
 import { LandingWorkflowCarousel } from "./landing-workflow-carousel";
 
 export function LandingPage({ content }: { content: LandingContent }) {
@@ -10,11 +15,22 @@ export function LandingPage({ content }: { content: LandingContent }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <LandingJsonLd />
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[200] focus:rounded-md focus:bg-foreground focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-background focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      >
+        Skip to main content
+      </a>
       <LandingHeader content={content} />
-      <main className="flex-1">
+      <main id="main-content" className="flex-1 outline-none" tabIndex={-1} aria-label="Conduit marketing">
         <LandingHero content={content} />
         <LandingFeatures section={content.features} />
+        <LandingToday section={content.today} />
+        <LandingComparison section={content.comparison} />
         <LandingWorkflowCarousel section={content.carousel} />
+        <LandingCtaBand section={content.ctaBand} />
+        <LandingFaq section={content.faq} />
       </main>
       <footer className="border-t border-border/60 bg-muted/15">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -26,7 +42,9 @@ export function LandingPage({ content }: { content: LandingContent }) {
             <Link href="/privacy" className="hover:text-foreground">
               {content.footer.privacy}
             </Link>
-            <span>{content.footer.terms}</span>
+            <Link href="/terms" className="hover:text-foreground">
+              {content.footer.terms}
+            </Link>
             <Link href="/login" className="hover:text-foreground">
               {content.nav.logIn}
             </Link>

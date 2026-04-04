@@ -6,6 +6,10 @@ export type {
   LandingFeature,
   LandingCarouselSlide,
   LandingFeatureIconId,
+  LandingFaqItem,
+  LandingTodayItem,
+  TrustChannel,
+  TrustChannelId,
 } from "./types";
 
 export { landingContent };

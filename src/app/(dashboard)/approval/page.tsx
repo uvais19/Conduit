@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { ContentDraftRecord } from "@/lib/content/types";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,20 @@ const STATUS_BADGE: Record<ContentDraftRecord["status"], string> = {
 };
 
 type SortKey = "createdAt" | "updatedAt" | "status" | "platform";
+
+const APPROVAL_FILTER_HINTS = {
+  status: "Which step in the approval pipeline to show — from draft through published.",
+  platform: "Filter the queue to a single social network or review everything at once.",
+  pillar: "Match drafts whose strategy pillar contains this text (case-sensitive as typed).",
+  sort: "Order of the list — by last edit, creation time, status, or platform name.",
+} as const;
+
+const APPROVAL_FORM_HINTS = {
+  revisionNotes:
+    "Concrete feedback for editors or AI: what to fix, tone issues, factual corrections, or sections to remove.",
+  scheduleDate:
+    "When this approved post should go live. Leave blank to let Conduit pick an optimal slot from your strategy.",
+} as const;
 
 export default function ApprovalPage() {
   const [drafts, setDrafts] = useState<ContentDraftRecord[]>([]);
@@ -283,9 +298,14 @@ export default function ApprovalPage() {
           <CardTitle>Filters & Sort</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-4">
-          <label className="space-y-2 text-sm">
-            Status
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="approval-filter-status"
+              label="Status"
+              hint={APPROVAL_FILTER_HINTS.status}
+            />
             <select
+              id="approval-filter-status"
               className="h-9 w-full rounded-md border bg-transparent px-3"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
@@ -296,11 +316,16 @@ export default function ApprovalPage() {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Platform
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="approval-filter-platform"
+              label="Platform"
+              hint={APPROVAL_FILTER_HINTS.platform}
+            />
             <select
+              id="approval-filter-platform"
               className="h-9 w-full rounded-md border bg-transparent px-3"
               value={platformFilter}
               onChange={(e) => setPlatformFilter(e.target.value as typeof platformFilter)}
@@ -312,20 +337,30 @@ export default function ApprovalPage() {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Pillar
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="approval-filter-pillar"
+              label="Pillar"
+              hint={APPROVAL_FILTER_HINTS.pillar}
+            />
             <Input
+              id="approval-filter-pillar"
               value={pillarFilter}
               onChange={(e) => setPillarFilter(e.target.value)}
               placeholder="Filter by pillar"
             />
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Sort by
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="approval-filter-sort"
+              label="Sort by"
+              hint={APPROVAL_FILTER_HINTS.sort}
+            />
             <select
+              id="approval-filter-sort"
               className="h-9 w-full rounded-md border bg-transparent px-3"
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as SortKey)}
@@ -335,7 +370,7 @@ export default function ApprovalPage() {
               <option value="status">Status</option>
               <option value="platform">Platform</option>
             </select>
-          </label>
+          </div>
         </CardContent>
       </Card>
 
@@ -464,15 +499,20 @@ export default function ApprovalPage() {
 
                   {showRevisionForm && (
                     <div className="space-y-2 rounded-md border p-3">
-                      <label className="block space-y-1 text-sm">
-                        <span className="font-medium">Revision notes</span>
+                      <div className="block space-y-2 text-sm">
+                        <FieldLabelWithHint
+                          htmlFor="approval-revision-notes"
+                          label="Revision notes"
+                          hint={APPROVAL_FORM_HINTS.revisionNotes}
+                        />
                         <textarea
+                          id="approval-revision-notes"
                           className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
                           placeholder="Describe what needs to change..."
                           value={revisionNotes}
                           onChange={(e) => setRevisionNotes(e.target.value)}
                         />
-                      </label>
+                      </div>
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -591,9 +631,14 @@ export default function ApprovalPage() {
 
                   {showScheduleForm && selectedDraft.status === "approved" && (
                     <div className="space-y-2 rounded-md border p-3">
-                      <label className="block space-y-1 text-sm">
-                        <span className="font-medium">Schedule date & time</span>
+                      <div className="block space-y-2 text-sm">
+                        <FieldLabelWithHint
+                          htmlFor="approval-schedule-datetime"
+                          label="Schedule date & time"
+                          hint={APPROVAL_FORM_HINTS.scheduleDate}
+                        />
                         <input
+                          id="approval-schedule-datetime"
                           type="datetime-local"
                           className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
                           value={scheduleDate}
@@ -602,7 +647,7 @@ export default function ApprovalPage() {
                         <p className="text-xs text-muted-foreground">
                           Leave empty to use AI-suggested optimal time.
                         </p>
-                      </label>
+                      </div>
                       <div className="flex gap-2">
                         <button
                           type="button"

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { Platform } from "@/lib/types";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,15 @@ const PLATFORM_GUIDES: Record<Platform, { tokenLabel: string; hint: string }> = 
 };
 
 const PLATFORM_ADVANCE_MS = 1500;
+
+const CONNECT_FIELD_HINTS = {
+  platform:
+    "Pick the network you want Conduit to publish to. Each integration uses that provider's API token.",
+  displayName:
+    "A friendly label in Conduit (e.g. your page or brand name). Shown in the dashboard and publish flows.",
+  pageId:
+    "The Facebook Page ID linked to your Instagram Business account or Facebook Page. Required for Meta Graph API publishing.",
+} as const;
 
 export default function PlatformsPage() {
   const router = useRouter();
@@ -283,9 +293,14 @@ export default function PlatformsPage() {
           <CardTitle>Connect a Platform</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <label className="block space-y-2 text-sm">
-            <span className="font-medium">Platform</span>
+          <div className="block space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="connect-platform"
+              label="Platform"
+              hint={CONNECT_FIELD_HINTS.platform}
+            />
             <select
+              id="connect-platform"
               className="h-9 w-full rounded-md border bg-transparent px-3"
               value={connectPlatform}
               onChange={(e) => setConnectPlatform(e.target.value as Platform | "")}
@@ -298,7 +313,7 @@ export default function PlatformsPage() {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
           {connectPlatform && (
             <>
@@ -309,36 +324,49 @@ export default function PlatformsPage() {
                 </p>
               </div>
 
-              <label className="block space-y-2 text-sm">
-                <span className="font-medium">Display Name</span>
+              <div className="block space-y-2 text-sm">
+                <FieldLabelWithHint
+                  htmlFor="connect-display-name"
+                  label="Display Name"
+                  hint={CONNECT_FIELD_HINTS.displayName}
+                />
                 <Input
+                  id="connect-display-name"
                   placeholder="e.g. My Business Page"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                 />
-              </label>
+              </div>
 
-              <label className="block space-y-2 text-sm">
-                <span className="font-medium">
-                  {PLATFORM_GUIDES[connectPlatform].tokenLabel}
-                </span>
+              <div className="block space-y-2 text-sm">
+                <FieldLabelWithHint
+                  htmlFor="connect-access-token"
+                  label={PLATFORM_GUIDES[connectPlatform].tokenLabel}
+                  hint={PLATFORM_GUIDES[connectPlatform].hint}
+                />
                 <Input
+                  id="connect-access-token"
                   type="password"
                   placeholder="Paste your API token here"
                   value={accessToken}
                   onChange={(e) => setAccessToken(e.target.value)}
                 />
-              </label>
+              </div>
 
               {(connectPlatform === "instagram" || connectPlatform === "facebook") && (
-                <label className="block space-y-2 text-sm">
-                  <span className="font-medium">Page ID</span>
+                <div className="block space-y-2 text-sm">
+                  <FieldLabelWithHint
+                    htmlFor="connect-page-id"
+                    label="Page ID"
+                    hint={CONNECT_FIELD_HINTS.pageId}
+                  />
                   <Input
+                    id="connect-page-id"
                     placeholder="Facebook/Instagram Page ID"
                     value={pageId}
                     onChange={(e) => setPageId(e.target.value)}
                   />
-                </label>
+                </div>
               )}
 
               <button

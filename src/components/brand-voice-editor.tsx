@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import {
   createEmptyBrandManifesto,
   listToText,
@@ -19,12 +19,54 @@ import {
 import type { BrandManifesto } from "@/lib/types";
 
 const sliderFields = [
-  { key: "formal", label: "Formal" },
-  { key: "playful", label: "Playful" },
-  { key: "technical", label: "Technical" },
-  { key: "emotional", label: "Emotional" },
-  { key: "provocative", label: "Provocative" },
+  {
+    key: "formal",
+    label: "Formal",
+    hint: "Slide toward formal for polished, professional copy; toward playful for casual, conversational language. This axis shapes word choice and structure.",
+  },
+  {
+    key: "playful",
+    label: "Playful",
+    hint: "Higher values encourage humor, warmth, and light metaphors. Lower values keep the tone more restrained and serious.",
+  },
+  {
+    key: "technical",
+    label: "Technical",
+    hint: "How much industry jargon, specs, and precision to use versus plain-language explanation.",
+  },
+  {
+    key: "emotional",
+    label: "Emotional",
+    hint: "Whether copy leans on feelings, empathy, and story versus rational benefits and facts.",
+  },
+  {
+    key: "provocative",
+    label: "Provocative",
+    hint: "Tolerance for bold takes, contrarian angles, and tension. Lower settings favor safer, consensus-friendly messaging.",
+  },
 ] as const;
+
+const LANGUAGE_HINTS = {
+  sentenceLength:
+    "Average length and rhythm of sentences. Short = punchy; long = narrative; varied = mixed cadence for interest.",
+  vocabulary:
+    "Complexity of words: simple for broad reach, professional for B2B polish, technical for expert audiences.",
+  perspective:
+    'Whether the brand speaks as "we" (first person), about itself in third person, or mixes both.',
+  emojiUsage:
+    "How often to use emojis in social copy. None keeps feeds corporate; heavy suits consumer lifestyle brands.",
+} as const;
+
+const VOICE_GUARDRAIL_HINTS = {
+  voiceAttributes:
+    "Traits writers should embody — one per line. These sync with your manifesto and directly steer generation.",
+  bannedWords:
+    "Terms or phrases that must never appear — one per line. Useful for compliance, competitor names, or clichés.",
+  contentDos:
+    "Encouraged habits for every post — one per line. Reinforces what “good” looks like for your brand.",
+  contentDonts:
+    "Hard stops and off-limits — one per line. Reduces mistakes before content goes to review.",
+} as const;
 
 export function BrandVoiceEditor() {
   const [manifesto, setManifesto] = useState<BrandManifesto>(createEmptyBrandManifesto());
@@ -118,8 +160,8 @@ export function BrandVoiceEditor() {
         <CardContent className="space-y-6">
           {sliderFields.map((field) => (
             <div key={field.key} className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <Label htmlFor={field.key}>{field.label}</Label>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <FieldLabelWithHint htmlFor={field.key} label={field.label} hint={field.hint} />
                 <span className="text-muted-foreground">
                   {manifesto.toneSpectrum[field.key]}/10
                 </span>
@@ -155,7 +197,11 @@ export function BrandVoiceEditor() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="sentenceLength">Sentence length</Label>
+            <FieldLabelWithHint
+              htmlFor="sentenceLength"
+              label="Sentence length"
+              hint={LANGUAGE_HINTS.sentenceLength}
+            />
             <select
               id="sentenceLength"
               className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -177,7 +223,11 @@ export function BrandVoiceEditor() {
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="vocabulary">Vocabulary</Label>
+            <FieldLabelWithHint
+              htmlFor="vocabulary"
+              label="Vocabulary"
+              hint={LANGUAGE_HINTS.vocabulary}
+            />
             <select
               id="vocabulary"
               className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -199,7 +249,11 @@ export function BrandVoiceEditor() {
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="perspective">Perspective</Label>
+            <FieldLabelWithHint
+              htmlFor="perspective"
+              label="Perspective"
+              hint={LANGUAGE_HINTS.perspective}
+            />
             <select
               id="perspective"
               className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -220,7 +274,11 @@ export function BrandVoiceEditor() {
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="emojiUsage">Emoji usage</Label>
+            <FieldLabelWithHint
+              htmlFor="emojiUsage"
+              label="Emoji usage"
+              hint={LANGUAGE_HINTS.emojiUsage}
+            />
             <select
               id="emojiUsage"
               className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -253,7 +311,11 @@ export function BrandVoiceEditor() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="voiceAttributes">Voice attributes (one per line)</Label>
+            <FieldLabelWithHint
+              htmlFor="voiceAttributes"
+              label="Voice attributes (one per line)"
+              hint={VOICE_GUARDRAIL_HINTS.voiceAttributes}
+            />
             <textarea
               id="voiceAttributes"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -267,7 +329,11 @@ export function BrandVoiceEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="bannedWords">Banned words (one per line)</Label>
+            <FieldLabelWithHint
+              htmlFor="bannedWords"
+              label="Banned words (one per line)"
+              hint={VOICE_GUARDRAIL_HINTS.bannedWords}
+            />
             <textarea
               id="bannedWords"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -281,7 +347,11 @@ export function BrandVoiceEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="contentDos">Content do&apos;s</Label>
+            <FieldLabelWithHint
+              htmlFor="contentDos"
+              label="Content do's"
+              hint={VOICE_GUARDRAIL_HINTS.contentDos}
+            />
             <textarea
               id="contentDos"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
@@ -295,7 +365,11 @@ export function BrandVoiceEditor() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="contentDonts">Content don&apos;ts</Label>
+            <FieldLabelWithHint
+              htmlFor="contentDonts"
+              label="Content don'ts"
+              hint={VOICE_GUARDRAIL_HINTS.contentDonts}
+            />
             <textarea
               id="contentDonts"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"

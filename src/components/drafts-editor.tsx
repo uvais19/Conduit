@@ -6,6 +6,7 @@ import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import type { ContentStrategy } from "@/lib/types";
 import { buildCalendarPreview, type CalendarPreviewItem } from "@/lib/strategy/defaults";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { buttonVariants } from "@/components/ui/button";
@@ -28,6 +29,20 @@ const initialFilters: DraftFilters = {
   status: "all",
   pillar: "",
 };
+
+const DRAFT_FILTER_HINTS = {
+  platform: "Limit the list to one network or show drafts for every connected platform.",
+  status:
+    "Workflow stage — e.g. draft vs in review vs published. Helps you focus on what needs action.",
+  pillar: "Free-text match against the strategy pillar saved on each draft.",
+} as const;
+
+const DRAFT_EDIT_HINTS = {
+  caption: "The main post body writers and previews use. Line breaks are preserved where the platform allows.",
+  hashtags:
+    "Space-separated tags; # is added automatically if missing. Preview may show a subset on character-limited platforms.",
+  cta: "The explicit call-to-action line, often merged into the caption or shown in the preview block.",
+} as const;
 
 function renderPreview(draft: ContentDraftRecord): string {
   switch (draft.platform) {
@@ -231,9 +246,14 @@ export function DraftsEditor() {
           <CardTitle>Filters</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
-          <label className="space-y-2 text-sm">
-            Platform
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="draft-filter-platform"
+              label="Platform"
+              hint={DRAFT_FILTER_HINTS.platform}
+            />
             <select
+              id="draft-filter-platform"
               className="h-9 w-full rounded-md border bg-transparent px-3"
               value={filters.platform}
               onChange={(event) =>
@@ -250,11 +270,16 @@ export function DraftsEditor() {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Status
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="draft-filter-status"
+              label="Status"
+              hint={DRAFT_FILTER_HINTS.status}
+            />
             <select
+              id="draft-filter-status"
               className="h-9 w-full rounded-md border bg-transparent px-3"
               value={filters.status}
               onChange={(event) =>
@@ -273,17 +298,22 @@ export function DraftsEditor() {
               <option value="published">Published</option>
               <option value="failed">Failed</option>
             </select>
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Pillar
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="draft-filter-pillar"
+              label="Pillar"
+              hint={DRAFT_FILTER_HINTS.pillar}
+            />
             <Input
+              id="draft-filter-pillar"
               value={filters.pillar}
               onChange={(event) =>
                 setFilters((current) => ({ ...current, pillar: event.target.value }))
               }
             />
-          </label>
+          </div>
         </CardContent>
       </Card>
 
@@ -443,20 +473,30 @@ export function DraftsEditor() {
               <p className="text-sm text-muted-foreground">Select a draft to edit.</p>
             ) : (
               <>
-                <label className="space-y-2 text-sm">
-                  Caption
+                <div className="space-y-2 text-sm">
+                  <FieldLabelWithHint
+                    htmlFor="draft-edit-caption"
+                    label="Caption"
+                    hint={DRAFT_EDIT_HINTS.caption}
+                  />
                   <textarea
+                    id="draft-edit-caption"
                     className="min-h-32 w-full rounded-md border bg-transparent px-3 py-2"
                     value={selectedDraft.caption}
                     onChange={(event) =>
                       patchSelectedDraft({ caption: event.target.value })
                     }
                   />
-                </label>
+                </div>
 
-                <label className="space-y-2 text-sm">
-                  Hashtags (space separated)
+                <div className="space-y-2 text-sm">
+                  <FieldLabelWithHint
+                    htmlFor="draft-edit-hashtags"
+                    label="Hashtags (space separated)"
+                    hint={DRAFT_EDIT_HINTS.hashtags}
+                  />
                   <Input
+                    id="draft-edit-hashtags"
                     value={selectedDraft.hashtags.join(" ")}
                     onChange={(event) =>
                       patchSelectedDraft({
@@ -467,15 +507,16 @@ export function DraftsEditor() {
                       })
                     }
                   />
-                </label>
+                </div>
 
-                <label className="space-y-2 text-sm">
-                  CTA
+                <div className="space-y-2 text-sm">
+                  <FieldLabelWithHint htmlFor="draft-edit-cta" label="CTA" hint={DRAFT_EDIT_HINTS.cta} />
                   <Input
+                    id="draft-edit-cta"
                     value={selectedDraft.cta}
                     onChange={(event) => patchSelectedDraft({ cta: event.target.value })}
                   />
-                </label>
+                </div>
 
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">

@@ -1,10 +1,12 @@
 ﻿"use client";
 
 import Link from "next/link";
+import { useCallback, useState, type ReactNode } from "react";
 import { Menu, Sparkles } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { scrollToLandingSection } from "@/lib/landing-scroll";
 import type { LandingContent } from "@/content/landing";
 import {
   Sheet,
@@ -14,23 +16,51 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
+const SECTION_LINK_CLASS =
+  "text-sm font-medium text-muted-foreground transition-colors hover:text-foreground";
+
+function SectionNavLink({
+  id,
+  children,
+  onBeforeScroll,
+  className,
+}: {
+  id: string;
+  children: ReactNode;
+  onBeforeScroll?: () => void;
+  className?: string;
+}) {
+  const href = `#${id}`;
+  return (
+    <a
+      href={href}
+      className={cn(SECTION_LINK_CLASS, className)}
+      onClick={(e) => {
+        e.preventDefault();
+        onBeforeScroll?.();
+        const delay = onBeforeScroll ? 220 : 0;
+        window.setTimeout(() => scrollToLandingSection(id), delay);
+      }}
+    >
+      {children}
+    </a>
+  );
+}
+
 export function LandingHeader({ content }: { content: LandingContent }) {
   const { nav } = content;
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const closeMobileThenScroll = useCallback(() => {
+    setMobileOpen(false);
+  }, []);
 
   const links = (
     <>
-      <a
-        href="#features"
-        className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        {nav.features}
-      </a>
-      <a
-        href="#workflow"
-        className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        {nav.workflow}
-      </a>
+      <SectionNavLink id="features">{nav.features}</SectionNavLink>
+      <SectionNavLink id="workflow">{nav.workflow}</SectionNavLink>
+      <SectionNavLink id="today">{nav.whatYouGet}</SectionNavLink>
+      <SectionNavLink id="faq">{nav.faq}</SectionNavLink>
     </>
   );
 
@@ -44,7 +74,7 @@ export function LandingHeader({ content }: { content: LandingContent }) {
           Conduit
         </Link>
 
-        <nav className="ml-6 hidden items-center gap-6 md:flex">{links}</nav>
+        <nav className="ml-4 hidden items-center gap-5 lg:ml-6 lg:flex xl:gap-6">{links}</nav>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <ThemeToggle />
@@ -65,13 +95,13 @@ export function LandingHeader({ content }: { content: LandingContent }) {
             {nav.getStarted}
           </Link>
 
-          <Sheet>
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger
               render={
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="md:hidden"
+                  className="lg:hidden"
                   aria-label={nav.menuOpen}
                 />
               }
@@ -84,12 +114,34 @@ export function LandingHeader({ content }: { content: LandingContent }) {
               </SheetHeader>
               <div className="mt-6 flex flex-col gap-4 px-4">
                 <div className="flex flex-col gap-3 border-b border-border pb-4">
-                  <a href="#features" className="text-sm font-medium">
+                  <SectionNavLink
+                    id="features"
+                    onBeforeScroll={closeMobileThenScroll}
+                    className="text-foreground"
+                  >
                     {nav.features}
-                  </a>
-                  <a href="#workflow" className="text-sm font-medium">
+                  </SectionNavLink>
+                  <SectionNavLink
+                    id="workflow"
+                    onBeforeScroll={closeMobileThenScroll}
+                    className="text-foreground"
+                  >
                     {nav.workflow}
-                  </a>
+                  </SectionNavLink>
+                  <SectionNavLink
+                    id="today"
+                    onBeforeScroll={closeMobileThenScroll}
+                    className="text-foreground"
+                  >
+                    {nav.whatYouGet}
+                  </SectionNavLink>
+                  <SectionNavLink
+                    id="faq"
+                    onBeforeScroll={closeMobileThenScroll}
+                    className="text-foreground"
+                  >
+                    {nav.faq}
+                  </SectionNavLink>
                 </div>
                 <Link
                   href="/login"

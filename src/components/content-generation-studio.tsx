@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
 import { DraftMediaGallery } from "@/components/draft-media-gallery";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
@@ -27,6 +28,25 @@ type GenerationPayload = {
   cta: string;
   generateVariants: boolean;
 };
+
+const GENERATION_HINTS = {
+  platform:
+    "Which network the copy and constraints are optimized for — character limits, norms, and hashtag style all follow this choice.",
+  pillar:
+    "The strategy theme this post belongs to. Keeps the idea aligned with your content pillars and reporting.",
+  topic:
+    "The specific angle, headline, or story for this generation. Be concrete; the model uses this as the main subject.",
+  objective:
+    "What success looks like for this piece — e.g. engagement, saves, clicks, or conversation. Shapes hook and CTA strength.",
+  audience:
+    "Who should feel spoken to in this draft. Overrides default manifesto audience when you need a segment-specific version.",
+  voice:
+    "Tone modifiers for this run only — e.g. punchy, empathetic, executive. Layered on top of your saved brand voice.",
+  cta:
+    "The action you want readers to take — comment keyword, link in bio, DM, sign up. Written into the close of the caption.",
+  variants:
+    "When enabled, Conduit produces multiple labeled variants (e.g. A/B/C) so you can compare hooks and structures side by side.",
+} as const;
 
 const initialPayload: GenerationPayload = {
   platform: "linkedin",
@@ -194,9 +214,14 @@ export function ContentGenerationStudio() {
           <CardTitle>Prompt Setup</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-2 text-sm">
-            Platform
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="gen-platform"
+              label="Platform"
+              hint={GENERATION_HINTS.platform}
+            />
             <select
+              id="gen-platform"
               className="h-9 w-full rounded-md border bg-transparent px-3"
               value={payload.platform}
               onChange={(event) =>
@@ -212,71 +237,87 @@ export function ContentGenerationStudio() {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Pillar
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint htmlFor="gen-pillar" label="Pillar" hint={GENERATION_HINTS.pillar} />
             <Input
+              id="gen-pillar"
               value={payload.pillar}
               onChange={(event) =>
                 setPayload((current) => ({ ...current, pillar: event.target.value }))
               }
             />
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm md:col-span-2">
-            Topic
+          <div className="space-y-2 text-sm md:col-span-2">
+            <FieldLabelWithHint htmlFor="gen-topic" label="Topic" hint={GENERATION_HINTS.topic} />
             <Input
+              id="gen-topic"
               value={payload.topic}
               onChange={(event) =>
                 setPayload((current) => ({ ...current, topic: event.target.value }))
               }
             />
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Objective
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="gen-objective"
+              label="Objective"
+              hint={GENERATION_HINTS.objective}
+            />
             <Input
+              id="gen-objective"
               value={payload.objective}
               onChange={(event) =>
                 setPayload((current) => ({ ...current, objective: event.target.value }))
               }
             />
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Audience
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint
+              htmlFor="gen-audience"
+              label="Audience"
+              hint={GENERATION_HINTS.audience}
+            />
             <Input
+              id="gen-audience"
               value={payload.audience}
               onChange={(event) =>
                 setPayload((current) => ({ ...current, audience: event.target.value }))
               }
             />
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            Voice
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint htmlFor="gen-voice" label="Voice" hint={GENERATION_HINTS.voice} />
             <Input
+              id="gen-voice"
               value={payload.voice}
               onChange={(event) =>
                 setPayload((current) => ({ ...current, voice: event.target.value }))
               }
             />
-          </label>
+          </div>
 
-          <label className="space-y-2 text-sm">
-            CTA
+          <div className="space-y-2 text-sm">
+            <FieldLabelWithHint htmlFor="gen-cta" label="CTA" hint={GENERATION_HINTS.cta} />
             <Input
+              id="gen-cta"
               value={payload.cta}
               onChange={(event) =>
                 setPayload((current) => ({ ...current, cta: event.target.value }))
               }
             />
-          </label>
+          </div>
 
-          <label className="flex items-center gap-2 text-sm md:col-span-2">
+          <div className="flex items-center gap-2 text-sm md:col-span-2">
             <input
+              id="gen-variants"
               type="checkbox"
+              className="size-4 shrink-0"
               checked={payload.generateVariants}
               onChange={(event) =>
                 setPayload((current) => ({
@@ -285,8 +326,12 @@ export function ContentGenerationStudio() {
                 }))
               }
             />
-            Generate A/B/C variants
-          </label>
+            <FieldLabelWithHint
+              htmlFor="gen-variants"
+              label="Generate A/B/C variants"
+              hint={GENERATION_HINTS.variants}
+            />
+          </div>
 
           <div className="md:col-span-2">
             <button
