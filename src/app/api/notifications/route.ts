@@ -1,34 +1,57 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/permissions";
 import {
-  listNotifications,
-  markAllRead,
-} from "@/lib/notifications/store";
+  getUserNotifications,
+  getUnreadCount,
+  markAsRead,
+  markAllAsRead,
+} from "@/lib/notifications";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
-export async function GET() {
+/** GET /api/notifications — list notifications + unread count */
+export async function GET(req: NextRequest) {
   try {
-    const session = await requireAuth();
-    const notifications = listNotifications(session.user.tenantId);
-    return NextResponse.json({ notifications });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    if (message === "Unauthorized") {
+    const { user } = await requireAuth();
+
+    const limited = rateLimitResponse(`notifications:${user.id}`);
+    if (limited) return limited;
+
+    const url = new URL(req.url);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? "20"), 50);
+    const offset = Number(url.searchParams.get("offset") ?? "0");
+
+    const [items, unread] = await Promise.all([
+      getUserNotifications(user.id, { limit, offset }),
+      getUnreadCount(user.id),
+    ]);
+
+    return NextResponse.json({ notifications: items, unread });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Server error";
+    if (msg === "Unauthorized")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    return NextResponse.json({ error: "Unable to fetch notifications" }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
-export async function POST() {
+/** POST /api/notifications — mark read (single or all) */
+export async function POST(req: NextRequest) {
   try {
-    const session = await requireAuth();
-    markAllRead(session.user.tenantId);
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    if (message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { user } = await requireAuth();
+    const body = (await req.json()) as { id?: string; markAllRead?: boolean };
+
+    if (body.markAllRead) {
+      await markAllAsRead(user.id);
+    } else if (body.id) {
+      await markAsRead(body.id);
     }
-    return NextResponse.json({ error: "Unable to mark notifications read" }, { status: 500 });
+
+    const unread = await getUnreadCount(user.id);
+    return NextResponse.json({ ok: true, unread });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Server error";
+    if (msg === "Unauthorized")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

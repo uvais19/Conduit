@@ -8,6 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DraftTimeline } from "@/components/draft-timeline";
+import { toast } from "sonner";
+import {
+  MessageSquare,
+  ShieldCheck,
+  Download,
+  Trash2,
+  Send,
+} from "lucide-react";
 
 const STATUS_OPTIONS: Array<{ value: "all" | ContentDraftRecord["status"]; label: string }> = [
   { value: "all", label: "All statuses" },
@@ -46,6 +54,15 @@ const APPROVAL_FORM_HINTS = {
     "When this approved post should go live. Leave blank to let Conduit pick an optimal slot from your strategy.",
 } as const;
 
+const REVISION_TEMPLATES = [
+  { label: "Tone too formal", text: "The tone feels too formal for this platform. Please make it more conversational and relatable." },
+  { label: "Needs stronger CTA", text: "The call-to-action is too weak. Please add a clear, compelling CTA that drives the desired action." },
+  { label: "Off-brand messaging", text: "This doesn't align with our brand voice. Please revise to match our tone guidelines." },
+  { label: "Too long", text: "The caption is too long for optimal engagement on this platform. Please trim to key points." },
+  { label: "Missing hashtags", text: "Please add relevant, trending hashtags appropriate for this platform and audience." },
+  { label: "Factual correction", text: "There are factual inaccuracies that need to be corrected before publishing." },
+];
+
 export default function ApprovalPage() {
   const [drafts, setDrafts] = useState<ContentDraftRecord[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -65,6 +82,37 @@ export default function ApprovalPage() {
     changesSummary: string;
     changesApplied: Array<{ what: string; why: string }>;
   } | null>(null);
+
+  // Comment thread state
+  const [comments, setComments] = useState<
+    Array<{
+      id: string;
+      content: string;
+      createdAt: string;
+      userName?: string;
+      userAvatar?: string;
+      parentId?: string;
+    }>
+  >([]);
+  const [commentText, setCommentText] = useState("");
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [postingComment, setPostingComment] = useState(false);
+
+  // Brand check state
+  const [brandCheck, setBrandCheck] = useState<{
+    overallScore: number;
+    toneScore: number;
+    messageAlignmentScore: number;
+    guidelinesScore: number;
+    issues: Array<{ severity: string; category: string; message: string; suggestion: string }>;
+    strengths: string[];
+    summary: string;
+  } | null>(null);
+  const [brandChecking, setBrandChecking] = useState(false);
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<"all" | ContentDraftRecord["status"]>("in-review");
@@ -271,14 +319,185 @@ export default function ApprovalPage() {
     }
   }
 
+  // ── Comment thread functions ──────────────────────────────
+  async function loadComments(draftId: string) {
+    setCommentsLoading(true);
+    try {
+      const res = await fetch(`/api/drafts/comments?draftId=${draftId}`);
+      const data = await res.json();
+      if (res.ok) setComments(data.comments ?? []);
+    } catch {
+      // Silently fail — comments are non-critical
+    } finally {
+      setCommentsLoading(false);
+    }
+  }
+
+  async function postComment() {
+    if (!selectedDraft || !commentText.trim()) return;
+    setPostingComment(true);
+    try {
+      const res = await fetch("/api/drafts/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId: selectedDraft.id, content: commentText.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to post comment");
+      setCommentText("");
+      await loadComments(selectedDraft.id);
+      toast.success("Comment added");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to post comment");
+    } finally {
+      setPostingComment(false);
+    }
+  }
+
+  async function deleteComment(commentId: string) {
+    try {
+      await fetch("/api/drafts/comments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId }),
+      });
+      if (selectedDraft) await loadComments(selectedDraft.id);
+      toast.success("Comment deleted");
+    } catch {
+      toast.error("Failed to delete comment");
+    }
+  }
+
+  // Load comments when selected draft changes
+  useEffect(() => {
+    if (selectedId) void loadComments(selectedId);
+    setBrandCheck(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  // ── Brand consistency check ───────────────────────────────
+  async function handleBrandCheck() {
+    if (!selectedDraft) return;
+    setBrandChecking(true);
+    setBrandCheck(null);
+    try {
+      const res = await fetch("/api/brand/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caption: selectedDraft.caption,
+          hashtags: selectedDraft.hashtags,
+          cta: selectedDraft.cta,
+          platform: selectedDraft.platform,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Brand check failed");
+      setBrandCheck(data.result);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Brand check failed");
+    } finally {
+      setBrandChecking(false);
+    }
+  }
+
+  // ── Bulk operations ───────────────────────────────────────
+  function toggleBulkSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBulkAction(action: "approve" | "submit" | "delete") {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch("/api/content/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: Array.from(selectedIds), action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Bulk action failed");
+      toast.success(`${action} applied to ${selectedIds.size} drafts`);
+      setSelectedIds(new Set());
+      await fetchDrafts();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bulk action failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
+  // ── Export drafts ─────────────────────────────────────────
+  async function handleExportDrafts() {
+    try {
+      const res = await fetch("/api/content/export?format=csv");
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "drafts-export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Drafts exported as CSV");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed");
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Approval Queue</h1>
-        <p className="text-muted-foreground">
-          Review, approve, or request revisions on content drafts.
-        </p>
-      </div>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <span className="animate-pulse-dot" />
+              Review Queue
+            </span>
+          </div>
+          <h1 className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
+            Approval Queue
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Review, approve, or request revisions on content drafts.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-sm text-muted-foreground">{selectedIds.size} selected</span>
+              <button
+                type="button"
+                disabled={bulkLoading}
+                onClick={() => void handleBulkAction("approve")}
+                className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50 shadow-sm transition-all hover:opacity-90"
+              >
+                Bulk Approve
+              </button>
+              <button
+                type="button"
+                disabled={bulkLoading}
+                onClick={() => void handleBulkAction("delete")}
+                className="inline-flex h-8 items-center rounded-lg bg-destructive px-3 text-xs font-semibold text-destructive-foreground disabled:opacity-50 transition-all hover:opacity-90"
+              >
+                Bulk Delete
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleExportDrafts()}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/80 bg-background px-3 text-xs font-medium hover:bg-muted/50 transition-colors"
+          >
+            <Download className="size-3.5" />
+            Export
+          </button>
+        </div>
+      </header>
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -293,11 +512,9 @@ export default function ApprovalPage() {
       )}
 
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters & Sort</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-4">
+      <div className="rounded-xl border border-border/80 bg-card p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Filters &amp; Sort</p>
+        <div className="grid gap-4 md:grid-cols-4">
           <div className="space-y-2 text-sm">
             <FieldLabelWithHint
               htmlFor="approval-filter-status"
@@ -306,7 +523,7 @@ export default function ApprovalPage() {
             />
             <select
               id="approval-filter-status"
-              className="h-9 w-full rounded-md border bg-transparent px-3"
+              className="h-9 w-full rounded-lg border border-border/80 bg-background px-3 text-sm hover:bg-muted/30 transition-colors"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
             >
@@ -326,7 +543,7 @@ export default function ApprovalPage() {
             />
             <select
               id="approval-filter-platform"
-              className="h-9 w-full rounded-md border bg-transparent px-3"
+              className="h-9 w-full rounded-lg border border-border/80 bg-background px-3 text-sm hover:bg-muted/30 transition-colors"
               value={platformFilter}
               onChange={(e) => setPlatformFilter(e.target.value as typeof platformFilter)}
             >
@@ -361,7 +578,7 @@ export default function ApprovalPage() {
             />
             <select
               id="approval-filter-sort"
-              className="h-9 w-full rounded-md border bg-transparent px-3"
+              className="h-9 w-full rounded-lg border border-border/80 bg-background px-3 text-sm hover:bg-muted/30 transition-colors"
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as SortKey)}
             >
@@ -371,8 +588,8 @@ export default function ApprovalPage() {
               <option value="platform">Platform</option>
             </select>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         {/* Draft list */}
@@ -392,18 +609,24 @@ export default function ApprovalPage() {
               <p className="text-sm text-muted-foreground">No drafts found.</p>
             ) : (
               sortedDrafts.map((draft) => (
-                <button
-                  key={draft.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(draft.id);
-                    setShowRevisionForm(false);
-                    setRevisionNotes("");
-                  }}
-                  className={`w-full rounded-md border p-2 text-left text-sm transition-colors hover:bg-muted/40 ${
-                    selectedId === draft.id ? "border-primary bg-primary/5" : ""
-                  }`}
-                >
+                <div key={draft.id} className="flex items-start gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="mt-3 size-3.5 rounded"
+                    checked={selectedIds.has(draft.id)}
+                    onChange={() => toggleBulkSelect(draft.id)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedId(draft.id);
+                      setShowRevisionForm(false);
+                      setRevisionNotes("");
+                    }}
+                    className={`w-full rounded-md border p-2 text-left text-sm transition-colors hover:bg-muted/40 ${
+                      selectedId === draft.id ? "border-primary bg-primary/5" : ""
+                    }`}
+                  >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">
                       {draft.variantLabel} · {PLATFORM_LABELS[draft.platform]}
@@ -417,6 +640,7 @@ export default function ApprovalPage() {
                     {new Date(draft.updatedAt).toLocaleDateString()}
                   </p>
                 </button>
+                </div>
               ))
             )}
           </CardContent>
@@ -499,6 +723,19 @@ export default function ApprovalPage() {
 
                   {showRevisionForm && (
                     <div className="space-y-2 rounded-md border p-3">
+                      {/* Revision templates */}
+                      <div className="flex flex-wrap gap-1">
+                        {REVISION_TEMPLATES.map((tpl) => (
+                          <button
+                            key={tpl.label}
+                            type="button"
+                            onClick={() => setRevisionNotes(tpl.text)}
+                            className="rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors hover:bg-muted"
+                          >
+                            {tpl.label}
+                          </button>
+                        ))}
+                      </div>
                       <div className="block space-y-2 text-sm">
                         <FieldLabelWithHint
                           htmlFor="approval-revision-notes"
@@ -724,6 +961,145 @@ export default function ApprovalPage() {
                 </CardHeader>
                 <CardContent>
                   <DraftTimeline draftId={selectedDraft.id} />
+                </CardContent>
+              </Card>
+
+              {/* Brand Consistency Check */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="size-4 text-primary" />
+                    Brand Consistency
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <button
+                    type="button"
+                    disabled={brandChecking}
+                    onClick={() => void handleBrandCheck()}
+                    className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  >
+                    {brandChecking ? "Checking..." : "Run Brand Check"}
+                  </button>
+                  {brandCheck && (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-sm font-bold ${
+                            brandCheck.overallScore >= 70
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                              : brandCheck.overallScore >= 40
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                          }`}
+                        >
+                          {brandCheck.overallScore}/100
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Tone: {brandCheck.toneScore} · Message: {brandCheck.messageAlignmentScore} · Guidelines: {brandCheck.guidelinesScore}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{brandCheck.summary}</p>
+                      {brandCheck.issues.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Issues</p>
+                          {brandCheck.issues.map((issue, i) => (
+                            <div key={i} className="rounded-md border p-2 text-xs">
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant={issue.severity === "high" ? "destructive" : "secondary"}
+                                  className="text-[10px]"
+                                >
+                                  {issue.severity}
+                                </Badge>
+                                <span className="font-medium">{issue.category}</span>
+                              </div>
+                              <p className="mt-1 text-muted-foreground">{issue.message}</p>
+                              <p className="mt-0.5 text-primary">{issue.suggestion}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {brandCheck.strengths.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Strengths</p>
+                          {brandCheck.strengths.map((s, i) => (
+                            <p key={i} className="text-xs text-emerald-700 dark:text-emerald-400">✓ {s}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Comment Threads */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="size-4 text-primary" />
+                    Comments
+                    {comments.length > 0 && (
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        ({comments.length})
+                      </span>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {commentsLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading comments...</p>
+                  ) : comments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No comments yet. Be the first to leave feedback.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {comments.map((comment) => (
+                        <div key={comment.id} className="group flex gap-2 rounded-md border p-2">
+                          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                            {(comment.userName ?? "?")[0].toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium">{comment.userName ?? "User"}</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {new Date(comment.createdAt).toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-sm whitespace-pre-wrap">{comment.content}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void deleteComment(comment.id)}
+                            className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                          >
+                            <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      placeholder="Add a comment..."
+                      className="h-9 flex-1 rounded-md border bg-transparent px-3 text-sm"
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void postComment();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={postingComment || !commentText.trim()}
+                      onClick={() => void postComment()}
+                      className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      <Send className="size-3.5" />
+                    </button>
+                  </div>
                 </CardContent>
               </Card>
             </>

@@ -6,6 +6,7 @@ export function LandingToday({ section }: { section: LandingContent["today"] }) 
     <section id="today" className="scroll-mt-20 border-b border-border/60 py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mb-10 max-w-2xl">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary">What you get</p>
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{section.sectionTitle}</h2>
           <p className="mt-2 text-muted-foreground">{section.sectionSubtitle}</p>
         </div>
@@ -13,7 +14,7 @@ export function LandingToday({ section }: { section: LandingContent["today"] }) 
           {section.items.map((item) => (
             <li
               key={item.title}
-              className="flex gap-3 rounded-xl border border-border/80 bg-card/50 p-4 ring-1 ring-foreground/5"
+              className="flex gap-3 rounded-2xl border border-border/80 bg-card p-5 shadow-sm transition-shadow hover:shadow-md"
             >
               <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Check className="size-4" aria-hidden />

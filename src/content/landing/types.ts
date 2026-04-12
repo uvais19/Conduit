@@ -29,6 +29,27 @@ export interface LandingTodayItem {
   description: string;
 }
 
+export interface LandingPricingTier {
+  name: string;
+  price: string;
+  period: string;
+  description: string;
+  features: string[];
+  cta: string;
+  highlighted?: boolean;
+}
+
+export interface LandingSocialProofStat {
+  value: string;
+  label: string;
+}
+
+export interface LandingTestimonial {
+  quote: string;
+  author: string;
+  role: string;
+}
+
 export type TrustChannelId = "linkedin" | "x" | "instagram" | "facebook";
 
 export interface TrustChannel {
@@ -101,5 +122,20 @@ export interface LandingContent {
     copyright: string;
     privacy: string;
     terms: string;
+  };
+  pricing: {
+    sectionTitle: string;
+    sectionSubtitle: string;
+    tiers: LandingPricingTier[];
+  };
+  socialProof: {
+    sectionTitle: string;
+    stats: LandingSocialProofStat[];
+    testimonials: LandingTestimonial[];
+  };
+  demo: {
+    sectionTitle: string;
+    sectionSubtitle: string;
+    videoPlaceholderText: string;
   };
 }

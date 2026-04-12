@@ -3,10 +3,13 @@ import type { LandingContent } from "@/content/landing";
 import { LandingJsonLd } from "./landing-json-ld";
 import { LandingComparison } from "./landing-comparison";
 import { LandingCtaBand } from "./landing-cta-band";
+import { LandingDemo } from "./landing-demo";
 import { LandingFaq } from "./landing-faq";
 import { LandingFeatures } from "./landing-features";
 import { LandingHeader } from "./landing-header";
 import { LandingHero } from "./landing-hero";
+import { LandingPricing } from "./landing-pricing";
+import { LandingSocialProof } from "./landing-social-proof";
 import { LandingToday } from "./landing-today";
 import { LandingWorkflowCarousel } from "./landing-workflow-carousel";
 
@@ -25,14 +28,17 @@ export function LandingPage({ content }: { content: LandingContent }) {
       <LandingHeader content={content} />
       <main id="main-content" className="flex-1 outline-none" tabIndex={-1} aria-label="Conduit marketing">
         <LandingHero content={content} />
+        <LandingSocialProof section={content.socialProof} />
         <LandingFeatures section={content.features} />
+        <LandingDemo section={content.demo} />
         <LandingToday section={content.today} />
         <LandingComparison section={content.comparison} />
         <LandingWorkflowCarousel section={content.carousel} />
+        <LandingPricing section={content.pricing} />
         <LandingCtaBand section={content.ctaBand} />
         <LandingFaq section={content.faq} />
       </main>
-      <footer className="border-t border-border/60 bg-muted/15">
+      <footer className="border-t border-border/60 bg-muted/20">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div>
             <p className="font-medium text-foreground">Conduit</p>

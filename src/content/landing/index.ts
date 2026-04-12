@@ -8,6 +8,9 @@ export type {
   LandingFeatureIconId,
   LandingFaqItem,
   LandingTodayItem,
+  LandingPricingTier,
+  LandingSocialProofStat,
+  LandingTestimonial,
   TrustChannel,
   TrustChannelId,
 } from "./types";

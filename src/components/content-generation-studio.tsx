@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import type { BrandManifesto } from "@/lib/types";
 import { deriveFieldsForPlatform } from "@/lib/content/platform-defaults";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -59,6 +60,14 @@ const initialPayload: GenerationPayload = {
   generateVariants: true,
 };
 
+const PLATFORM_MEDIA_SUPPORT: Record<string, { formats: string[]; maxDuration?: string; notes: string }> = {
+  instagram: { formats: ["Image", "Carousel", "Reel", "Story"], maxDuration: "90s Reels, 60s Stories", notes: "Reels get 67% more reach than static posts" },
+  linkedin: { formats: ["Image", "Carousel (PDF)", "Video", "Article"], maxDuration: "10 min", notes: "Native video gets 5x more engagement" },
+  x: { formats: ["Image", "GIF", "Video"], maxDuration: "2:20", notes: "Videos auto-play in timeline" },
+  facebook: { formats: ["Image", "Carousel", "Video", "Reel", "Story"], maxDuration: "240 min", notes: "Short-form video under 60s performs best" },
+  gbp: { formats: ["Image", "Video"], maxDuration: "30s", notes: "Photos with businesses get 35% more clicks" },
+};
+
 export function ContentGenerationStudio() {
   const searchParams = useSearchParams();
   const [payload, setPayload] = useState<GenerationPayload>(initialPayload);
@@ -68,6 +77,76 @@ export function ContentGenerationStudio() {
   const [drafts, setDrafts] = useState<ContentDraftRecord[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [generatingVariant, setGeneratingVariant] = useState<string | null>(null);
+  const [brandCheck, setBrandCheck] = useState<{
+    overallScore: number;
+    issues: { field: string; severity: string; message: string }[];
+    strengths: string[];
+    summary: string;
+  } | null>(null);
+  const [brandChecking, setBrandChecking] = useState(false);
+  const [translating, setTranslating] = useState<string | null>(null);
+  const [translateLang, setTranslateLang] = useState("Spanish");
+
+  const TRANSLATE_LANGUAGES = [
+    "Spanish", "French", "German", "Portuguese", "Italian", "Dutch",
+    "Japanese", "Korean", "Chinese (Simplified)", "Arabic", "Hindi",
+    "Russian", "Turkish", "Indonesian",
+  ];
+
+  const handleTranslate = useCallback(
+    async (draftId: string) => {
+      const draft = drafts.find((d) => d.id === draftId);
+      if (!draft) return;
+      setTranslating(draftId);
+      try {
+        const res = await fetch("/api/content/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: draft.caption,
+            targetLanguage: translateLang,
+            platform: payload.platform,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Translation failed");
+        setDrafts((current) =>
+          current.map((d) =>
+            d.id === draftId ? { ...d, caption: data.translated } : d
+          )
+        );
+        toast.success(`Translated to ${translateLang}`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Translation failed");
+      } finally {
+        setTranslating(null);
+      }
+    },
+    [drafts, translateLang, payload.platform]
+  );
+
+  const handleBrandCheck = useCallback(
+    async (content: string) => {
+      setBrandChecking(true);
+      setBrandCheck(null);
+      try {
+        const res = await fetch("/api/brand/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, platform: payload.platform }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Brand check failed");
+        setBrandCheck(data.result);
+        toast.success(`Brand score: ${data.result.overallScore}/100`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Brand check failed");
+      } finally {
+        setBrandChecking(false);
+      }
+    },
+    [payload.platform]
+  );
 
   useEffect(() => {
     async function loadManifesto() {
@@ -237,6 +316,23 @@ export function ContentGenerationStudio() {
                 </option>
               ))}
             </select>
+            {PLATFORM_MEDIA_SUPPORT[payload.platform] && (
+              <div className="mt-1.5 rounded-md border border-primary/15 bg-primary/5 px-3 py-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {PLATFORM_MEDIA_SUPPORT[payload.platform].formats.map((f) => (
+                    <span key={f} className="rounded-full bg-background px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider border">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {PLATFORM_MEDIA_SUPPORT[payload.platform].maxDuration && (
+                    <span className="font-medium">Max: {PLATFORM_MEDIA_SUPPORT[payload.platform].maxDuration} · </span>
+                  )}
+                  {PLATFORM_MEDIA_SUPPORT[payload.platform].notes}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 text-sm">
@@ -355,14 +451,33 @@ export function ContentGenerationStudio() {
       {grouped.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold leading-snug">
-              {payload.topic.trim() || payload.pillar || "Generated drafts"}
-            </CardTitle>
-            <CardDescription>
-              {payload.pillar}
-              {payload.pillar ? " · " : ""}
-              {PLATFORM_LABELS[payload.platform]}
-            </CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-lg font-semibold leading-snug">
+                  {payload.topic.trim() || payload.pillar || "Generated drafts"}
+                </CardTitle>
+                <CardDescription>
+                  {payload.pillar}
+                  {payload.pillar ? " · " : ""}
+                  {PLATFORM_LABELS[payload.platform]}
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="translate-lang" className="text-xs text-muted-foreground whitespace-nowrap">
+                  Translate to:
+                </label>
+                <select
+                  id="translate-lang"
+                  className="h-7 rounded border bg-transparent px-2 text-xs"
+                  value={translateLang}
+                  onChange={(e) => setTranslateLang(e.target.value)}
+                >
+                  {TRANSLATE_LANGUAGES.map((lang) => (
+                    <option key={lang} value={lang}>{lang}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -377,13 +492,24 @@ export function ContentGenerationStudio() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Variant {draft.variantLabel}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(draft.id)}
-                      className="shrink-0 rounded border px-2 py-1 text-xs"
-                    >
-                      Edit visuals
-                    </button>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        disabled={translating === draft.id}
+                        onClick={() => void handleTranslate(draft.id)}
+                        className="shrink-0 rounded border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
+                        title={`Translate to ${translateLang}`}
+                      >
+                        {translating === draft.id ? "Translating..." : "Translate"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(draft.id)}
+                        className="shrink-0 rounded border px-2 py-1 text-xs"
+                      >
+                        Edit visuals
+                      </button>
+                    </div>
                   </div>
                   <p className="flex-1 whitespace-pre-wrap text-sm">{draft.caption}</p>
                   <p className="mt-2 text-muted-foreground text-xs">{draft.hashtags.join(" ")}</p>
@@ -400,6 +526,97 @@ export function ContentGenerationStudio() {
               ))}
             </div>
           </CardContent>
+        </Card>
+      )}
+
+      {/* Brand Consistency Check */}
+      {grouped.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Brand Consistency Check</CardTitle>
+              <button
+                type="button"
+                disabled={brandChecking || !selectedId}
+                onClick={() => {
+                  const draft = drafts.find((d) => d.id === selectedId);
+                  if (draft) void handleBrandCheck(draft.caption);
+                }}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-accent disabled:opacity-50"
+              >
+                {brandChecking ? (
+                  <>
+                    <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Checking...
+                  </>
+                ) : (
+                  "Check selected draft"
+                )}
+              </button>
+            </div>
+            <CardDescription>
+              Verify your generated content against your brand guidelines before submitting.
+            </CardDescription>
+          </CardHeader>
+          {brandCheck && (
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div
+                  className={`flex size-14 items-center justify-center rounded-xl text-xl font-bold ${
+                    brandCheck.overallScore >= 80
+                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                      : brandCheck.overallScore >= 60
+                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        : "bg-red-500/10 text-red-700 dark:text-red-400"
+                  }`}
+                >
+                  {brandCheck.overallScore}
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Overall Brand Score</p>
+                  <p className="text-xs text-muted-foreground">{brandCheck.summary}</p>
+                </div>
+              </div>
+              {brandCheck.issues.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Issues
+                  </p>
+                  <ul className="space-y-1.5">
+                    {brandCheck.issues.map((issue, i) => (
+                      <li
+                        key={i}
+                        className={`rounded-lg border px-3 py-2 text-sm ${
+                          issue.severity === "high"
+                            ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
+                            : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950"
+                        }`}
+                      >
+                        <span className="font-medium">{issue.field}:</span> {issue.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {brandCheck.strengths.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Strengths
+                  </p>
+                  <ul className="flex flex-wrap gap-2">
+                    {brandCheck.strengths.map((s) => (
+                      <li
+                        key={s}
+                        className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+                      >
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          )}
         </Card>
       )}
 

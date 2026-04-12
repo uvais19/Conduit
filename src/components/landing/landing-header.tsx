@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useState, type ReactNode } from "react";
-import { Menu, Sparkles } from "lucide-react";
+import { Menu } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/sheet";
 
 const SECTION_LINK_CLASS =
-  "text-sm font-medium text-muted-foreground transition-colors hover:text-foreground";
+  "text-sm font-medium text-muted-foreground transition-colors hover:text-primary";
 
 function SectionNavLink({
   id,
@@ -60,18 +60,19 @@ export function LandingHeader({ content }: { content: LandingContent }) {
       <SectionNavLink id="features">{nav.features}</SectionNavLink>
       <SectionNavLink id="workflow">{nav.workflow}</SectionNavLink>
       <SectionNavLink id="today">{nav.whatYouGet}</SectionNavLink>
+      <SectionNavLink id="pricing">Pricing</SectionNavLink>
       <SectionNavLink id="faq">{nav.faq}</SectionNavLink>
     </>
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Sparkles className="size-4" />
-          </span>
-          Conduit
+    <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+      <div className="mx-auto flex h-[3.25rem] max-w-6xl items-center gap-4 px-4 sm:px-6">
+        <Link
+          href="/"
+          className="font-[family-name:var(--font-heading)] text-lg font-semibold tracking-tight text-foreground"
+        >
+          Conduit<span className="text-gradient">.</span>
         </Link>
 
         <nav className="ml-4 hidden items-center gap-5 lg:ml-6 lg:flex xl:gap-6">{links}</nav>
@@ -134,6 +135,13 @@ export function LandingHeader({ content }: { content: LandingContent }) {
                     className="text-foreground"
                   >
                     {nav.whatYouGet}
+                  </SectionNavLink>
+                  <SectionNavLink
+                    id="pricing"
+                    onBeforeScroll={closeMobileThenScroll}
+                    className="text-foreground"
+                  >
+                    Pricing
                   </SectionNavLink>
                   <SectionNavLink
                     id="faq"

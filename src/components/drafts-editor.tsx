@@ -13,6 +13,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
 import { DraftTimeline } from "@/components/draft-timeline";
 import { ContentRefiner } from "@/components/content-refiner";
+import { toast } from "sonner";
 import {
   groupVariants,
   sortVariantGroupsByRecent,
@@ -69,6 +70,7 @@ export function DraftsEditor() {
   const [error, setError] = useState("");
   const [strategy, setStrategy] = useState<ContentStrategy | null>(null);
   const [strategyLoading, setStrategyLoading] = useState(true);
+  const [adaptingTo, setAdaptingTo] = useState<string | null>(null);
 
   const selectedDraft = useMemo(
     () => drafts.find((draft) => draft.id === selectedId) ?? null,
@@ -224,6 +226,32 @@ export function DraftsEditor() {
         draft.id === selectedDraft.id ? { ...draft, ...patch } : draft
       )
     );
+  }
+
+  async function handleAdaptTo(targetPlatform: string) {
+    if (!selectedDraft) return;
+    setAdaptingTo(targetPlatform);
+    try {
+      const res = await fetch("/api/content/adapt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: selectedDraft.caption,
+          sourcePlatform: selectedDraft.platform,
+          targetPlatform,
+          hashtags: selectedDraft.hashtags,
+          cta: selectedDraft.cta,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Adaptation failed");
+      patchSelectedDraft({ caption: data.adapted });
+      toast.success(`Adapted for ${PLATFORM_LABELS[targetPlatform as keyof typeof PLATFORM_LABELS] ?? targetPlatform}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Adaptation failed");
+    } finally {
+      setAdaptingTo(null);
+    }
   }
 
   return (
@@ -519,9 +547,33 @@ export function DraftsEditor() {
                 </div>
 
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-                    Live Preview ({PLATFORM_LABELS[selectedDraft.platform]})
-                  </p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Live Preview ({PLATFORM_LABELS[selectedDraft.platform]})
+                    </p>
+                    <div className="flex gap-1.5">
+                      {selectedDraft.mediaType && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                            selectedDraft.mediaType === "video"
+                              ? "bg-purple-500/10 text-purple-700 dark:text-purple-400"
+                              : selectedDraft.mediaType === "carousel"
+                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                                : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          }`}
+                        >
+                          {selectedDraft.mediaType}
+                        </span>
+                      )}
+                      {selectedDraft.mediaUrls.some((url) =>
+                        /\.(mp4|mov|avi|webm)$/i.test(url)
+                      ) && (
+                        <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400">
+                          Video
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <pre className="whitespace-pre-wrap text-sm">{renderPreview(selectedDraft)}</pre>
                 </div>
 
@@ -545,6 +597,26 @@ export function DraftsEditor() {
                       {submitting ? "Submitting..." : "Submit for Review"}
                     </button>
                   )}
+                </div>
+
+                {/* Cross-platform adaptation */}
+                <div className="rounded-lg border border-dashed p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Adapt for another platform
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PLATFORMS.filter((p) => p !== selectedDraft.platform).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        disabled={!!adaptingTo}
+                        onClick={() => void handleAdaptTo(p)}
+                        className="inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
+                      >
+                        {adaptingTo === p ? "Adapting..." : PLATFORM_LABELS[p]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <DraftVisualEditor

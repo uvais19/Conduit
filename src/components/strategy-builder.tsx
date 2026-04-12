@@ -508,16 +508,24 @@ export function StrategyBuilder() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Content Strategy</h1>
-          <p className="text-muted-foreground">
+      <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <span className="animate-pulse-dot" />
+              Strategy
+            </span>
+            {version && <Badge variant="secondary" className="text-xs">Version {version}</Badge>}
+          </div>
+          <h1 className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
+            Content Strategy
+          </h1>
+          <p className="text-sm text-muted-foreground">
             Generate and refine your pillars, posting cadence, and weekly themes.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {version && <Badge variant="secondary">Version {version}</Badge>}
-          <Button onClick={handleGenerate} disabled={generating}>
+          <Button onClick={handleGenerate} disabled={generating} className="shadow-md glow-primary">
             <Sparkles className="mr-2 size-4" />
             {generating ? (generationStep || "Generating...") : "Generate strategy"}
           </Button>
@@ -535,7 +543,7 @@ export function StrategyBuilder() {
             {saving ? "Saving..." : "Save strategy"}
           </Button>
         </div>
-      </div>
+      </header>
 
       {message && <div className="rounded-lg border border-green-600/30 bg-green-600/5 p-3 text-sm text-green-700">{message}</div>}
       {error && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}

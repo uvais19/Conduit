@@ -39,13 +39,14 @@ export function LandingWorkflowCarousel({ section }: { section: Section }) {
     >
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mb-10 max-w-2xl">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary">Workflow</p>
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
             {section.sectionTitle}
           </h2>
           <p className="mt-2 text-muted-foreground">{section.sectionSubtitle}</p>
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card p-6 shadow-sm ring-1 ring-foreground/5 sm:p-10">
+        <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card p-6 shadow-md sm:p-10">
           <div className="flex items-start justify-between gap-4">
             <Button
               type="button"

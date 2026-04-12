@@ -33,6 +33,7 @@ export function LandingFeatures({
     <section id="features" className="scroll-mt-20 py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mb-10 max-w-2xl">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary">Features</p>
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
             {section.sectionTitle}
           </h2>
@@ -46,10 +47,10 @@ export function LandingFeatures({
               <Card
                 key={item.id}
                 data-hoverable=""
-                className="border-border/80 transition-shadow"
+                className="group cursor-default"
               >
                 <CardHeader className="pb-2">
-                  <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <div className="mb-2 flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                     <Icon className="size-5" />
                   </div>
                   <CardTitle>{item.title}</CardTitle>

@@ -95,7 +95,7 @@ export function ContentRefiner({
             <div
               key={i}
               className={`rounded-md border p-2 text-xs ${
-                entry.applied ? "bg-primary/5 border-primary/30" : ""
+                entry.applied ? "bg-primary/5 border-primary/20" : ""
               }`}
             >
               <p className="font-medium text-muted-foreground">You: {entry.instruction}</p>

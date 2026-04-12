@@ -108,6 +108,36 @@ export const landingContent: LandingContent = {
         answer:
           "You can get started free to explore the workflow. Paid plans typically add seats, higher limits, or advanced features as your team scales — check in-product billing or contact us for current options.",
       },
+      {
+        question: "Can I manage multiple brands from one account?",
+        answer:
+          "Yes. Each brand gets its own workspace with separate strategy, voice guidelines, and connected platforms. Switch between workspaces to manage different clients or product lines — perfect for agencies.",
+      },
+      {
+        question: "How does the AI content studio handle different platforms?",
+        answer:
+          "When generating content, the studio adapts output for each platform's format and character limits. A LinkedIn thought-leadership post reads differently from an Instagram caption — the AI uses your brand context plus platform best practices to tailor each draft.",
+      },
+      {
+        question: "Can I schedule content across multiple time zones?",
+        answer:
+          "Absolutely. Set your workspace's default timezone in settings, and the calendar displays everything in your local time. When you schedule posts, times are converted to each platform's native timezone automatically.",
+      },
+      {
+        question: "What happens if a platform API goes down during publishing?",
+        answer:
+          "Conduit retries failed publishes automatically with exponential backoff. If publishing still fails after retries, the post is flagged in your dashboard with a clear error so you can re-queue or publish manually.",
+      },
+      {
+        question: "Do you support video and carousel content?",
+        answer:
+          "You can attach images and video to drafts. The media gallery supports common formats, and the preview shows how carousels and video posts will render on each platform before you publish.",
+      },
+      {
+        question: "How does Conduit compare to Buffer, Hootsuite, or Sprout Social?",
+        answer:
+          "Most schedulers bolt on strategy as an afterthought. Conduit starts with strategy and brand context, so every draft is grounded in your positioning — not just queued in a time slot. Approvals, analytics, and AI generation all live in the same workflow instead of separate add-ons.",
+      },
     ],
   },
   features: {
@@ -194,5 +224,97 @@ export const landingContent: LandingContent = {
     copyright: "Conduit. All rights reserved.",
     privacy: "Privacy",
     terms: "Terms",
+  },
+  pricing: {
+    sectionTitle: "Simple, transparent pricing",
+    sectionSubtitle:
+      "Start free, upgrade when your team grows. No surprise fees, no per-post charges.",
+    tiers: [
+      {
+        name: "Starter",
+        price: "Free",
+        period: "",
+        description: "For solo creators and small brands getting started.",
+        features: [
+          "1 workspace",
+          "2 connected platforms",
+          "50 AI-generated drafts/month",
+          "Basic analytics",
+          "Calendar & scheduling",
+          "Community support",
+        ],
+        cta: "Get started free",
+      },
+      {
+        name: "Pro",
+        price: "$29",
+        period: "/month",
+        description: "For growing teams who need approval workflows and deeper insights.",
+        features: [
+          "Unlimited workspaces",
+          "5 connected platforms",
+          "Unlimited AI drafts",
+          "Advanced analytics & export",
+          "Approval workflows",
+          "Brand consistency checker",
+          "Content templates",
+          "Priority support",
+        ],
+        cta: "Start 14-day trial",
+        highlighted: true,
+      },
+      {
+        name: "Agency",
+        price: "$79",
+        period: "/month",
+        description: "For agencies managing multiple brands and client accounts.",
+        features: [
+          "Everything in Pro",
+          "Unlimited team members",
+          "Multi-brand management",
+          "Client approval portal",
+          "Custom brand voices",
+          "API access",
+          "Dedicated support",
+          "White-label reports",
+        ],
+        cta: "Contact sales",
+      },
+    ],
+  },
+  socialProof: {
+    sectionTitle: "Trusted by marketing teams",
+    stats: [
+      { value: "10,000+", label: "Posts scheduled" },
+      { value: "500+", label: "Brands onboarded" },
+      { value: "3.2x", label: "Faster content cycle" },
+      { value: "40%", label: "Higher engagement" },
+    ],
+    testimonials: [
+      {
+        quote:
+          "Conduit replaced our spreadsheet-based content calendar and three other tools. Our approval time went from days to hours.",
+        author: "Sarah Chen",
+        role: "Head of Marketing, Bloom Agency",
+      },
+      {
+        quote:
+          "The AI content studio actually understands our brand voice. We went from 3 posts/week to daily publishing without sacrificing quality.",
+        author: "Marcus Rivera",
+        role: "Founder, GrowthLab",
+      },
+      {
+        quote:
+          "Finally, a tool where strategy and execution live in the same place. No more copy-pasting between docs and schedulers.",
+        author: "Priya Sharma",
+        role: "Social Media Manager, TechVault",
+      },
+    ],
+  },
+  demo: {
+    sectionTitle: "See Conduit in action",
+    sectionSubtitle:
+      "Watch how teams go from strategy to scheduled posts in minutes — not hours.",
+    videoPlaceholderText: "Product demo coming soon",
   },
 };

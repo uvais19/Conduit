@@ -32,7 +32,7 @@ export function FieldLabelWithHint({
         <Tooltip>
           <TooltipTrigger
             type="button"
-            className="text-violet-500 transition-colors hover:text-violet-600"
+            className="text-primary transition-colors hover:text-primary/80"
           >
             <Sparkles className="size-3" />
             <span className="sr-only">AI suggested</span>

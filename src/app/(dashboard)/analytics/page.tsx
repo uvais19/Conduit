@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Bar,
   BarChart,
@@ -17,6 +17,8 @@ import type { DashboardOverview, TrendPoint, VariantComparison } from "@/lib/ana
 import { VariantComparisonView } from "@/components/variant-comparison-view";
 import { TrendCharts } from "@/components/trend-charts";
 import { PerPostAnalyticsDetail } from "@/components/per-post-analytics-detail";
+import { Download } from "lucide-react";
+import { toast } from "sonner";
 
 export default function AnalyticsPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
@@ -28,6 +30,9 @@ export default function AnalyticsPage() {
   const [collecting, setCollecting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   async function fetchOverview() {
     const response = await fetch("/api/analytics");
@@ -103,6 +108,29 @@ export default function AnalyticsPage() {
     }
   }
 
+  const handleExport = useCallback(async (format: "csv" | "json") => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ format });
+      if (dateFrom) params.set("from", dateFrom);
+      if (dateTo) params.set("to", dateTo);
+      const response = await fetch(`/api/analytics/export?${params.toString()}`);
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `analytics-export.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Analytics exported as ${format.toUpperCase()}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }, [dateFrom, dateTo]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -112,7 +140,7 @@ export default function AnalyticsPage() {
             Performance overview, top-performing posts, and variant insights.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             className="h-9 rounded-md border bg-transparent px-3 text-sm"
             value={days}
@@ -126,6 +154,48 @@ export default function AnalyticsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Date range + export controls */}
+      <Card>
+        <CardContent className="flex flex-wrap items-end gap-3 pt-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">From</label>
+            <input
+              type="date"
+              className="h-9 rounded-md border bg-transparent px-3 text-sm"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">To</label>
+            <input
+              type="date"
+              className="h-9 rounded-md border bg-transparent px-3 text-sm"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={exporting}
+            onClick={() => void handleExport("csv")}
+          >
+            <Download className="mr-1.5 size-3.5" />
+            Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={exporting}
+            onClick={() => void handleExport("json")}
+          >
+            <Download className="mr-1.5 size-3.5" />
+            Export JSON
+          </Button>
+        </CardContent>
+      </Card>
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">

@@ -523,13 +523,19 @@ export default function AnalysisPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <span className="animate-pulse-dot" />
+              AI Analysis
+            </span>
+          </div>
+          <h1 className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
             Post Analysis
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            AI-powered analysis of your existing social media posts
+          <p className="text-sm text-muted-foreground">
+            AI-powered insights drawn from your existing social media posts
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -537,7 +543,7 @@ export default function AnalysisPage() {
             type="button"
             disabled={reanalysing}
             onClick={() => void handleReanalyse()}
-            className="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-accent disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border/80 bg-background px-4 text-sm font-medium hover:bg-muted/50 disabled:opacity-50 transition-colors"
           >
             <RefreshCw
               className={`size-3.5 ${reanalysing ? "animate-spin" : ""}`}
@@ -546,12 +552,13 @@ export default function AnalysisPage() {
           </button>
           <a
             href="/strategy"
-            className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-md glow-primary transition-all hover:opacity-90"
           >
-            Regenerate Strategy with Insights
+            <ArrowRight className="size-3.5" />
+            Regenerate Strategy
           </a>
         </div>
-      </div>
+      </header>
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -560,16 +567,16 @@ export default function AnalysisPage() {
       )}
 
       {/* Platform tabs */}
-      <div className="flex gap-1 rounded-lg border bg-muted/30 p-1">
+      <div className="flex gap-1 rounded-xl border border-border/80 bg-muted/30 p-1">
         {analyses.map((a) => (
           <button
             key={a.platform}
             type="button"
             onClick={() => setActiveTab(a.platform)}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
               activeTab === a.platform
-                ? "bg-background shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-background shadow-sm text-foreground ring-1 ring-primary/20"
+                : "text-muted-foreground hover:text-foreground hover:bg-background/50"
             }`}
           >
             {PLATFORM_LABELS[a.platform]}

@@ -304,7 +304,7 @@ export function OnboardingWizard() {
               </div>
             </div>
             <div className="flex items-center gap-3 rounded-lg border border-dashed p-4">
-              <Sparkles className="size-5 shrink-0 text-violet-500" />
+              <Sparkles className="size-5 shrink-0 text-primary" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">Let AI fill in the details</p>
                 <p className="text-xs text-muted-foreground">
@@ -319,7 +319,7 @@ export function OnboardingWizard() {
                 onClick={handlePrefill}
                 className="shrink-0 gap-1.5"
               >
-                <Sparkles className="size-3.5 text-violet-500" />
+                <Sparkles className="size-3.5 text-primary" />
                 {prefilling ? "Analyzing..." : "Suggest with AI"}
               </Button>
             </div>

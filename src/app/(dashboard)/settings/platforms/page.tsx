@@ -19,6 +19,15 @@ type ConnectionInfo = {
   createdAt: string;
 };
 
+function getConnectionHealth(conn: ConnectionInfo): { label: string; color: string } {
+  if (!conn.tokenExpiresAt) return { label: "Connected", color: "bg-emerald-500" };
+  const expires = new Date(conn.tokenExpiresAt);
+  const daysLeft = Math.floor((expires.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (daysLeft < 0) return { label: "Token expired", color: "bg-red-500" };
+  if (daysLeft < 7) return { label: `Expires in ${daysLeft}d`, color: "bg-amber-500" };
+  return { label: "Connected", color: "bg-emerald-500" };
+}
+
 const PLATFORM_GUIDES: Record<Platform, { tokenLabel: string; hint: string }> = {
   instagram: {
     tokenLabel: "Instagram Graph API Token",
@@ -185,16 +194,21 @@ export default function PlatformsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Connected Platforms</h1>
-        <p className="text-muted-foreground">
-          Connect your social media accounts to publish content directly from Conduit.
-        </p>
-        <p className="text-sm text-muted-foreground mt-1">
+      <header className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+            <span className="animate-pulse-dot" />
+            Integrations
+          </span>
+        </div>
+        <h1 className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
+          Connected Platforms
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Connect your social media accounts to publish content directly from Conduit.{" "}
           You can skip this for now — your drafts and strategy are ready to use.
-          Connect a platform whenever you&#39;re ready to publish directly from Conduit.
         </p>
-      </div>
+      </header>
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -251,38 +265,45 @@ export default function PlatformsPage() {
               No platforms connected yet. Use the form below to connect your first platform.
             </p>
           ) : (
-            connections.map((conn) => (
-              <div
-                key={conn.id}
-                className="flex items-center justify-between rounded-md border p-3"
-              >
-                <div>
-                  <p className="font-medium">
-                    {PLATFORM_LABELS[conn.platform]}
-                    <Badge variant="outline" className="ml-2">
-                      Connected
-                    </Badge>
-                  </p>
-                  <p className="text-sm text-muted-foreground">{conn.displayName}</p>
-                  {conn.platformPageId && (
-                    <p className="text-xs text-muted-foreground">
-                      Page ID: {conn.platformPageId}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Connected {new Date(conn.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={actionLoading}
-                  onClick={() => void handleDisconnect(conn.platform)}
-                  className="inline-flex h-8 items-center rounded-md border border-destructive/30 px-3 text-sm text-destructive disabled:opacity-50"
+            connections.map((conn) => {
+              const health = getConnectionHealth(conn);
+              return (
+                <div
+                  key={conn.id}
+                  className="flex items-center justify-between rounded-xl border border-border/80 bg-card p-4 transition-colors hover:bg-muted/20"
                 >
-                  Disconnect
-                </button>
-              </div>
-            ))
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{PLATFORM_LABELS[conn.platform]}</p>
+                      <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium">
+                        <span className={`size-2 rounded-full ${health.color}`} />
+                        {health.label}
+                      </span>
+                      <Badge variant="outline" className="text-xs">
+                        Simulated
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{conn.displayName}</p>
+                    {conn.platformPageId && (
+                      <p className="text-xs text-muted-foreground">
+                        Page ID: {conn.platformPageId}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Connected {new Date(conn.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() => void handleDisconnect(conn.platform)}
+                    className="inline-flex h-8 items-center rounded-lg border border-destructive/30 bg-destructive/5 px-3 text-sm font-medium text-destructive disabled:opacity-50 transition-colors hover:bg-destructive/10"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              );
+            })
           )}
         </CardContent>
       </Card>
@@ -301,7 +322,7 @@ export default function PlatformsPage() {
             />
             <select
               id="connect-platform"
-              className="h-9 w-full rounded-md border bg-transparent px-3"
+              className="h-9 w-full rounded-lg border border-border/80 bg-background px-3 text-sm hover:bg-muted/30 transition-colors"
               value={connectPlatform}
               onChange={(e) => setConnectPlatform(e.target.value as Platform | "")}
             >
@@ -373,7 +394,7 @@ export default function PlatformsPage() {
                 type="button"
                 disabled={actionLoading || !accessToken.trim() || !displayName.trim()}
                 onClick={() => void handleConnect()}
-                className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50 shadow-md glow-primary transition-all hover:opacity-90"
               >
                 {actionLoading ? "Connecting..." : "Connect Platform"}
               </button>
