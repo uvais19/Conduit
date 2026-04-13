@@ -47,6 +47,8 @@ type VisualPlanModelJson = {
   carousel?: Array<{ id?: string; heading: string; body: string }>;
   storyTemplate?: VisualPlan["storyTemplate"];
   recommendedDimensions: { width: number; height: number; aspectRatio: string };
+  /** Why this visual angle supports the caption */
+  designRationale?: string;
 };
 
 export type ImageApiAspectRatio = "1:1" | "4:5" | "9:16" | "16:9";
@@ -261,6 +263,7 @@ export async function runVisualDesignerAgent({
 
   const visualInstructions: string[] = [
     "Return strict JSON only matching the schema shape given.",
+    'Include "designRationale": 2–4 sentences on why this visual plan, hook, and layout serve the caption and platform.',
     inferenceNote,
     platformVisualDirectives(draft.platform, generationContext),
   ];
@@ -373,6 +376,10 @@ export async function runVisualDesignerAgent({
         ? "Favor crisp typography and 1200px-class width for landscape cards; keep prompts text-centric."
         : undefined;
 
+  const designRationale =
+    merged.designRationale?.trim() ||
+    `Visual objective "${merged.objective.trim()}" with ${merged.styleHint.trim()} styling aligns imagery with the caption's main hook for ${draft.platform}.`;
+
   const visualPlanData: VisualPlanPersisted = {
     objective: merged.objective.trim(),
     styleHint: merged.styleHint.trim(),
@@ -380,6 +387,7 @@ export async function runVisualDesignerAgent({
     slideImagePrompts: slideBriefs,
     recommendedAspectRatio: aspectRatio,
     recommendedResolutionNote: resolutionNote,
+    designRationale,
   };
 
   const plan: VisualPlan = {

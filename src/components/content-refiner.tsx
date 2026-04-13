@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import type { Platform } from "@/lib/types";
+import { FieldCharCounter } from "@/components/field-char-counter";
 
 type RefinementEntry = {
   instruction: string;
@@ -80,9 +81,7 @@ export function ContentRefiner({
     <div className="space-y-3 rounded-md border p-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">Content Refiner</p>
-        <span className="text-xs text-muted-foreground">
-          {charCount}/{pk?.charLimit ?? "∞"} chars
-        </span>
+        <FieldCharCounter current={charCount} max={pk?.charLimit ?? null} />
       </div>
 
       {error && (
@@ -130,7 +129,11 @@ export function ContentRefiner({
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-end">
+          <FieldCharCounter current={instruction.length} max={500} label="Instruction" />
+        </div>
+        <div className="flex gap-2">
         <input
           type="text"
           className="h-8 flex-1 rounded-md border bg-transparent px-3 text-sm"
@@ -153,6 +156,7 @@ export function ContentRefiner({
         >
           {loading ? "Refining..." : "Refine"}
         </button>
+        </div>
       </div>
     </div>
   );

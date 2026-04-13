@@ -33,6 +33,8 @@ export const visualPlanPersistedSchema = z.object({
   slideImagePrompts: z.array(z.string()).optional(),
   recommendedAspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9"]).optional(),
   recommendedResolutionNote: z.string().optional(),
+  /** Why this visual angle / hook fits the caption and platform */
+  designRationale: z.string().optional(),
 });
 
 export type VisualPlanPersisted = z.infer<typeof visualPlanPersistedSchema>;
@@ -53,6 +55,7 @@ export const draftUpdateSchema = z.object({
   hashtags: z.array(z.string()).optional(),
   cta: z.string().optional(),
   pillar: z.string().optional(),
+  campaignId: z.string().uuid().nullable().optional(),
   mediaUrls: z.array(z.string()).optional(),
   mediaType: mediaTypeSchema.optional(),
   carousel: z.array(carouselSlideSchema).optional(),
@@ -82,6 +85,8 @@ export type GeneratedVariant = {
   caption: string;
   hashtags: string[];
   cta: string;
+  /** Why this hook/angle was chosen for this variant */
+  writerRationale?: string;
 };
 
 export type ContentDraftRecord = {
@@ -92,6 +97,8 @@ export type ContentDraftRecord = {
   caption: string;
   hashtags: string[];
   cta: string;
+  writerRationale?: string | null;
+  campaignId?: string | null;
   mediaUrls: string[];
   mediaType: z.infer<typeof mediaTypeSchema>;
   carousel: z.infer<typeof carouselSlideSchema>[];

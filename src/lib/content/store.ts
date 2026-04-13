@@ -27,6 +27,8 @@ function mapDraftRow(row: typeof contentDrafts.$inferSelect): ContentDraftRecord
     caption: row.caption,
     hashtags: row.hashtags ?? [],
     cta: row.cta ?? "",
+    writerRationale: row.writerRationale ?? null,
+    campaignId: row.campaignId ?? null,
     mediaUrls: row.mediaUrls ?? [],
     mediaType: row.mediaType,
     carousel: (row.carouselData as ContentDraftRecord["carousel"]) ?? [],
@@ -69,6 +71,8 @@ export async function createDraftsFromVariants({
       caption: variant.caption,
       hashtags: variant.hashtags,
       cta: variant.cta,
+      writerRationale: variant.writerRationale ?? null,
+      campaignId: null,
       mediaUrls: [],
       mediaType: "text-only" as const,
       carousel: [],
@@ -105,6 +109,7 @@ export async function createDraftsFromVariants({
         caption: variant.caption,
         hashtags: variant.hashtags,
         cta: variant.cta,
+        writerRationale: variant.writerRationale ?? null,
         mediaUrls: [] as string[],
         mediaType: "text-only" as const,
         carouselData: [] as unknown[],
@@ -196,6 +201,8 @@ export async function updateDraft(
       | "hashtags"
       | "cta"
       | "pillar"
+      | "campaignId"
+      | "writerRationale"
       | "status"
       | "mediaUrls"
       | "mediaType"
@@ -233,6 +240,8 @@ export async function updateDraft(
       hashtags: patch.hashtags,
       cta: patch.cta,
       pillar: patch.pillar,
+      campaignId: patch.campaignId,
+      writerRationale: patch.writerRationale,
       status: patch.status,
       mediaUrls: patch.mediaUrls,
       mediaType: patch.mediaType,

@@ -160,17 +160,31 @@ export const contentStrategies = pgTable("content_strategies", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const campaigns = pgTable("campaigns", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const contentDrafts = pgTable("content_drafts", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id")
     .references(() => tenants.id, { onDelete: "cascade" })
     .notNull(),
   strategyId: uuid("strategy_id").references(() => contentStrategies.id),
+  campaignId: uuid("campaign_id").references(() => campaigns.id, {
+    onDelete: "set null",
+  }),
   platform: platformEnum("platform").notNull(),
   pillar: text("pillar"),
   caption: text("caption").notNull(),
   hashtags: text("hashtags").array(),
   cta: text("cta"),
+  writerRationale: text("writer_rationale"),
   mediaUrls: text("media_urls").array(),
   mediaType: mediaTypeEnum("media_type").notNull().default("text-only"),
   carouselData: jsonb("carousel_data"), // Array of carousel slides

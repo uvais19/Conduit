@@ -3,6 +3,75 @@ import { generateText } from "@/lib/ai/clients";
 import { writeLocalMediaFile } from "@/lib/storage/local-media";
 import { uploadFile } from "@/lib/storage/r2";
 
+type DalleSize = "1024x1024" | "1024x1792" | "1792x1024";
+
+function openAiImageSize(aspectRatio: "1:1" | "4:5" | "9:16" | "16:9"): DalleSize {
+  if (aspectRatio === "9:16" || aspectRatio === "4:5") return "1024x1792";
+  if (aspectRatio === "16:9") return "1792x1024";
+  return "1024x1024";
+}
+
+async function tryOpenAiRasterImage({
+  refinedPrompt,
+  aspectRatio,
+  tenantId,
+}: {
+  refinedPrompt: string;
+  aspectRatio: "1:1" | "4:5" | "9:16" | "16:9";
+  tenantId: string;
+}): Promise<{ imageUrl: string; provider: string } | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const model = process.env.OPENAI_IMAGE_MODEL ?? "dall-e-3";
+  const size = openAiImageSize(aspectRatio);
+
+  const response = await fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      prompt: refinedPrompt.slice(0, 3900),
+      n: 1,
+      size,
+      response_format: "url",
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    console.warn("OpenAI image generation failed:", response.status, errText);
+    return null;
+  }
+
+  const data = (await response.json()) as {
+    data?: Array<{ url?: string }>;
+  };
+  const url = data.data?.[0]?.url;
+  if (!url) return null;
+
+  const imgRes = await fetch(url);
+  if (!imgRes.ok) return null;
+  const buf = Buffer.from(await imgRes.arrayBuffer());
+  const contentType = imgRes.headers.get("content-type") || "image/png";
+  const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "png";
+  const key = `${tenantId}/generated/${randomUUID()}.${ext}`;
+
+  if (canUseR2()) {
+    const imageUrl = await uploadFile(key, buf, contentType);
+    return { imageUrl, provider: `${model}-raster` };
+  }
+
+  await writeLocalMediaFile(key, buf);
+  return {
+    imageUrl: `local-preview://${key}`,
+    provider: `${model}-raster-local`,
+  };
+}
+
 function canUseR2(): boolean {
   return Boolean(
     process.env.R2_ACCOUNT_ID &&
@@ -59,6 +128,19 @@ export async function generateImageAsset({
       userPrompt: `Refine this prompt for aspect ratio ${aspectRatio}: ${prompt}`,
       temperature: 0.2,
     })) ?? prompt;
+
+  try {
+    const raster = await tryOpenAiRasterImage({
+      refinedPrompt,
+      aspectRatio,
+      tenantId,
+    });
+    if (raster) {
+      return { imageUrl: raster.imageUrl, provider: raster.provider, prompt: refinedPrompt };
+    }
+  } catch (e) {
+    console.warn("Raster image generation error, falling back to SVG:", e);
+  }
 
   const svg = svgPlaceholder({
     headline: "Conduit AI Visual",

@@ -18,6 +18,11 @@ import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
 import { DraftMediaGallery } from "@/components/draft-media-gallery";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
+import { FieldCharCounter } from "@/components/field-char-counter";
+import { ContentExplainerPanel } from "@/components/content-explainer-panel";
+import { ExportDraftsButton } from "@/components/export-drafts-button";
+import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
+import type { Platform } from "@/lib/types";
 
 type GenerationPayload = {
   platform: (typeof PLATFORMS)[number];
@@ -273,13 +278,18 @@ export function ContentGenerationStudio() {
     }
   }
 
+  const pk = PLATFORM_KNOWLEDGE[payload.platform as Platform];
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Generate Content</h1>
-        <p className="text-muted-foreground">
-          Pick platform + pillar, then generate draft variants side-by-side.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Generate Content</h1>
+          <p className="text-muted-foreground">
+            Pick platform + pillar, then generate draft variants side-by-side.
+          </p>
+        </div>
+        <ExportDraftsButton />
       </div>
 
       {error && (
@@ -336,7 +346,10 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint htmlFor="gen-pillar" label="Pillar" hint={GENERATION_HINTS.pillar} />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint htmlFor="gen-pillar" label="Pillar" hint={GENERATION_HINTS.pillar} />
+              <FieldCharCounter current={payload.pillar.length} max={120} />
+            </div>
             <Input
               id="gen-pillar"
               value={payload.pillar}
@@ -347,7 +360,10 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm md:col-span-2">
-            <FieldLabelWithHint htmlFor="gen-topic" label="Topic" hint={GENERATION_HINTS.topic} />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint htmlFor="gen-topic" label="Topic" hint={GENERATION_HINTS.topic} />
+              <FieldCharCounter current={payload.topic.length} max={200} />
+            </div>
             <Input
               id="gen-topic"
               value={payload.topic}
@@ -358,11 +374,14 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint
-              htmlFor="gen-objective"
-              label="Objective"
-              hint={GENERATION_HINTS.objective}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor="gen-objective"
+                label="Objective"
+                hint={GENERATION_HINTS.objective}
+              />
+              <FieldCharCounter current={payload.objective.length} max={80} />
+            </div>
             <Input
               id="gen-objective"
               value={payload.objective}
@@ -373,11 +392,14 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint
-              htmlFor="gen-audience"
-              label="Audience"
-              hint={GENERATION_HINTS.audience}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor="gen-audience"
+                label="Audience"
+                hint={GENERATION_HINTS.audience}
+              />
+              <FieldCharCounter current={payload.audience.length} max={200} />
+            </div>
             <Input
               id="gen-audience"
               value={payload.audience}
@@ -388,7 +410,10 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint htmlFor="gen-voice" label="Voice" hint={GENERATION_HINTS.voice} />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint htmlFor="gen-voice" label="Voice" hint={GENERATION_HINTS.voice} />
+              <FieldCharCounter current={payload.voice.length} max={120} />
+            </div>
             <Input
               id="gen-voice"
               value={payload.voice}
@@ -399,7 +424,10 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint htmlFor="gen-cta" label="CTA" hint={GENERATION_HINTS.cta} />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint htmlFor="gen-cta" label="CTA" hint={GENERATION_HINTS.cta} />
+              <FieldCharCounter current={payload.cta.length} max={280} />
+            </div>
             <Input
               id="gen-cta"
               value={payload.cta}
@@ -511,14 +539,35 @@ export function ContentGenerationStudio() {
                       </button>
                     </div>
                   </div>
-                  <p className="flex-1 whitespace-pre-wrap text-sm">{draft.caption}</p>
-                  <p className="mt-2 text-muted-foreground text-xs">{draft.hashtags.join(" ")}</p>
-                  <p className="mt-1 text-xs font-medium">CTA: {draft.cta}</p>
+                  {draft.writerRationale && (
+                    <div className="mb-2">
+                      <ContentExplainerPanel title="Why this hook / angle" body={draft.writerRationale} />
+                    </div>
+                  )}
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="flex-1 whitespace-pre-wrap text-sm">{draft.caption}</p>
+                    <FieldCharCounter current={draft.caption.length} max={pk.charLimit} />
+                  </div>
+                  <div className="mt-2 flex items-start justify-between gap-2">
+                    <p className="flex-1 text-muted-foreground text-xs">{draft.hashtags.join(" ")}</p>
+                    <FieldCharCounter
+                      label="Tags"
+                      current={draft.hashtags.length}
+                      max={pk.hashtagLimits.max > 0 ? pk.hashtagLimits.max : null}
+                    />
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium">CTA: {draft.cta}</p>
+                    <FieldCharCounter current={draft.cta.length} max={280} />
+                  </div>
                   {draft.mediaUrls.length > 0 && (
                     <div className="mt-3">
                       <DraftMediaGallery
                         key={draft.mediaUrls.join("|")}
                         urls={draft.mediaUrls}
+                        verticalShortForm={
+                          payload.platform === "instagram" && draft.mediaType === "video"
+                        }
                       />
                     </div>
                   )}

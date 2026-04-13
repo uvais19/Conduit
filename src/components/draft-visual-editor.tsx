@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DraftMediaGallery } from "@/components/draft-media-gallery";
 import { InstagramCarouselPreview } from "@/components/instagram-carousel-preview";
+import { FieldCharCounter } from "@/components/field-char-counter";
+import { ContentExplainerPanel } from "@/components/content-explainer-panel";
 import type { ContentDraftRecord } from "@/lib/content/types";
 
 type Props = {
@@ -230,6 +232,15 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
             Objective, style, carousel, and image prompt are filled automatically when you generate
             variants. Use “Generate Visual Plan” to refresh from the latest caption and carousel.
           </p>
+          {draft.visualPlanData?.designRationale && (
+            <div className="pt-2">
+              <ContentExplainerPanel
+                title="Why this visual plan"
+                body={draft.visualPlanData.designRationale}
+                defaultOpen
+              />
+            </div>
+          )}
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           <div className="space-y-2 text-sm">
@@ -275,11 +286,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint
-              htmlFor={`${draft.id}-image-prompt`}
-              label="Image prompt"
-              hint={VISUAL_HINTS.imagePrompt}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor={`${draft.id}-image-prompt`}
+                label="Image prompt"
+                hint={VISUAL_HINTS.imagePrompt}
+              />
+              <FieldCharCounter current={imagePrompt.length} max={4000} />
+            </div>
             <textarea
               id={`${draft.id}-image-prompt`}
               className="min-h-40 w-full rounded-md border bg-transparent px-3 py-2 text-sm leading-relaxed"
@@ -307,8 +321,8 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
             <div className="flex flex-col gap-2">
               <FieldLabelWithHint
                 htmlFor={`${draft.id}-upload-image`}
-                label="Upload image"
-                hint={VISUAL_HINTS.upload}
+                label="Upload image or video"
+                hint="Images for feed/carousel, or short video files (e.g. MP4, WebM) for Reels-style placements."
               />
               <label
                 htmlFor={`${draft.id}-upload-image`}
@@ -318,7 +332,7 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
                 <input
                   id={`${draft.id}-upload-image`}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   className="sr-only"
                   onChange={uploadImage}
                 />
@@ -334,6 +348,10 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
               <DraftMediaGallery
                 key={draft.mediaUrls.join("|")}
                 urls={draft.mediaUrls}
+                verticalShortForm={
+                  draft.mediaType === "video" ||
+                  draft.visualPlanData?.recommendedAspectRatio === "9:16"
+                }
               />
             </div>
           )}
@@ -374,11 +392,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
                 </div>
               </div>
               <div className="space-y-1">
-                <FieldLabelWithHint
-                  htmlFor={`${draft.id}-carousel-${index}-heading`}
-                  label="Heading"
-                  hint={VISUAL_HINTS.carouselHeading}
-                />
+                <div className="flex items-center justify-between gap-2">
+                  <FieldLabelWithHint
+                    htmlFor={`${draft.id}-carousel-${index}-heading`}
+                    label="Heading"
+                    hint={VISUAL_HINTS.carouselHeading}
+                  />
+                  <FieldCharCounter current={slide.heading.length} max={200} />
+                </div>
                 <Input
                   id={`${draft.id}-carousel-${index}-heading`}
                   value={slide.heading}
@@ -386,11 +407,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
                 />
               </div>
               <div className="mt-2 space-y-1">
-                <FieldLabelWithHint
-                  htmlFor={`${draft.id}-carousel-${index}-body`}
-                  label="Body"
-                  hint={VISUAL_HINTS.carouselBody}
-                />
+                <div className="flex items-center justify-between gap-2">
+                  <FieldLabelWithHint
+                    htmlFor={`${draft.id}-carousel-${index}-body`}
+                    label="Body"
+                    hint={VISUAL_HINTS.carouselBody}
+                  />
+                  <FieldCharCounter current={slide.body.length} max={2000} />
+                </div>
                 <textarea
                   id={`${draft.id}-carousel-${index}-body`}
                   className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2"
@@ -443,11 +467,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint
-              htmlFor={`${draft.id}-story-headline`}
-              label="Headline"
-              hint={VISUAL_HINTS.storyHeadline}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor={`${draft.id}-story-headline`}
+                label="Headline"
+                hint={VISUAL_HINTS.storyHeadline}
+              />
+              <FieldCharCounter current={(draft.storyTemplate?.headline ?? "").length} max={100} />
+            </div>
             <Input
               id={`${draft.id}-story-headline`}
               value={draft.storyTemplate?.headline ?? ""}
@@ -456,11 +483,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
           </div>
 
           <div className="space-y-2 text-sm md:col-span-2">
-            <FieldLabelWithHint
-              htmlFor={`${draft.id}-story-subheadline`}
-              label="Subheadline"
-              hint={VISUAL_HINTS.storySubheadline}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor={`${draft.id}-story-subheadline`}
+                label="Subheadline"
+                hint={VISUAL_HINTS.storySubheadline}
+              />
+              <FieldCharCounter current={(draft.storyTemplate?.subheadline ?? "").length} max={200} />
+            </div>
             <Input
               id={`${draft.id}-story-subheadline`}
               value={draft.storyTemplate?.subheadline ?? ""}
@@ -469,11 +499,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
           </div>
 
           <div className="space-y-2 text-sm md:col-span-2">
-            <FieldLabelWithHint
-              htmlFor={`${draft.id}-story-cta`}
-              label="CTA Text"
-              hint={VISUAL_HINTS.storyCta}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor={`${draft.id}-story-cta`}
+                label="CTA Text"
+                hint={VISUAL_HINTS.storyCta}
+              />
+              <FieldCharCounter current={(draft.storyTemplate?.ctaText ?? "").length} max={80} />
+            </div>
             <Input
               id={`${draft.id}-story-cta`}
               value={draft.storyTemplate?.ctaText ?? ""}
