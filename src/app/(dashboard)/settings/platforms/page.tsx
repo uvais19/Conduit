@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { Platform } from "@/lib/types";
@@ -94,6 +95,21 @@ export default function PlatformsPage() {
 
   useEffect(() => {
     void fetchConnections();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const oauth = params.get("oauth");
+    const message = params.get("message");
+    if (oauth === "success") {
+      toast.success("Meta account connected.");
+      void fetchConnections();
+      window.history.replaceState({}, "", "/settings/platforms");
+    } else if (oauth === "error" && message) {
+      toast.error(decodeURIComponent(message));
+      window.history.replaceState({}, "", "/settings/platforms");
+    }
   }, []);
 
   useEffect(() => {
@@ -279,9 +295,15 @@ export default function PlatformsPage() {
                         <span className={`size-2 rounded-full ${health.color}`} />
                         {health.label}
                       </span>
-                      <Badge variant="outline" className="text-xs">
-                        Simulated
-                      </Badge>
+                      {conn.platform === "instagram" || conn.platform === "facebook" ? (
+                        <Badge variant="secondary" className="text-xs">
+                          Meta Graph
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          Simulated
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">{conn.displayName}</p>
                     {conn.platformPageId && (
@@ -308,10 +330,43 @@ export default function PlatformsPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Connect with Meta (OAuth)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Sign in with Meta to attach a Facebook Page access token for{" "}
+            <strong>Facebook</strong> or <strong>Instagram Business</strong>. Configure{" "}
+            <code className="rounded bg-muted px-1 text-xs">META_APP_ID</code>,{" "}
+            <code className="rounded bg-muted px-1 text-xs">META_APP_SECRET</code>, and add the
+            callback URL{" "}
+            <code className="rounded bg-muted px-1 text-xs">
+              …/api/platforms/oauth/meta/callback
+            </code>{" "}
+            in your Meta app settings.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/api/platforms/oauth/meta/start?platform=instagram"
+              className="inline-flex h-9 items-center rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
+            >
+              Connect Instagram
+            </a>
+            <a
+              href="/api/platforms/oauth/meta/start?platform=facebook"
+              className="inline-flex h-9 items-center rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
+            >
+              Connect Facebook
+            </a>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Connect new platform */}
       <Card>
         <CardHeader>
-          <CardTitle>Connect a Platform</CardTitle>
+          <CardTitle>Connect a Platform (manual token)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="block space-y-2 text-sm">

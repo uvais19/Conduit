@@ -17,6 +17,7 @@ import type { DashboardOverview, TrendPoint, VariantComparison } from "@/lib/ana
 import { VariantComparisonView } from "@/components/variant-comparison-view";
 import { TrendCharts } from "@/components/trend-charts";
 import { PerPostAnalyticsDetail } from "@/components/per-post-analytics-detail";
+import { MetricsDataSourceBadge } from "@/components/metrics-data-source-badge";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 
@@ -134,8 +135,16 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
+            {overview ? (
+              <MetricsDataSourceBadge
+                live={overview.metricsSourceBreakdown.live}
+                simulated={overview.metricsSourceBreakdown.simulated}
+              />
+            ) : null}
+          </div>
           <p className="text-muted-foreground">
             Performance overview, top-performing posts, and variant insights.
           </p>
@@ -224,7 +233,15 @@ export default function AnalyticsPage() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Platform Breakdown</CardTitle>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Platform Breakdown
+              {overview ? (
+                <MetricsDataSourceBadge
+                  live={overview.metricsSourceBreakdown.live}
+                  simulated={overview.metricsSourceBreakdown.simulated}
+                />
+              ) : null}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -250,7 +267,15 @@ export default function AnalyticsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Top Posts by Engagement</CardTitle>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Top Posts by Engagement
+              {overview ? (
+                <MetricsDataSourceBadge
+                  live={overview.metricsSourceBreakdown.live}
+                  simulated={overview.metricsSourceBreakdown.simulated}
+                />
+              ) : null}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -286,7 +311,12 @@ export default function AnalyticsPage() {
 
       <VariantComparisonView comparisons={comparisons} loading={loading} />
 
-      <TrendCharts trends={trends} loading={loading} periodDays={days} />
+      <TrendCharts
+        trends={trends}
+        loading={loading}
+        periodDays={days}
+        metricsSourceBreakdown={overview?.metricsSourceBreakdown}
+      />
     </div>
   );
 }

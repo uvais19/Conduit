@@ -8,29 +8,123 @@
 
 import type { Platform, FetchedPost } from "@/lib/types";
 import type { PlatformConnection } from "@/lib/platforms/store";
+import {
+  getFacebookPostInsights,
+  getFacebookPostObject,
+  getInstagramMediaInsights,
+  listFacebookPagePosts,
+  listInstagramMedia,
+  resolveInstagramUserId,
+} from "@/lib/platforms/meta-graph";
 
 // ---------------------------------------------------------------------------
-// Real API stubs (per-platform)
+// Real API integrations (per-platform)
 // ---------------------------------------------------------------------------
 
 async function fetchFromInstagram(
-  _connection: PlatformConnection,
-  _limit: number
+  connection: PlatformConnection,
+  limit: number
 ): Promise<FetchedPost[] | null> {
-  // Real implementation would:
-  //   GET /{user-id}/media?fields=caption,timestamp,like_count,comments_count,media_type
-  //   GET /{media-id}/insights for reach/impressions/saves
-  return null;
+  if (!connection.accessToken?.trim()) return null;
+  try {
+    const igUserId = await resolveInstagramUserId(connection);
+    if (!igUserId) return null;
+
+    const items = await listInstagramMedia(
+      igUserId,
+      connection.accessToken,
+      limit
+    );
+    if (items.length === 0) return null;
+
+    const out: FetchedPost[] = [];
+    for (const item of items) {
+      const insights = await getInstagramMediaInsights(
+        item.id,
+        connection.accessToken
+      );
+      const likes = item.like_count ?? 0;
+      const comments = item.comments_count ?? 0;
+      const impressions =
+        insights.impressions || insights.reach || Math.max(1, likes + comments);
+      const reach = insights.reach || impressions;
+      const saves = insights.saves;
+      const engagement = insights.engagement;
+      const shares = Math.max(0, engagement - likes - comments - saves);
+      const totalEng = likes + comments + shares + saves;
+      const engagementRate =
+        impressions > 0 ? Math.round((totalEng / impressions) * 10000) / 10000 : 0;
+
+      out.push({
+        platformPostId: item.id,
+        platform: "instagram",
+        content: item.caption ?? "",
+        mediaType: item.media_type,
+        postedAt: item.timestamp ?? new Date().toISOString(),
+        impressions,
+        reach,
+        likes,
+        comments,
+        shares,
+        saves,
+        clicks: 0,
+        engagementRate,
+      });
+    }
+    return out;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchFromFacebook(
-  _connection: PlatformConnection,
-  _limit: number
+  connection: PlatformConnection,
+  limit: number
 ): Promise<FetchedPost[] | null> {
-  // Real implementation would:
-  //   GET /{page-id}/posts?fields=message,created_time,likes.summary(true),shares,
-  //        insights.metric(post_impressions,post_engaged_users)
-  return null;
+  const pageId = connection.platformPageId?.trim();
+  if (!connection.accessToken?.trim() || !pageId) return null;
+
+  try {
+    const posts = await listFacebookPagePosts(
+      pageId,
+      connection.accessToken,
+      limit
+    );
+    if (posts.length === 0) return null;
+
+    const out: FetchedPost[] = [];
+    for (const p of posts) {
+      const obj = await getFacebookPostObject(p.id, connection.accessToken);
+      const ins = await getFacebookPostInsights(p.id, connection.accessToken);
+      const likes = obj.likes?.summary?.total_count ?? 0;
+      const comments = obj.comments?.summary?.total_count ?? 0;
+      const shares = obj.shares?.count ?? 0;
+      const impressions =
+        ins.impressions || Math.max(1, likes + comments + shares);
+      const reach = ins.reach || impressions;
+      const totalEng = likes + comments + shares;
+      const engagementRate =
+        impressions > 0 ? Math.round((totalEng / impressions) * 10000) / 10000 : 0;
+
+      out.push({
+        platformPostId: p.id,
+        platform: "facebook",
+        content: p.message ?? "",
+        postedAt: p.created_time ?? new Date().toISOString(),
+        impressions,
+        reach,
+        likes,
+        comments,
+        shares,
+        saves: 0,
+        clicks: 0,
+        engagementRate,
+      });
+    }
+    return out;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchFromLinkedIn(

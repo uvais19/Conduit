@@ -9,22 +9,33 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { TrendPoint } from "@/lib/analytics/types";
+import { MetricsDataSourceBadge } from "@/components/metrics-data-source-badge";
 
 export function TrendCharts({
   trends,
   loading,
   periodDays,
+  metricsSourceBreakdown,
 }: {
   trends: TrendPoint[];
   loading: boolean;
   periodDays: 7 | 30;
+  metricsSourceBreakdown?: { live: number; simulated: number };
 }) {
   const label = periodDays === 7 ? "Weekly" : "Monthly";
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{label} Trend Charts</CardTitle>
+        <CardTitle className="flex flex-wrap items-center gap-2">
+          {label} Trend Charts
+          {metricsSourceBreakdown ? (
+            <MetricsDataSourceBadge
+              live={metricsSourceBreakdown.live}
+              simulated={metricsSourceBreakdown.simulated}
+            />
+          ) : null}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? (

@@ -9,6 +9,13 @@
 import type { Platform } from "@/lib/types";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import type { PlatformConnection } from "@/lib/platforms/store";
+import {
+  MetaGraphError,
+  publishFacebookFeedPost,
+  publishFacebookPagePhoto,
+  publishInstagramFeedPhoto,
+  resolveInstagramUserId,
+} from "@/lib/platforms/meta-graph";
 
 export type PublishResult = {
   success: boolean;
@@ -27,16 +34,58 @@ async function publishToInstagram(
 ): Promise<PublishResult> {
   const now = new Date().toISOString();
 
-  // Real implementation would call the Instagram Graph API:
-  // 1. POST /{page-id}/media with image_url + caption
-  // 2. POST /{page-id}/media_publish with creation_id
-  // For now we simulate success when credentials are present.
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
   }
+  if (!connection.platformPageId?.trim()) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: "Facebook Page ID is required for Instagram Graph publishing",
+    };
+  }
 
-  const simulatedId = `ig_${Date.now()}_${draft.id.slice(0, 8)}`;
-  return { success: true, platformPostId: simulatedId, publishedAt: now };
+  const imageUrl = draft.mediaUrls[0]?.trim();
+  if (!imageUrl) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: "Instagram publishing requires at least one image URL (publicly reachable HTTPS)",
+    };
+  }
+
+  try {
+    const igUserId = await resolveInstagramUserId(connection);
+    if (!igUserId) {
+      return {
+        success: false,
+        platformPostId: "",
+        publishedAt: now,
+        error:
+          "Could not resolve Instagram Business account ID — link an IG account to your Facebook Page or set Platform user ID to the IGBA id",
+      };
+    }
+
+    const published = await publishInstagramFeedPhoto({
+      igUserId,
+      accessToken: connection.accessToken,
+      imageUrl,
+      caption: draft.caption,
+      hashtags: draft.hashtags,
+    });
+
+    return { success: true, platformPostId: published.id, publishedAt: now };
+  } catch (e) {
+    const msg =
+      e instanceof MetaGraphError
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : "Instagram publish failed";
+    return { success: false, platformPostId: "", publishedAt: now, error: msg };
+  }
 }
 
 async function publishToFacebook(
@@ -48,9 +97,45 @@ async function publishToFacebook(
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
   }
+  const pageId = connection.platformPageId?.trim();
+  if (!pageId) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: "Facebook Page ID is required for Graph API publishing",
+    };
+  }
 
-  const simulatedId = `fb_${Date.now()}_${draft.id.slice(0, 8)}`;
-  return { success: true, platformPostId: simulatedId, publishedAt: now };
+  try {
+    const imageUrl = draft.mediaUrls[0]?.trim();
+    if (imageUrl) {
+      const published = await publishFacebookPagePhoto({
+        pageId,
+        accessToken: connection.accessToken,
+        imageUrl,
+        message: draft.caption,
+        hashtags: draft.hashtags,
+      });
+      return { success: true, platformPostId: published.id, publishedAt: now };
+    }
+
+    const published = await publishFacebookFeedPost({
+      pageId,
+      accessToken: connection.accessToken,
+      message: draft.caption,
+      hashtags: draft.hashtags,
+    });
+    return { success: true, platformPostId: published.id, publishedAt: now };
+  } catch (e) {
+    const msg =
+      e instanceof MetaGraphError
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : "Facebook publish failed";
+    return { success: false, platformPostId: "", publishedAt: now, error: msg };
+  }
 }
 
 async function publishToLinkedIn(

@@ -16,6 +16,8 @@ export type PostMetrics = {
   saves: number;
   clicks: number;
   engagementRate: number;
+  /** Live platform API vs internal simulation */
+  dataSource?: "live" | "simulated";
 };
 
 export type DashboardOverview = {
@@ -26,6 +28,8 @@ export type DashboardOverview = {
   avgEngagementRate: number;
   platformBreakdown: PlatformSummary[];
   topPosts: TopPost[];
+  /** Counts of latest metric rows by source (per published draft) */
+  metricsSourceBreakdown: { live: number; simulated: number };
 };
 
 export type PlatformSummary = {
