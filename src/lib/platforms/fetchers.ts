@@ -16,6 +16,9 @@ import {
   listInstagramMedia,
   resolveInstagramUserId,
 } from "@/lib/platforms/meta-graph";
+import { fetchLinkedInMetrics } from "@/lib/platforms/linkedin-api";
+import { fetchXTweetMetrics } from "@/lib/platforms/x-api";
+import { fetchGbpPostMetrics } from "@/lib/platforms/gbp-api";
 
 // ---------------------------------------------------------------------------
 // Real API integrations (per-platform)
@@ -128,32 +131,166 @@ async function fetchFromFacebook(
 }
 
 async function fetchFromLinkedIn(
-  _connection: PlatformConnection,
-  _limit: number
+  connection: PlatformConnection,
+  limit: number
 ): Promise<FetchedPost[] | null> {
-  // Real implementation would:
-  //   GET /ugcPosts + GET /organizationalEntityShareStatistics
-  //   Note: LinkedIn's read API is restrictive
-  return null;
+  if (!connection.accessToken?.trim() || !connection.platformUserId?.trim()) return null;
+  try {
+    const authorUrn = connection.platformUserId.startsWith("urn:")
+      ? connection.platformUserId
+      : `urn:li:person:${connection.platformUserId}`;
+    const base = process.env.LINKEDIN_API_BASE_URL ?? "https://api.linkedin.com/v2";
+    const response = await fetch(
+      `${base}/ugcPosts?q=authors&authors=List(${encodeURIComponent(authorUrn)})&count=${Math.min(limit, 50)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${connection.accessToken}`,
+          "X-Restli-Protocol-Version": "2.0.0",
+        },
+        cache: "no-store",
+      }
+    );
+    if (!response.ok) return null;
+    const payload = (await response.json()) as {
+      elements?: { id?: string; created?: { time?: number }; specificContent?: { "com.linkedin.ugc.ShareContent"?: { shareCommentary?: { text?: string } } } }[];
+    };
+    const elements = payload.elements ?? [];
+    if (elements.length === 0) return null;
+    const out: FetchedPost[] = [];
+    for (const post of elements) {
+      if (!post.id) continue;
+      const urn = `urn:li:share:${post.id}`;
+      const metrics = await fetchLinkedInMetrics({
+        accessToken: connection.accessToken,
+        authorUrn,
+        postUrn: urn,
+      });
+      const impressions = Math.max(1, metrics.impressions);
+      const totalEng =
+        metrics.likes +
+        metrics.comments +
+        metrics.shares +
+        metrics.saves +
+        metrics.clicks;
+      out.push({
+        platformPostId: post.id,
+        platform: "linkedin",
+        content:
+          post.specificContent?.["com.linkedin.ugc.ShareContent"]?.shareCommentary
+            ?.text ?? "",
+        mediaType: "text-only",
+        postedAt: post.created?.time
+          ? new Date(post.created.time).toISOString()
+          : new Date().toISOString(),
+        ...metrics,
+        engagementRate: Math.round((totalEng / impressions) * 10000) / 10000,
+      });
+    }
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchFromX(
-  _connection: PlatformConnection,
-  _limit: number
+  connection: PlatformConnection,
+  limit: number
 ): Promise<FetchedPost[] | null> {
-  // Real implementation would:
-  //   GET /users/{id}/tweets?tweet.fields=public_metrics,created_at,text
-  //   Note: requires paid API tier for meaningful read access
-  return null;
+  if (!connection.accessToken?.trim() || !connection.platformUserId?.trim()) return null;
+  try {
+    const base = process.env.X_API_BASE_URL ?? "https://api.twitter.com/2";
+    const response = await fetch(
+      `${base}/users/${connection.platformUserId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at`,
+      {
+        headers: { Authorization: `Bearer ${connection.accessToken}` },
+        cache: "no-store",
+      }
+    );
+    if (!response.ok) return null;
+    const payload = (await response.json()) as {
+      data?: { id?: string; text?: string; created_at?: string }[];
+    };
+    const tweets = payload.data ?? [];
+    if (tweets.length === 0) return null;
+    const out: FetchedPost[] = [];
+    for (const tweet of tweets) {
+      if (!tweet.id) continue;
+      const metrics = await fetchXTweetMetrics({
+        accessToken: connection.accessToken,
+        tweetId: tweet.id,
+      });
+      const impressions = Math.max(1, metrics.impressions);
+      const totalEng =
+        metrics.likes +
+        metrics.comments +
+        metrics.shares +
+        metrics.saves +
+        metrics.clicks;
+      out.push({
+        platformPostId: tweet.id,
+        platform: "x",
+        content: tweet.text ?? "",
+        mediaType: "text-only",
+        postedAt: tweet.created_at ?? new Date().toISOString(),
+        ...metrics,
+        engagementRate: Math.round((totalEng / impressions) * 10000) / 10000,
+      });
+    }
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchFromGBP(
-  _connection: PlatformConnection,
-  _limit: number
+  connection: PlatformConnection,
+  limit: number
 ): Promise<FetchedPost[] | null> {
-  // Real implementation would:
-  //   GET /accounts/{id}/locations/{id}/localPosts + localPostMetrics
-  return null;
+  if (!connection.accessToken?.trim() || !connection.platformPageId?.trim()) return null;
+  try {
+    const base = process.env.GBP_POSTS_BASE_URL ?? "https://mybusiness.googleapis.com/v4";
+    const response = await fetch(
+      `${base}/${connection.platformPageId}/localPosts?pageSize=${Math.min(limit, 100)}`,
+      {
+        headers: { Authorization: `Bearer ${connection.accessToken}` },
+        cache: "no-store",
+      }
+    );
+    if (!response.ok) return null;
+    const payload = (await response.json()) as {
+      localPosts?: { name?: string; summary?: string; createTime?: string }[];
+    };
+    const posts = payload.localPosts ?? [];
+    if (posts.length === 0) return null;
+    const out: FetchedPost[] = [];
+    for (const post of posts) {
+      if (!post.name) continue;
+      const metrics = await fetchGbpPostMetrics({
+        accessToken: connection.accessToken,
+        locationName: connection.platformPageId,
+        localPostName: post.name,
+      });
+      const impressions = Math.max(1, metrics.impressions);
+      const totalEng =
+        metrics.likes +
+        metrics.comments +
+        metrics.shares +
+        metrics.saves +
+        metrics.clicks;
+      out.push({
+        platformPostId: post.name,
+        platform: "gbp",
+        content: post.summary ?? "",
+        mediaType: "text-only",
+        postedAt: post.createTime ?? new Date().toISOString(),
+        ...metrics,
+        engagementRate: Math.round((totalEng / impressions) * 10000) / 10000,
+      });
+    }
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
+  }
 }
 
 const platformFetchers: Record<

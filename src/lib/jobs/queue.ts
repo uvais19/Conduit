@@ -8,6 +8,9 @@ import { db } from "@/lib/db";
 import { contentDrafts } from "@/lib/db/schema";
 import { eq, and, lte } from "drizzle-orm";
 import { logActivity } from "@/lib/audit-log";
+import { getPlatformConnection } from "@/lib/platforms/store";
+import { publishDraft, simulatePublish } from "@/lib/agents/publishing/publisher";
+import type { ContentDraftRecord } from "@/lib/content/types";
 
 export type JobType = "publish_scheduled" | "collect_analytics" | "send_digest";
 
@@ -99,13 +102,32 @@ export async function processScheduledPosts(): Promise<number> {
       job.status = "running";
       job.attempts++;
 
-      // In a real implementation, this would call the platform API
-      // For now, mark as published
+      const mappedDraft = {
+        ...draft,
+        scheduledAt: draft.scheduledAt?.toISOString() ?? null,
+        publishedAt: draft.publishedAt?.toISOString() ?? null,
+        createdAt: draft.createdAt.toISOString(),
+        updatedAt: draft.updatedAt.toISOString(),
+        hashtags: draft.hashtags ?? [],
+        mediaUrls: draft.mediaUrls ?? [],
+        pillar: draft.pillar ?? "",
+        cta: draft.cta ?? "",
+        platformPostId: draft.platformPostId ?? null,
+      } as unknown as ContentDraftRecord;
+      const connection = getPlatformConnection(draft.tenantId, draft.platform);
+      const publishResult = connection
+        ? await publishDraft(mappedDraft, connection)
+        : await simulatePublish(mappedDraft);
+      if (!publishResult.success) {
+        throw new Error(publishResult.error ?? "Scheduled publish failed");
+      }
+
       await db
         .update(contentDrafts)
         .set({
           status: "published",
-          publishedAt: now,
+          publishedAt: new Date(publishResult.publishedAt),
+          platformPostId: publishResult.platformPostId,
           updatedAt: now,
         })
         .where(eq(contentDrafts.id, draft.id));

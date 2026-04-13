@@ -16,6 +16,9 @@ import {
   publishInstagramFeedPhoto,
   resolveInstagramUserId,
 } from "@/lib/platforms/meta-graph";
+import { publishLinkedInPost } from "@/lib/platforms/linkedin-api";
+import { publishXPost } from "@/lib/platforms/x-api";
+import { publishGbpPost } from "@/lib/platforms/gbp-api";
 
 export type PublishResult = {
   success: boolean;
@@ -148,8 +151,27 @@ async function publishToLinkedIn(
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
   }
 
-  const simulatedId = `li_${Date.now()}_${draft.id.slice(0, 8)}`;
-  return { success: true, platformPostId: simulatedId, publishedAt: now };
+  if (!connection.platformUserId?.trim()) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: "LinkedIn platform user id is required",
+    };
+  }
+  try {
+    const published = await publishLinkedInPost({
+      accessToken: connection.accessToken,
+      authorUrn: connection.platformUserId.startsWith("urn:")
+        ? connection.platformUserId
+        : `urn:li:person:${connection.platformUserId}`,
+      draft,
+    });
+    return { success: true, platformPostId: published.id, publishedAt: now };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "LinkedIn publish failed";
+    return { success: false, platformPostId: "", publishedAt: now, error: msg };
+  }
 }
 
 async function publishToX(
@@ -162,8 +184,13 @@ async function publishToX(
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
   }
 
-  const simulatedId = `x_${Date.now()}_${draft.id.slice(0, 8)}`;
-  return { success: true, platformPostId: simulatedId, publishedAt: now };
+  try {
+    const published = await publishXPost({ accessToken: connection.accessToken, draft });
+    return { success: true, platformPostId: published.id, publishedAt: now };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "X publish failed";
+    return { success: false, platformPostId: "", publishedAt: now, error: msg };
+  }
 }
 
 async function publishToGBP(
@@ -176,8 +203,25 @@ async function publishToGBP(
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
   }
 
-  const simulatedId = `gbp_${Date.now()}_${draft.id.slice(0, 8)}`;
-  return { success: true, platformPostId: simulatedId, publishedAt: now };
+  if (!connection.platformPageId?.trim()) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: "Google Business Profile location id is required",
+    };
+  }
+  try {
+    const published = await publishGbpPost({
+      accessToken: connection.accessToken,
+      locationName: connection.platformPageId,
+      draft,
+    });
+    return { success: true, platformPostId: published.id, publishedAt: now };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "GBP publish failed";
+    return { success: false, platformPostId: "", publishedAt: now, error: msg };
+  }
 }
 
 // ---------------------------------------------------------------------------

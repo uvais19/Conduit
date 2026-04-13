@@ -1,5 +1,6 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
+import { classifyWebhookEventType, ingestWebhookEvent } from "@/lib/platforms/webhook-events";
 
 /**
  * Meta (Facebook / Instagram) Webhooks — verification + ingest endpoint.
@@ -48,8 +49,16 @@ export async function POST(request: Request) {
 
   try {
     const parsed = raw ? JSON.parse(raw) : null;
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[webhooks/meta]", JSON.stringify(parsed)?.slice(0, 2000));
+    const entries = Array.isArray(parsed?.entry) ? parsed.entry : [];
+    for (const entry of entries) {
+      const tenantId = String(entry?.id ?? "global");
+      ingestWebhookEvent(tenantId, {
+        id: randomUUID(),
+        platform: entry?.id ? "facebook" : "instagram",
+        eventType: classifyWebhookEventType(entry),
+        occurredAt: new Date().toISOString(),
+        payload: entry,
+      });
     }
   } catch {
     // ignore malformed body

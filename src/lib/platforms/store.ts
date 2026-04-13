@@ -16,6 +16,8 @@ export type PlatformConnection = {
   refreshToken: string;
   tokenExpiresAt: string | null;
   connectedBy: string;
+  lastRefreshAttemptAt: string | null;
+  lastRefreshError: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -62,6 +64,8 @@ export function savePlatformConnection(params: {
     refreshToken: safeEncrypt(params.refreshToken ?? ""),
     tokenExpiresAt: params.tokenExpiresAt ?? null,
     connectedBy: params.connectedBy,
+    lastRefreshAttemptAt: null,
+    lastRefreshError: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -96,4 +100,38 @@ export function disconnectPlatform(tenantId: string, platform: Platform): boolea
   if (filtered.length === connections.length) return false;
   connectionsByTenant.set(tenantId, filtered);
   return true;
+}
+
+export function updatePlatformConnectionTokens(params: {
+  tenantId: string;
+  platform: Platform;
+  accessToken: string;
+  refreshToken?: string;
+  tokenExpiresAt?: string | null;
+  refreshError?: string | null;
+}): PlatformConnection | null {
+  const existing = connectionsByTenant.get(params.tenantId) ?? [];
+  const index = existing.findIndex((c) => c.platform === params.platform);
+  if (index === -1) return null;
+
+  const current = existing[index];
+  const next: PlatformConnection = {
+    ...current,
+    accessToken: safeEncrypt(params.accessToken),
+    refreshToken: safeEncrypt(params.refreshToken ?? safeDecrypt(current.refreshToken)),
+    tokenExpiresAt: params.tokenExpiresAt ?? current.tokenExpiresAt,
+    lastRefreshAttemptAt: new Date().toISOString(),
+    lastRefreshError: params.refreshError ?? null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const copy = [...existing];
+  copy[index] = next;
+  connectionsByTenant.set(params.tenantId, copy);
+
+  return {
+    ...next,
+    accessToken: safeDecrypt(next.accessToken),
+    refreshToken: safeDecrypt(next.refreshToken),
+  };
 }

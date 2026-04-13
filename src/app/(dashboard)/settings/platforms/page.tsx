@@ -17,6 +17,8 @@ type ConnectionInfo = {
   platformUserId: string;
   platformPageId: string;
   tokenExpiresAt: string | null;
+  lastRefreshAttemptAt?: string | null;
+  lastRefreshError?: string | null;
   createdAt: string;
 };
 
@@ -103,7 +105,7 @@ export default function PlatformsPage() {
     const oauth = params.get("oauth");
     const message = params.get("message");
     if (oauth === "success") {
-      toast.success("Meta account connected.");
+      toast.success("Platform account connected.");
       void fetchConnections();
       window.history.replaceState({}, "", "/settings/platforms");
     } else if (oauth === "error" && message) {
@@ -299,6 +301,10 @@ export default function PlatformsPage() {
                         <Badge variant="secondary" className="text-xs">
                           Meta Graph
                         </Badge>
+                      ) : conn.platform === "linkedin" || conn.platform === "x" || conn.platform === "gbp" ? (
+                        <Badge variant="secondary" className="text-xs">
+                          OAuth
+                        </Badge>
                       ) : (
                         <Badge variant="outline" className="text-xs">
                           Simulated
@@ -314,6 +320,16 @@ export default function PlatformsPage() {
                     <p className="text-xs text-muted-foreground">
                       Connected {new Date(conn.createdAt).toLocaleDateString()}
                     </p>
+                    {conn.lastRefreshAttemptAt ? (
+                      <p className="text-xs text-muted-foreground">
+                        Last token refresh attempt: {new Date(conn.lastRefreshAttemptAt).toLocaleString()}
+                      </p>
+                    ) : null}
+                    {conn.lastRefreshError ? (
+                      <p className="text-xs text-destructive">
+                        Refresh issue: {conn.lastRefreshError}
+                      </p>
+                    ) : null}
                   </div>
                   <button
                     type="button"
@@ -332,7 +348,7 @@ export default function PlatformsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Connect with Meta (OAuth)</CardTitle>
+          <CardTitle>Connect with OAuth</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -358,6 +374,24 @@ export default function PlatformsPage() {
               className="inline-flex h-9 items-center rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
             >
               Connect Facebook
+            </a>
+            <a
+              href="/api/platforms/oauth/linkedin/start"
+              className="inline-flex h-9 items-center rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
+            >
+              Connect LinkedIn
+            </a>
+            <a
+              href="/api/platforms/oauth/x/start"
+              className="inline-flex h-9 items-center rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
+            >
+              Connect X
+            </a>
+            <a
+              href="/api/platforms/oauth/gbp/start"
+              className="inline-flex h-9 items-center rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
+            >
+              Connect Google Business Profile
             </a>
           </div>
         </CardContent>
