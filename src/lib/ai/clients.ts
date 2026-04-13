@@ -59,6 +59,43 @@ async function callGemini({
   );
 }
 
+/**
+ * Raw Gemini `generateContent` (any JSON body). Used for image models with custom `generationConfig`.
+ * Returns null when the key is missing, on 429, or on non-OK HTTP (logs a warning).
+ */
+export async function callGeminiGenerateContent(
+  model: string,
+  body: Record<string, unknown>
+): Promise<unknown | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (response.status === 429) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const errBody = await response.text().catch(() => "");
+    console.warn("Gemini generateContent failed:", response.status, errBody);
+    return null;
+  }
+
+  return response.json();
+}
+
 async function callGroq({
   systemPrompt,
   userPrompt,
