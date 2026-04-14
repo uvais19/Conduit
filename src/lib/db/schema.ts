@@ -94,6 +94,13 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "competitor_alert",
 ]);
 
+export const publishJobStatusEnum = pgEnum("publish_job_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
+
 // ============================================================
 // Tables
 // ============================================================
@@ -314,6 +321,26 @@ export const platformAnalyses = pgTable("platform_analyses", {
   data: jsonb("data").notNull(),
   postsAnalysed: integer("posts_analysed").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const publishJobs = pgTable("publish_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  draftId: uuid("draft_id")
+    .references(() => contentDrafts.id, { onDelete: "cascade" })
+    .notNull(),
+  status: publishJobStatusEnum("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  lastError: text("last_error"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const uploadedDocuments = pgTable("uploaded_documents", {

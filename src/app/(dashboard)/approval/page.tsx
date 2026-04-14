@@ -117,6 +117,7 @@ export default function ApprovalPage() {
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkShiftDays, setBulkShiftDays] = useState(7);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<"all" | ContentDraftRecord["status"]>("in-review");
@@ -435,6 +436,43 @@ export default function ApprovalPage() {
     }
   }
 
+  async function handleBulkReschedule(previewOnly: boolean) {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const payload = {
+        draftIds: Array.from(selectedIds),
+        action: previewOnly ? "reschedule_preview" : "reschedule_apply",
+        offsetDays: bulkShiftDays,
+      };
+
+      const res = await fetch("/api/content/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Bulk reschedule failed");
+
+      if (previewOnly) {
+        const conflictCount = Array.isArray(data.conflicts) ? data.conflicts.length : 0;
+        toast.success(
+          `Preview ready for ${data.total ?? 0} drafts${
+            conflictCount > 0 ? ` (${conflictCount} conflicts)` : ""
+          }`,
+        );
+      } else {
+        toast.success(`Rescheduled ${data.updated ?? selectedIds.size} drafts by ${bulkShiftDays} day(s)`);
+        setSelectedIds(new Set());
+        await fetchDrafts();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bulk reschedule failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -472,6 +510,32 @@ export default function ApprovalPage() {
               >
                 Bulk Delete
               </button>
+              <div className="inline-flex items-center gap-1 rounded-lg border border-border/70 px-2 py-1">
+                <span className="text-[11px] text-muted-foreground">Shift</span>
+                <input
+                  type="number"
+                  className="h-6 w-14 rounded border bg-background px-1 text-xs"
+                  value={bulkShiftDays}
+                  onChange={(e) => setBulkShiftDays(Number(e.target.value) || 0)}
+                />
+                <span className="text-[11px] text-muted-foreground">days</span>
+                <button
+                  type="button"
+                  disabled={bulkLoading || bulkShiftDays === 0}
+                  onClick={() => void handleBulkReschedule(true)}
+                  className="inline-flex h-6 items-center rounded-md border px-2 text-[11px] font-medium"
+                >
+                  Preview
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkLoading || bulkShiftDays === 0}
+                  onClick={() => void handleBulkReschedule(false)}
+                  className="inline-flex h-6 items-center rounded-md bg-primary px-2 text-[11px] font-medium text-primary-foreground"
+                >
+                  Apply
+                </button>
+              </div>
             </>
           )}
           <ExportDraftsButton />
