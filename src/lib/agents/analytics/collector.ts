@@ -17,6 +17,10 @@ import type { ContentDraftRecord } from "@/lib/content/types";
 import type { PlatformConnection } from "@/lib/platforms/store";
 import { recordMetrics } from "@/lib/analytics/store";
 import type { PostMetrics } from "@/lib/analytics/types";
+import { fetchMetaRealMetrics } from "@/lib/platforms/meta-metrics";
+import { fetchLinkedInMetrics } from "@/lib/platforms/linkedin-api";
+import { fetchXTweetMetrics } from "@/lib/platforms/x-api";
+import { fetchGbpPostMetrics } from "@/lib/platforms/gbp-api";
 
 // ---------------------------------------------------------------------------
 // Simulated metrics generation
@@ -93,7 +97,10 @@ function randInt(min: number, max: number): number {
 function simulateMetrics(
   platform: Platform,
   hoursAfterPublish: number
-): Omit<PostMetrics, "id" | "draftId" | "tenantId" | "platform" | "platformPostId" | "collectedAt"> {
+): Omit<
+  PostMetrics,
+  "id" | "draftId" | "tenantId" | "platform" | "platformPostId" | "collectedAt"
+> {
   const ranges = PLATFORM_RANGES[platform];
 
   // Metrics grow with time — apply a multiplier based on hours elapsed
@@ -117,7 +124,17 @@ function simulateMetrics(
       ? Math.round((totalEngagements / impressions) * 10000) / 10000
       : 0;
 
-  return { impressions, reach, likes, comments, shares, saves, clicks, engagementRate };
+  return {
+    impressions,
+    reach,
+    likes,
+    comments,
+    shares,
+    saves,
+    clicks,
+    engagementRate,
+    dataSource: "simulated",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -125,17 +142,73 @@ function simulateMetrics(
 // ---------------------------------------------------------------------------
 
 async function fetchRealMetrics(
-  _draft: ContentDraftRecord,
-  _connection: PlatformConnection
-): Promise<Omit<PostMetrics, "id" | "draftId" | "tenantId" | "platform" | "platformPostId" | "collectedAt"> | null> {
-  // Real implementation would call each platform's insights/analytics API:
-  //   - Instagram: GET /{media-id}/insights
-  //   - Facebook: GET /{post-id}/insights
-  //   - LinkedIn: GET /organizationalEntityShareStatistics
-  //   - X: GET /tweets/{id}?tweet.fields=public_metrics
-  //   - GBP: GET /accounts/{id}/locations/{id}/localPosts/{id}
-  //
-  // For now we return null to signal fallback to simulation.
+  draft: ContentDraftRecord,
+  connection: PlatformConnection
+): Promise<
+  | Omit<
+      PostMetrics,
+      "id" | "draftId" | "tenantId" | "platform" | "platformPostId" | "collectedAt"
+    >
+  | null
+> {
+  const meta = await fetchMetaRealMetrics(draft, connection);
+  if (meta) return meta;
+  const postId = draft.platformPostId?.trim();
+  if (!postId || postId.startsWith("sim_")) return null;
+
+  if (draft.platform === "linkedin" && connection.platformUserId?.trim()) {
+    const authorUrn = connection.platformUserId.startsWith("urn:")
+      ? connection.platformUserId
+      : `urn:li:person:${connection.platformUserId}`;
+    const postUrn = postId.startsWith("urn:") ? postId : `urn:li:share:${postId}`;
+    const m = await fetchLinkedInMetrics({
+      accessToken: connection.accessToken,
+      authorUrn,
+      postUrn,
+    });
+    const impressions = Math.max(1, m.impressions);
+    return {
+      ...m,
+      engagementRate:
+        Math.round(
+          ((m.likes + m.comments + m.shares + m.saves + m.clicks) / impressions) * 10000
+        ) / 10000,
+      dataSource: "live",
+    };
+  }
+
+  if (draft.platform === "x") {
+    const m = await fetchXTweetMetrics({
+      accessToken: connection.accessToken,
+      tweetId: postId,
+    });
+    const impressions = Math.max(1, m.impressions);
+    return {
+      ...m,
+      engagementRate:
+        Math.round(
+          ((m.likes + m.comments + m.shares + m.saves + m.clicks) / impressions) * 10000
+        ) / 10000,
+      dataSource: "live",
+    };
+  }
+
+  if (draft.platform === "gbp" && connection.platformPageId?.trim()) {
+    const m = await fetchGbpPostMetrics({
+      accessToken: connection.accessToken,
+      locationName: connection.platformPageId,
+      localPostName: postId,
+    });
+    const impressions = Math.max(1, m.impressions);
+    return {
+      ...m,
+      engagementRate:
+        Math.round(
+          ((m.likes + m.comments + m.shares + m.saves + m.clicks) / impressions) * 10000
+        ) / 10000,
+      dataSource: "live",
+    };
+  }
   return null;
 }
 

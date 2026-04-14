@@ -106,14 +106,17 @@ function NavLink({
   href,
   children,
   active,
+  tourId,
 }: {
   href: string;
   children: React.ReactNode;
   active: boolean;
+  tourId?: string;
 }) {
   return (
     <Link
       href={href}
+      data-tour-id={tourId}
       className={cn(
         "studio-nav-link relative px-1 py-2 text-sm font-medium transition-colors",
         active
@@ -137,6 +140,7 @@ function NavDropdown({ group }: { group: NavGroup }) {
         render={
           <button
             type="button"
+            data-tour-id={`nav-${group.title.toLowerCase()}`}
             className={cn(
               "relative inline-flex items-center gap-1 px-1 py-2 text-sm font-medium transition-colors after:absolute after:bottom-0 after:left-0 after:h-0.5 after:bg-primary after:transition-opacity",
               open
@@ -243,19 +247,20 @@ export function StudioNav() {
         <NavLink
           href="/dashboard"
           active={matches(pathname, "/dashboard")}
+          tourId="nav-overview"
         >
           <span className="inline-flex items-center gap-1.5">
             <LayoutGrid className="size-4 opacity-70" />
             Overview
           </span>
         </NavLink>
-        <NavLink href="/calendar" active={matches(pathname, "/calendar")}>
+        <NavLink href="/calendar" active={matches(pathname, "/calendar")} tourId="nav-calendar">
           <span className="inline-flex items-center gap-1.5">
             <Calendar className="size-4 opacity-70" />
             Calendar
           </span>
         </NavLink>
-        <NavLink href="/approval" active={matches(pathname, "/approval")}>
+        <NavLink href="/approval" active={matches(pathname, "/approval")} tourId="nav-approvals">
           <span className="inline-flex items-center gap-1.5">
             <CheckCircle className="size-4 opacity-70" />
             Approvals

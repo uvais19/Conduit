@@ -25,10 +25,20 @@ function useDb() {
   return Boolean(process.env.DATABASE_URL);
 }
 
+type MetricRawPayload = {
+  conduit?: { dataSource?: "live" | "simulated" };
+} | null;
+
 function mapMetricRow(
   row: typeof postAnalytics.$inferSelect,
   tenantId: string
 ): PostMetrics {
+  const raw = row.rawData as MetricRawPayload;
+  const dataSource =
+    raw?.conduit?.dataSource === "live" || raw?.conduit?.dataSource === "simulated"
+      ? raw.conduit.dataSource
+      : "simulated";
+
   return {
     id: row.id,
     draftId: row.draftId,
@@ -44,6 +54,7 @@ function mapMetricRow(
     saves: row.saves ?? 0,
     clicks: row.clicks ?? 0,
     engagementRate: Number(row.engagementRate ?? 0),
+    dataSource,
   };
 }
 
@@ -55,12 +66,15 @@ export async function recordMetrics(
       ...params,
       id: randomUUID(),
       collectedAt: new Date().toISOString(),
+      dataSource: params.dataSource ?? "simulated",
     };
 
     const existing = metricsByTenant.get(params.tenantId) ?? [];
     metricsByTenant.set(params.tenantId, [record, ...existing]);
     return record;
   }
+
+  const dataSource = params.dataSource ?? "simulated";
 
   const [created] = await db
     .insert(postAnalytics)
@@ -77,7 +91,7 @@ export async function recordMetrics(
       saves: params.saves,
       clicks: params.clicks,
       engagementRate: params.engagementRate.toString(),
-      rawData: null,
+      rawData: { conduit: { dataSource } },
     })
     .returning();
 
@@ -208,6 +222,13 @@ export async function getDashboardOverview(
     .sort((a, b) => b.engagementRate - a.engagementRate)
     .slice(0, 10);
 
+  let live = 0;
+  let simulated = 0;
+  for (const m of latestMetrics) {
+    if (m.dataSource === "live") live += 1;
+    else simulated += 1;
+  }
+
   return {
     totalPosts: drafts.length,
     totalImpressions,
@@ -216,6 +237,7 @@ export async function getDashboardOverview(
     avgEngagementRate: Math.round(avgEngagementRate * 10000) / 10000,
     platformBreakdown,
     topPosts,
+    metricsSourceBreakdown: { live, simulated },
   };
 }
 

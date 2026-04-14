@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { X, ArrowRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface TourStep {
   title: string;
   description: string;
-  targetRoute: string;
+  targetSelector?: string;
   position?: "center" | "bottom-right";
 }
 
@@ -17,50 +17,51 @@ const TOUR_STEPS: TourStep[] = [
     title: "Welcome to Conduit!",
     description:
       "Let's take a quick tour. Conduit helps you go from brand strategy to published social media posts — all in one place.",
-    targetRoute: "/dashboard",
+    targetSelector: '[data-tour-id="nav-overview"]',
     position: "center",
   },
   {
-    title: "Start with onboarding",
+    title: "Overview dashboard",
     description:
-      "Enter your business details and website. Our AI agents will analyze your brand and generate a Brand Manifesto automatically.",
-    targetRoute: "/onboarding",
+      "This is your command center for performance snapshots, tasks, and quick actions across the workspace.",
+    targetSelector: '[data-tour-id="nav-overview"]',
   },
   {
-    title: "Build your strategy",
+    title: "Content workspace",
     description:
-      "Define content pillars, posting cadence, and goals. The AI uses your manifesto to create a strategy tailored to your brand.",
-    targetRoute: "/strategy",
+      "Use Content to generate drafts, manage templates, and recycle high-performing ideas.",
+    targetSelector: '[data-tour-id="nav-content"]',
   },
   {
-    title: "Create content",
+    title: "Approvals pipeline",
     description:
-      "Generate platform-native posts with the AI content studio. Refine, attach media, and send for approval — all from one editor.",
-    targetRoute: "/content/generate",
+      "Approvals keeps review, comments, and publishing decisions organized before anything goes live.",
+    targetSelector: '[data-tour-id="nav-approvals"]',
   },
   {
-    title: "Review and approve",
+    title: "Calendar planner",
     description:
-      "Manage your content pipeline. Review drafts, leave comments, run brand consistency checks, and approve posts before they go live.",
-    targetRoute: "/approval",
+      "Calendar gives you the posting timeline with drag-and-drop scheduling and conflict visibility.",
+    targetSelector: '[data-tour-id="nav-calendar"]',
   },
   {
-    title: "Schedule and publish",
+    title: "Insights and analytics",
     description:
-      "See all your content on the calendar. Drag and drop to reschedule, spot conflicts, and export your plan.",
-    targetRoute: "/calendar",
+      "Insights covers analytics, post analysis, and competitor tracking to improve future content.",
+    targetSelector: '[data-tour-id="nav-insights"]',
   },
   {
-    title: "Track performance",
+    title: "Strategy and brand",
     description:
-      "Monitor reach, engagement, and growth across all platforms. Export reports and learn what works best for your audience.",
-    targetRoute: "/analytics",
+      "Strategy and Brand sections keep your plan, voice, and creative direction aligned as you scale.",
+    targetSelector:
+      '[data-tour-id="nav-strategy"], [data-tour-id="nav-brand"]',
   },
   {
     title: "You're all set!",
     description:
       "Start by onboarding your business — everything else flows from there. You can revisit this tour anytime from settings.",
-    targetRoute: "/dashboard",
+    targetSelector: '[data-tour-id="nav-workspace"]',
     position: "center",
   },
 ];
@@ -68,10 +69,10 @@ const TOUR_STEPS: TourStep[] = [
 const TOUR_STORAGE_KEY = "conduit-tour-completed";
 
 export function GuidedTour() {
-  const router = useRouter();
   const pathname = usePathname();
   const [step, setStep] = useState(-1);
   const [visible, setVisible] = useState(false);
+  const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
     try {
@@ -102,21 +103,58 @@ export function GuidedTour() {
       return;
     }
     setStep(next);
-    const target = TOUR_STEPS[next];
-    if (target && target.targetRoute !== pathname) {
-      router.push(target.targetRoute);
-    }
-  }, [step, dismiss, router, pathname]);
+  }, [step, dismiss]);
 
   const goPrev = useCallback(() => {
     const prev = step - 1;
     if (prev < 0) return;
     setStep(prev);
-    const target = TOUR_STEPS[prev];
-    if (target && target.targetRoute !== pathname) {
-      router.push(target.targetRoute);
+  }, [step]);
+
+  const targetElement = useMemo(() => {
+    if (typeof document === "undefined") return null;
+    const current = TOUR_STEPS[step];
+    if (!current?.targetSelector) return null;
+    const selectors = current.targetSelector.split(",").map((s) => s.trim());
+    for (const selector of selectors) {
+      const found = document.querySelector(selector);
+      if (found) return found;
     }
-  }, [step, router, pathname]);
+    return null;
+  }, [step]);
+
+  useEffect(() => {
+    if (!visible || step < 0) return;
+    if (!targetElement) {
+      setHighlightRect(null);
+      return;
+    }
+    const updateRect = () => {
+      setHighlightRect(targetElement.getBoundingClientRect());
+    };
+    updateRect();
+    window.addEventListener("resize", updateRect);
+    window.addEventListener("scroll", updateRect, true);
+    return () => {
+      window.removeEventListener("resize", updateRect);
+      window.removeEventListener("scroll", updateRect, true);
+    };
+  }, [visible, step, targetElement]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const onCaptureClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-tour-dialog='true']")) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener("click", onCaptureClick, true);
+    return () => {
+      document.removeEventListener("click", onCaptureClick, true);
+    };
+  }, [visible]);
 
   if (!visible || step < 0) return null;
 
@@ -124,17 +162,93 @@ export function GuidedTour() {
   if (!current) return null;
   const isCenter = current.position === "center";
   const isLast = step === TOUR_STEPS.length - 1;
+  const pad = 8;
+  const viewportW = typeof window !== "undefined" ? window.innerWidth : 0;
+  const viewportH = typeof window !== "undefined" ? window.innerHeight : 0;
+  const hole = highlightRect && step > 0
+    ? {
+        top: Math.max(0, highlightRect.top - pad),
+        left: Math.max(0, highlightRect.left - pad),
+        right: Math.min(viewportW, highlightRect.right + pad),
+        bottom: Math.min(viewportH, highlightRect.bottom + pad),
+      }
+    : null;
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm"
-        onClick={dismiss}
-        aria-hidden
-      />
+      {hole ? (
+        <>
+          <div
+            className="fixed z-[100] bg-black/40 backdrop-blur-sm"
+            style={{ top: 0, left: 0, right: 0, height: hole.top }}
+            onClick={dismiss}
+            aria-hidden
+          />
+          <div
+            className="fixed z-[100] bg-black/40 backdrop-blur-sm"
+            style={{
+              top: hole.top,
+              left: 0,
+              width: hole.left,
+              height: Math.max(0, hole.bottom - hole.top),
+            }}
+            onClick={dismiss}
+            aria-hidden
+          />
+          <div
+            className="fixed z-[100] bg-black/40 backdrop-blur-sm"
+            style={{
+              top: hole.top,
+              right: 0,
+              width: Math.max(0, viewportW - hole.right),
+              height: Math.max(0, hole.bottom - hole.top),
+            }}
+            onClick={dismiss}
+            aria-hidden
+          />
+          <div
+            className="fixed z-[100] bg-black/40 backdrop-blur-sm"
+            style={{ left: 0, right: 0, bottom: 0, top: hole.bottom }}
+            onClick={dismiss}
+            aria-hidden
+          />
+          <div
+            className="fixed z-[100]"
+            style={{
+              top: hole.top,
+              left: hole.left,
+              width: Math.max(0, hole.right - hole.left),
+              height: Math.max(0, hole.bottom - hole.top),
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            aria-hidden
+          />
+        </>
+      ) : (
+        <div
+          className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm"
+          onClick={dismiss}
+          aria-hidden
+        />
+      )}
+      {highlightRect && step > 0 ? (
+        <div
+          className="pointer-events-none fixed z-[100] rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-background"
+          style={{
+            top: highlightRect.top - 4,
+            left: highlightRect.left - 4,
+            width: highlightRect.width + 8,
+            height: highlightRect.height + 8,
+          }}
+          aria-hidden
+        />
+      ) : null}
       {/* Tour card */}
       <div
+        data-tour-dialog="true"
         className={`fixed z-[101] w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-5 shadow-2xl ${
           isCenter
             ? "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
