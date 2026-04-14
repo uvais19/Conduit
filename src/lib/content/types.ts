@@ -48,6 +48,8 @@ export const contentGenerationRequestSchema = z.object({
   voice: z.string().min(1).default("clear, helpful, and confident"),
   cta: z.string().min(1).default("Learn more"),
   generateVariants: z.boolean().default(true),
+  /** Optional campaign to attach new drafts to (must belong to tenant). */
+  campaignId: z.string().uuid().optional(),
 });
 
 export const draftUpdateSchema = z.object({
@@ -77,6 +79,29 @@ export const draftUpdateSchema = z.object({
 export type ContentGenerationRequest = z.infer<
   typeof contentGenerationRequestSchema
 >;
+
+export type CampaignRecord = {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const campaignCreateSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200),
+  description: z.string().max(2000).optional(),
+});
+
+export const campaignUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).nullable().optional(),
+});
+
+export const campaignAssignDraftsSchema = z.object({
+  draftIds: z.array(z.string().uuid()).min(1).max(100),
+});
 
 export type VariantLabel = z.infer<typeof variantLabelSchema>;
 

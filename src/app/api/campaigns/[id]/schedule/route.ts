@@ -3,10 +3,17 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getCampaignForTenant, scheduleApprovedCampaignDrafts } from "@/lib/campaigns/store";
 
-const bodySchema = z.object({
-  startAt: z.string().min(1),
-  hoursBetween: z.number().min(1).max(168).default(24),
-});
+const bodySchema = z
+  .object({
+    startAt: z.string().min(1),
+    hoursBetween: z.number().min(1).max(8760).optional(),
+    /** UI alias — same as hoursBetween */
+    intervalHours: z.number().min(1).max(8760).optional(),
+  })
+  .transform((data) => ({
+    startAt: data.startAt,
+    hoursBetween: data.hoursBetween ?? data.intervalHours ?? 24,
+  }));
 
 export async function POST(
   req: NextRequest,
@@ -48,6 +55,7 @@ export async function POST(
     return NextResponse.json({
       campaignId,
       ...result,
+      updated: result.scheduled.length,
       message:
         result.scheduled.length === 0
           ? "No approved drafts in this campaign to schedule."

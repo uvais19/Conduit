@@ -13,6 +13,8 @@ export async function GET(request: Request) {
     const platform = parsedPlatform.success ? parsedPlatform.data : undefined;
     const status = searchParams.get("status") ?? undefined;
     const pillar = searchParams.get("pillar") ?? undefined;
+    const campaignId = searchParams.get("campaignId") ?? undefined;
+    const unassignedOnly = searchParams.get("unassignedOnly") === "true";
     const grouped = searchParams.get("grouped") === "true";
 
     const drafts = await listDrafts({
@@ -20,6 +22,8 @@ export async function GET(request: Request) {
       platform,
       status: status as never,
       pillar,
+      campaignId,
+      unassignedOnly,
     });
 
     return NextResponse.json({

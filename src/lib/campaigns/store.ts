@@ -1,17 +1,10 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaigns, contentDrafts } from "@/lib/db/schema";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { enqueue } from "@/lib/agents/publishing/scheduler";
 import { recordAuditEvent } from "@/lib/content/audit";
-
-export type CampaignRecord = {
-  id: string;
-  tenantId: string;
-  name: string;
-  description: string | null;
-  createdAt: string;
-};
+import type { CampaignRecord } from "@/lib/content/types";
 
 function mapCampaign(row: typeof campaigns.$inferSelect): CampaignRecord {
   return {
@@ -20,6 +13,7 @@ function mapCampaign(row: typeof campaigns.$inferSelect): CampaignRecord {
     name: row.name,
     description: row.description ?? null,
     createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -28,7 +22,7 @@ export async function listCampaigns(tenantId: string): Promise<CampaignRecord[]>
     .select()
     .from(campaigns)
     .where(eq(campaigns.tenantId, tenantId))
-    .orderBy(desc(campaigns.createdAt));
+    .orderBy(desc(campaigns.updatedAt));
   return rows.map(mapCampaign);
 }
 
@@ -57,6 +51,56 @@ export async function getCampaignForTenant(
     .where(and(eq(campaigns.id, campaignId), eq(campaigns.tenantId, tenantId)))
     .limit(1);
   return row ? mapCampaign(row) : null;
+}
+
+/** Alias for API routes that follow `getCampaignById` naming. */
+export const getCampaignById = getCampaignForTenant;
+
+export async function updateCampaign(
+  tenantId: string,
+  id: string,
+  patch: { name?: string; description?: string | null }
+): Promise<CampaignRecord | null> {
+  const [row] = await db
+    .update(campaigns)
+    .set({
+      ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+      ...(patch.description !== undefined
+        ? { description: patch.description?.trim() || null }
+        : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(campaigns.tenantId, tenantId), eq(campaigns.id, id)))
+    .returning();
+
+  return row ? mapCampaign(row) : null;
+}
+
+export async function deleteCampaign(tenantId: string, id: string): Promise<boolean> {
+  const result = await db
+    .delete(campaigns)
+    .where(and(eq(campaigns.tenantId, tenantId), eq(campaigns.id, id)));
+
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Assign drafts to a campaign (tenant must own drafts and campaign). */
+export async function assignDraftsToCampaign(
+  tenantId: string,
+  campaignId: string,
+  draftIds: string[]
+): Promise<number> {
+  const campaign = await getCampaignForTenant(tenantId, campaignId);
+  if (!campaign) {
+    throw new Error("Campaign not found");
+  }
+
+  const result = await db
+    .update(contentDrafts)
+    .set({ campaignId, updatedAt: new Date() })
+    .where(and(eq(contentDrafts.tenantId, tenantId), inArray(contentDrafts.id, draftIds)));
+
+  return result.rowCount ?? draftIds.length;
 }
 
 /** Schedule each approved draft in the campaign at staggered times (hours between posts). */

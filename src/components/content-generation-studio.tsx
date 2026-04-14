@@ -33,6 +33,8 @@ type GenerationPayload = {
   voice: string;
   cta: string;
   generateVariants: boolean;
+  /** Optional campaign — new variants are attached to this batch. */
+  campaignId?: string;
 };
 
 const GENERATION_HINTS = {
@@ -52,6 +54,8 @@ const GENERATION_HINTS = {
     "The action you want readers to take — comment keyword, link in bio, DM, sign up. Written into the close of the caption.",
   variants:
     "When enabled, Conduit produces multiple labeled variants (e.g. A/B/C) so you can compare hooks and structures side by side.",
+  campaign:
+    "Optional: attach generated drafts to a named campaign so you can batch-approve and schedule them together from Campaigns.",
 } as const;
 
 const initialPayload: GenerationPayload = {
@@ -73,9 +77,12 @@ const PLATFORM_MEDIA_SUPPORT: Record<string, { formats: string[]; maxDuration?: 
   gbp: { formats: ["Image", "Video"], maxDuration: "30s", notes: "Photos with businesses get 35% more clicks" },
 };
 
+type CampaignOption = { id: string; name: string };
+
 export function ContentGenerationStudio() {
   const searchParams = useSearchParams();
   const [payload, setPayload] = useState<GenerationPayload>(initialPayload);
+  const [campaignOptions, setCampaignOptions] = useState<CampaignOption[]>([]);
   const [manifesto, setManifesto] = useState<BrandManifesto | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -188,16 +195,38 @@ export function ContentGenerationStudio() {
     const platform = searchParams.get("platform");
     const pillar = searchParams.get("pillar");
     const topic = searchParams.get("topic");
+    const campaignId = searchParams.get("campaignId");
 
-    if (platform || pillar || topic) {
+    if (platform || pillar || topic || campaignId) {
       setPayload((current) => ({
         ...current,
         ...(platform && PLATFORMS.includes(platform as (typeof PLATFORMS)[number]) && { platform: platform as (typeof PLATFORMS)[number] }),
         ...(pillar && { pillar }),
         ...(topic && { topic }),
+        ...(campaignId && { campaignId }),
       }));
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    async function loadCampaigns() {
+      try {
+        const res = await fetch("/api/campaigns");
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.campaigns)) {
+          setCampaignOptions(
+            data.campaigns.map((c: { id: string; name: string }) => ({
+              id: c.id,
+              name: c.name,
+            }))
+          );
+        }
+      } catch {
+        // optional
+      }
+    }
+    void loadCampaigns();
+  }, []);
 
   const grouped = useMemo(() => {
     return drafts.sort((a, b) => a.variantLabel.localeCompare(b.variantLabel));
@@ -215,10 +244,14 @@ export function ContentGenerationStudio() {
     setGeneratingVariant(null);
 
     try {
+      const { campaignId, ...rest } = payload;
       const response = await fetch("/api/content/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...rest,
+          ...(campaignId ? { campaignId } : {}),
+        }),
       });
 
       if (!response.ok) {
@@ -343,6 +376,39 @@ export function ContentGenerationStudio() {
                 </p>
               </div>
             )}
+          </div>
+
+          <div className="space-y-2 text-sm md:col-span-2">
+            <FieldLabelWithHint
+              htmlFor="gen-campaign"
+              label="Campaign (optional)"
+              hint={GENERATION_HINTS.campaign}
+            />
+            <select
+              id="gen-campaign"
+              className="h-9 w-full rounded-md border bg-transparent px-3"
+              value={payload.campaignId ?? ""}
+              onChange={(event) =>
+                setPayload((current) => ({
+                  ...current,
+                  campaignId: event.target.value || undefined,
+                }))
+              }
+            >
+              <option value="">None</option>
+              {campaignOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">
+              Create campaigns under{" "}
+              <a className="text-primary underline" href="/content/campaigns">
+                Content → Campaigns
+              </a>
+              .
+            </p>
           </div>
 
           <div className="space-y-2 text-sm">
