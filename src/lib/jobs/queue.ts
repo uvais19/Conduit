@@ -5,8 +5,8 @@
  */
 
 import { db } from "@/lib/db";
-import { contentDrafts } from "@/lib/db/schema";
-import { eq, and, lte } from "drizzle-orm";
+import { contentDrafts, publishJobs } from "@/lib/db/schema";
+import { eq, and, lte, desc } from "drizzle-orm";
 import { logActivity } from "@/lib/audit-log";
 
 export type JobType = "publish_scheduled" | "collect_analytics" | "send_digest";
@@ -25,6 +25,11 @@ interface Job {
 
 // In-memory queue for the stub implementation
 const jobQueue: Job[] = [];
+const MAX_RECENT_JOBS = 200;
+
+function hasDatabase() {
+  return Boolean(process.env.DATABASE_URL);
+}
 
 export function enqueueJob(
   type: JobType,
@@ -52,6 +57,17 @@ export function getQueueStats(): {
   failed: number;
   total: number;
 } {
+  if (hasDatabase()) {
+    // DB-backed stats are returned by getQueueStatsAsync().
+    return {
+      pending: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      total: 0,
+    };
+  }
+
   return {
     pending: jobQueue.filter((j) => j.status === "pending").length,
     running: jobQueue.filter((j) => j.status === "running").length,
@@ -61,10 +77,74 @@ export function getQueueStats(): {
   };
 }
 
+export async function getQueueStatsAsync(): Promise<{
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
+  total: number;
+}> {
+  if (!hasDatabase()) {
+    return getQueueStats();
+  }
+
+  const rows = await db
+    .select({
+      status: publishJobs.status,
+    })
+    .from(publishJobs)
+    .orderBy(desc(publishJobs.createdAt))
+    .limit(MAX_RECENT_JOBS);
+
+  const stats = {
+    pending: 0,
+    running: 0,
+    completed: 0,
+    failed: 0,
+    total: rows.length,
+  };
+
+  for (const row of rows) {
+    if (row.status === "pending") stats.pending++;
+    if (row.status === "running") stats.running++;
+    if (row.status === "completed") stats.completed++;
+    if (row.status === "failed") stats.failed++;
+  }
+
+  return stats;
+}
+
 export function getRecentJobs(limit = 20): Job[] {
   return [...jobQueue]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, limit);
+}
+
+export async function getRecentJobsAsync(limit = 20): Promise<Job[]> {
+  if (!hasDatabase()) {
+    return getRecentJobs(limit);
+  }
+
+  const rows = await db
+    .select()
+    .from(publishJobs)
+    .orderBy(desc(publishJobs.createdAt))
+    .limit(limit);
+
+  return rows.map((row) => ({
+    id: row.id,
+    type: "publish_scheduled" as const,
+    payload: {
+      draftId: row.draftId,
+      tenantId: row.tenantId,
+    },
+    scheduledAt: row.scheduledFor,
+    status: row.status,
+    attempts: row.attempts,
+    maxAttempts: row.maxAttempts,
+    lastError: row.lastError ?? undefined,
+    createdAt: row.createdAt,
+  }));
 }
 
 /**
@@ -72,6 +152,10 @@ export function getRecentJobs(limit = 20): Job[] {
  * Returns the number of posts processed.
  */
 export async function processScheduledPosts(): Promise<number> {
+  if (!hasDatabase()) {
+    return 0;
+  }
+
   const now = new Date();
 
   // Find all scheduled drafts that are due
@@ -89,16 +173,25 @@ export async function processScheduledPosts(): Promise<number> {
   let processed = 0;
 
   for (const draft of dueDrafts) {
-    const job = enqueueJob("publish_scheduled", {
-      draftId: draft.id,
-      tenantId: draft.tenantId,
-      platform: draft.platform,
-    });
+    const [job] = await db
+      .insert(publishJobs)
+      .values({
+        tenantId: draft.tenantId,
+        draftId: draft.id,
+        status: "running",
+        attempts: 1,
+        maxAttempts: 3,
+        scheduledFor: draft.scheduledAt ?? now,
+        startedAt: now,
+        metadata: {
+          platform: draft.platform,
+          source: "cron",
+        },
+        updatedAt: now,
+      })
+      .returning();
 
     try {
-      job.status = "running";
-      job.attempts++;
-
       // In a real implementation, this would call the platform API
       // For now, mark as published
       await db
@@ -110,7 +203,14 @@ export async function processScheduledPosts(): Promise<number> {
         })
         .where(eq(contentDrafts.id, draft.id));
 
-      job.status = "completed";
+      await db
+        .update(publishJobs)
+        .set({
+          status: "completed",
+          completedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(publishJobs.id, job.id));
       processed++;
 
       try {
@@ -126,8 +226,15 @@ export async function processScheduledPosts(): Promise<number> {
         // Non-critical
       }
     } catch (err) {
-      job.status = job.attempts >= job.maxAttempts ? "failed" : "pending";
-      job.lastError = err instanceof Error ? err.message : "Unknown error";
+      const lastError = err instanceof Error ? err.message : "Unknown error";
+      await db
+        .update(publishJobs)
+        .set({
+          status: "failed",
+          lastError,
+          updatedAt: now,
+        })
+        .where(eq(publishJobs.id, job.id));
     }
   }
 

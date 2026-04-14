@@ -41,7 +41,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 
 // ── types ────────────────────────────────────────────────────
-type CalendarMode = "week" | "month";
+type CalendarMode = "week" | "month" | "quarter";
 type DaySlot = { date: Date; label: string; isToday: boolean; isCurrentMonth: boolean };
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
@@ -94,6 +94,17 @@ function getMonthGrid(year: number, month: number): DaySlot[] {
     cur = addDays(cur, 1);
   }
   return slots;
+}
+
+function startOfQuarter(d: Date): Date {
+  const month = d.getMonth();
+  const quarterStartMonth = Math.floor(month / 3) * 3;
+  return new Date(d.getFullYear(), quarterStartMonth, 1);
+}
+
+function getQuarterMonths(d: Date): Date[] {
+  const start = startOfQuarter(d);
+  return [0, 1, 2].map((offset) => new Date(start.getFullYear(), start.getMonth() + offset, 1));
 }
 
 // ── sortable calendar item ──────────────────────────────────
@@ -323,7 +334,8 @@ export function CalendarView() {
       setCurrentDate((prev) => {
         const d = new Date(prev);
         if (mode === "week") d.setDate(d.getDate() + delta * 7);
-        else d.setMonth(d.getMonth() + delta);
+        else if (mode === "month") d.setMonth(d.getMonth() + delta);
+        else d.setMonth(d.getMonth() + delta * 3);
         return d;
       });
     },
@@ -346,6 +358,10 @@ export function CalendarView() {
     () => (mode === "month" ? getMonthGrid(currentDate.getFullYear(), currentDate.getMonth()) : []),
     [mode, currentDate],
   );
+  const quarterMonths = useMemo(
+    () => (mode === "quarter" ? getQuarterMonths(currentDate) : []),
+    [mode, currentDate],
+  );
 
   // Map scheduled drafts by day-of-week name
   const draftsByDay = useMemo(() => {
@@ -359,22 +375,29 @@ export function CalendarView() {
     return map;
   }, [scheduledDrafts]);
 
-  const handleExportCalendar = useCallback(() => {
-    const lines = ["Day,Time,Platform,Theme,Pillar,Content Type"];
-    for (const item of calendarItems) {
-      lines.push(
-        [item.day, item.time, item.platform, `"${item.theme}"`, `"${item.pillar}"`, item.contentType].join(","),
-      );
-    }
-    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const downloadBlob = useCallback((blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "content-calendar.csv";
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Calendar exported as CSV");
-  }, [calendarItems]);
+  }, []);
+
+  const handleExportCalendar = useCallback(
+    async (format: "csv" | "ics") => {
+      const response = await fetch(`/api/calendar/export?format=${format}`);
+      if (!response.ok) {
+        toast.error(`Failed to export ${format.toUpperCase()} calendar`);
+        return;
+      }
+      const blob = await response.blob();
+      const suffix = new Date().toISOString().slice(0, 10);
+      downloadBlob(blob, `conduit-calendar-${suffix}.${format}`);
+      toast.success(`Calendar exported as ${format.toUpperCase()}`);
+    },
+    [downloadBlob],
+  );
 
   if (loading) {
     return <div className="text-sm text-muted-foreground">Loading your content calendar...</div>;
@@ -401,7 +424,9 @@ export function CalendarView() {
   const dateLabel =
     mode === "week"
       ? `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${addDays(weekStart, 6).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-      : currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      : mode === "month"
+        ? currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+        : `${quarterMonths[0]?.toLocaleDateString("en-US", { month: "short" })} – ${quarterMonths[2]?.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`;
 
   return (
     <div className="space-y-6">
@@ -418,7 +443,7 @@ export function CalendarView() {
             Content Calendar
           </h1>
           <p className="text-sm text-muted-foreground">
-            Drag posts between days to reschedule. Toggle between week and month views.
+            Drag posts between days to reschedule. Toggle between week, month, and quarter views.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -439,6 +464,14 @@ export function CalendarView() {
             >
               Month
             </button>
+            <button
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+                mode === "quarter" ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setMode("quarter")}
+            >
+              Quarter
+            </button>
           </div>
           <div className="inline-flex items-center gap-1">
             <Button variant="outline" size="icon" onClick={() => navigateDate(-1)}>
@@ -452,9 +485,13 @@ export function CalendarView() {
               Today
             </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={handleExportCalendar}>
+          <Button variant="outline" size="sm" onClick={() => void handleExportCalendar("csv")}>
             <Download className="mr-1.5 size-3.5" />
-            Export
+            Export CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => void handleExportCalendar("ics")}>
+            <Download className="mr-1.5 size-3.5" />
+            Export ICS
           </Button>
         </div>
       </header>
@@ -527,7 +564,7 @@ export function CalendarView() {
               );
             })}
           </div>
-        ) : (
+        ) : mode === "month" ? (
           /* Month view grid */
           <div className="overflow-hidden rounded-xl border">
             <div className="grid grid-cols-7 border-b bg-muted/50">
@@ -574,6 +611,55 @@ export function CalendarView() {
                 );
               })}
             </div>
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-3">
+            {quarterMonths.map((monthDate) => {
+              const slots = getMonthGrid(monthDate.getFullYear(), monthDate.getMonth());
+              return (
+                <div key={monthDate.toISOString()} className="overflow-hidden rounded-xl border">
+                  <div className="border-b bg-muted/50 px-3 py-2 text-sm font-medium">
+                    {monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  </div>
+                  <div className="grid grid-cols-7 border-b bg-muted/30">
+                    {WEEKDAYS.map((d) => (
+                      <div key={d} className="px-1 py-1 text-center text-[10px] font-medium text-muted-foreground">
+                        {d.slice(0, 3)}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7">
+                    {slots.map((slot, i) => {
+                      const dayName = slot.date.toLocaleDateString("en-US", { weekday: "long" });
+                      const dayItems = calendarItems.filter((item) => item.day === dayName);
+                      return (
+                        <div
+                          key={i}
+                          className={`min-h-[72px] border-b border-r p-1 ${
+                            !slot.isCurrentMonth ? "bg-muted/20 opacity-40" : ""
+                          }`}
+                        >
+                          <span className="text-[10px] text-muted-foreground">{slot.label}</span>
+                          <div className="mt-0.5 space-y-0.5">
+                            {dayItems.slice(0, 2).map((item) => (
+                              <div
+                                key={item.id}
+                                className={`truncate rounded px-1 py-0.5 text-[10px] ${PLATFORM_COLORS[item.platform] ?? "bg-muted"}`}
+                              >
+                                {item.time}
+                              </div>
+                            ))}
+                            {dayItems.length > 2 && (
+                              <div className="text-[10px] text-muted-foreground">+{dayItems.length - 2}</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
