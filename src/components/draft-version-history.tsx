@@ -10,6 +10,11 @@ type Props = {
   onDraftUpdated: (draft: ContentDraftRecord) => void;
 };
 
+function hashtagsToString(h: unknown): string {
+  if (Array.isArray(h)) return (h as string[]).join(" ");
+  return "";
+}
+
 export function DraftVersionHistory({ draft, onDraftUpdated }: Props) {
   const [versions, setVersions] = useState<DraftVersion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +73,8 @@ export function DraftVersionHistory({ draft, onDraftUpdated }: Props) {
   if (versions.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        No saved versions yet. Versions are recorded when you snapshot from the API or restore.
+        No saved versions yet. Saving the draft records a version automatically; you can also use
+        &quot;Snapshot to history&quot; before big edits.
       </p>
     );
   }
@@ -110,11 +116,19 @@ export function DraftVersionHistory({ draft, onDraftUpdated }: Props) {
       </ul>
 
       {selected && (
-        <div className="space-y-2 border-t pt-2">
-          <p className="text-xs font-medium text-muted-foreground">Diff vs current caption</p>
-          <CaptionDiff
-            currentCaption={draft.caption}
-            versionCaption={selected.caption}
+        <div className="space-y-3 border-t pt-2">
+          <p className="text-xs font-medium text-muted-foreground">Diff vs current draft</p>
+          <VersionFieldsDiff
+            current={{
+              caption: draft.caption,
+              hashtags: draft.hashtags.join(" "),
+              cta: draft.cta,
+            }}
+            version={{
+              caption: selected.caption,
+              hashtags: hashtagsToString(selected.hashtags),
+              cta: selected.cta ?? "",
+            }}
           />
         </div>
       )}
@@ -122,30 +136,53 @@ export function DraftVersionHistory({ draft, onDraftUpdated }: Props) {
   );
 }
 
-function CaptionDiff({
-  currentCaption,
-  versionCaption,
+function VersionFieldsDiff({
+  current,
+  version,
 }: {
-  currentCaption: string;
-  versionCaption: string;
+  current: { caption: string; hashtags: string; cta: string };
+  version: { caption: string; hashtags: string; cta: string };
 }) {
-  if (currentCaption === versionCaption) {
-    return <p className="text-xs text-muted-foreground">Caption matches current editor.</p>;
-  }
+  const fields: { key: "caption" | "hashtags" | "cta"; label: string }[] = [
+    { key: "caption", label: "Caption" },
+    { key: "hashtags", label: "Hashtags" },
+    { key: "cta", label: "CTA" },
+  ];
+
   return (
-    <div className="grid gap-2 md:grid-cols-2">
-      <div>
-        <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">Selected version</p>
-        <pre className="max-h-36 overflow-auto whitespace-pre-wrap rounded border bg-muted/30 p-2 text-[11px] leading-snug">
-          {versionCaption}
-        </pre>
-      </div>
-      <div>
-        <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">Current draft</p>
-        <pre className="max-h-36 overflow-auto whitespace-pre-wrap rounded border p-2 text-[11px] leading-snug">
-          {currentCaption}
-        </pre>
-      </div>
+    <div className="space-y-3">
+      {fields.map(({ key, label }) => {
+        const cur = current[key];
+        const ver = version[key];
+        const same = cur === ver;
+        return (
+          <div key={key}>
+            <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">{label}</p>
+            {same ? (
+              <p className="text-xs text-muted-foreground">No change from current.</p>
+            ) : (
+              <div className="grid gap-2 md:grid-cols-2">
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                    Selected version
+                  </p>
+                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded border bg-muted/30 p-2 text-[11px] leading-snug">
+                    {ver || "—"}
+                  </pre>
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                    Current draft
+                  </p>
+                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded border p-2 text-[11px] leading-snug">
+                    {cur || "—"}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

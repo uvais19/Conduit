@@ -607,20 +607,38 @@ export function ContentGenerationStudio() {
                   </div>
                   {draft.writerRationale && (
                     <div className="mb-2">
-                      <ContentExplainerPanel title="Why this hook / angle" body={draft.writerRationale} />
+                      <ContentExplainerPanel
+                        title="Why this hook / angle (writer)"
+                        body={draft.writerRationale}
+                      />
+                    </div>
+                  )}
+                  {draft.visualPlanData?.designRationale && (
+                    <div className="mb-2">
+                      <ContentExplainerPanel
+                        title="Why this visual angle (designer)"
+                        body={draft.visualPlanData.designRationale}
+                      />
                     </div>
                   )}
                   <div className="flex items-start justify-between gap-2">
                     <p className="flex-1 whitespace-pre-wrap text-sm">{draft.caption}</p>
                     <FieldCharCounter current={draft.caption.length} max={pk.charLimit} />
                   </div>
-                  <div className="mt-2 flex items-start justify-between gap-2">
+                  <div className="mt-2 flex flex-wrap items-start justify-between gap-2">
                     <p className="flex-1 text-muted-foreground text-xs">{draft.hashtags.join(" ")}</p>
-                    <FieldCharCounter
-                      label="Tags"
-                      current={draft.hashtags.length}
-                      max={pk.hashtagLimits.max > 0 ? pk.hashtagLimits.max : null}
-                    />
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <FieldCharCounter
+                        label="Tags"
+                        current={draft.hashtags.length}
+                        max={pk.hashtagLimits.max > 0 ? pk.hashtagLimits.max : null}
+                      />
+                      <FieldCharCounter
+                        label="Hashtag text"
+                        current={draft.hashtags.join(" ").length}
+                        max={null}
+                      />
+                    </div>
                   </div>
                   <div className="mt-1 flex items-center justify-between gap-2">
                     <p className="text-xs font-medium">CTA: {draft.cta}</p>

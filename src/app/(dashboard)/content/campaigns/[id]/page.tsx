@@ -11,6 +11,7 @@ import type { ContentDraftRecord } from "@/lib/content/types";
 import { PLATFORM_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ExportDraftsButton } from "@/components/export-drafts-button";
 
 type Campaign = {
   id: string;
@@ -217,7 +218,8 @@ export default function CampaignDetailPage() {
           </p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight">Campaign</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportDraftsButton />
           <Link
             href={`/content/generate?campaignId=${id}`}
             className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted"

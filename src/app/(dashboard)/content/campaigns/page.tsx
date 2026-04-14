@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Megaphone } from "lucide-react";
 import { toast } from "sonner";
+import { ExportDraftsButton } from "@/components/export-drafts-button";
 
 type Campaign = {
   id: string;
@@ -76,10 +77,13 @@ export default function CampaignsPage() {
             Group drafts into named batches, then approve and schedule them together.
           </p>
         </div>
-        <Button type="button" onClick={() => setShowForm((s) => !s)}>
-          <Plus className="mr-2 size-4" />
-          New campaign
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <ExportDraftsButton />
+          <Button type="button" onClick={() => setShowForm((s) => !s)}>
+            <Plus className="mr-2 size-4" />
+            New campaign
+          </Button>
+        </div>
       </div>
 
       {showForm && (

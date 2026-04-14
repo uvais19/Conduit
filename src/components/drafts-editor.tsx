@@ -237,11 +237,28 @@ export function DraftsEditor() {
         throw new Error(data.error || "Unable to save draft");
       }
 
+      const saved = data.draft as ContentDraftRecord;
       setDrafts((current) =>
         current.map((draft) =>
-          draft.id === selectedDraft.id ? (data.draft as ContentDraftRecord) : draft
+          draft.id === selectedDraft.id ? saved : draft
         )
       );
+
+      try {
+        await fetch("/api/drafts/versions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            draftId: saved.id,
+            caption: saved.caption,
+            hashtags: saved.hashtags,
+            cta: saved.cta,
+            changeDescription: "Auto-saved from drafts editor",
+          }),
+        });
+      } catch {
+        // Version snapshot is best-effort; save already succeeded
+      }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save draft");
     } finally {
@@ -583,6 +600,14 @@ export function DraftsEditor() {
                   <ContentExplainerPanel
                     title="Why this hook / angle (writer)"
                     body={selectedDraft.writerRationale}
+                    defaultOpen
+                  />
+                )}
+                {selectedDraft.visualPlanData?.designRationale && (
+                  <ContentExplainerPanel
+                    title="Why this visual angle (designer)"
+                    body={selectedDraft.visualPlanData.designRationale}
+                    defaultOpen
                   />
                 )}
 
@@ -689,17 +714,24 @@ export function DraftsEditor() {
                 </div>
 
                 <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <FieldLabelWithHint
                       htmlFor="draft-edit-hashtags"
                       label="Hashtags (space separated)"
                       hint={DRAFT_EDIT_HINTS.hashtags}
                     />
-                    <FieldCharCounter
-                      label="Tags"
-                      current={selectedDraft.hashtags.length}
-                      max={PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].hashtagLimits.max}
-                    />
+                    <div className="flex flex-wrap gap-2">
+                      <FieldCharCounter
+                        label="Tags"
+                        current={selectedDraft.hashtags.length}
+                        max={PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].hashtagLimits.max}
+                      />
+                      <FieldCharCounter
+                        label="Hashtag text"
+                        current={selectedDraft.hashtags.join(" ").length}
+                        max={null}
+                      />
+                    </div>
                   </div>
                   <Input
                     id="draft-edit-hashtags"
@@ -833,6 +865,7 @@ export function DraftsEditor() {
                     Version history
                   </p>
                   <DraftVersionHistory
+                    key={`${selectedDraft.id}-${selectedDraft.updatedAt}`}
                     draft={selectedDraft}
                     onDraftUpdated={(d) => {
                       setDrafts((current) => current.map((x) => (x.id === d.id ? d : x)));

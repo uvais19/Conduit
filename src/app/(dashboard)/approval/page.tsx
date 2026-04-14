@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ExportDraftsButton } from "@/components/export-drafts-button";
 import { FieldCharCounter } from "@/components/field-char-counter";
+import { ContentExplainerPanel } from "@/components/content-explainer-panel";
 import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type { Platform } from "@/lib/types";
 
@@ -650,6 +651,19 @@ export default function ApprovalPage() {
                   </Badge>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {selectedDraft.writerRationale && (
+                    <ContentExplainerPanel
+                      title="Why this hook / angle (writer)"
+                      body={selectedDraft.writerRationale}
+                    />
+                  )}
+                  {selectedDraft.visualPlanData?.designRationale && (
+                    <ContentExplainerPanel
+                      title="Why this visual angle (designer)"
+                      body={selectedDraft.visualPlanData.designRationale}
+                    />
+                  )}
+
                   <div>
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -665,21 +679,28 @@ export default function ApprovalPage() {
 
                   {selectedDraft.hashtags.length > 0 && (
                     <div>
-                      <div className="mb-1 flex items-center justify-between gap-2">
+                      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                           Hashtags
                         </p>
-                        <FieldCharCounter
-                          label="Tags"
-                          current={selectedDraft.hashtags.length}
-                          max={
-                            PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].hashtagLimits
-                              .max > 0
-                              ? PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].hashtagLimits
-                                  .max
-                              : null
-                          }
-                        />
+                        <div className="flex flex-wrap gap-2">
+                          <FieldCharCounter
+                            label="Tags"
+                            current={selectedDraft.hashtags.length}
+                            max={
+                              PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].hashtagLimits
+                                .max > 0
+                                ? PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].hashtagLimits
+                                    .max
+                                : null
+                            }
+                          />
+                          <FieldCharCounter
+                            label="Hashtag text"
+                            current={selectedDraft.hashtags.join(" ").length}
+                            max={null}
+                          />
+                        </div>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {selectedDraft.hashtags.join(" ")}
@@ -746,11 +767,14 @@ export default function ApprovalPage() {
                         ))}
                       </div>
                       <div className="block space-y-2 text-sm">
-                        <FieldLabelWithHint
-                          htmlFor="approval-revision-notes"
-                          label="Revision notes"
-                          hint={APPROVAL_FORM_HINTS.revisionNotes}
-                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <FieldLabelWithHint
+                            htmlFor="approval-revision-notes"
+                            label="Revision notes"
+                            hint={APPROVAL_FORM_HINTS.revisionNotes}
+                          />
+                          <FieldCharCounter current={revisionNotes.length} max={4000} />
+                        </div>
                         <textarea
                           id="approval-revision-notes"
                           className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"

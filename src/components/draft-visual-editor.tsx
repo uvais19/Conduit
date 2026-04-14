@@ -244,11 +244,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint
-              htmlFor={`${draft.id}-visual-objective`}
-              label="Objective"
-              hint={VISUAL_HINTS.objective}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor={`${draft.id}-visual-objective`}
+                label="Objective"
+                hint={VISUAL_HINTS.objective}
+              />
+              <FieldCharCounter current={objective.length} max={200} />
+            </div>
             <Input
               id={`${draft.id}-visual-objective`}
               value={objective}
@@ -256,11 +259,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
             />
           </div>
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint
-              htmlFor={`${draft.id}-visual-style`}
-              label="Style hint"
-              hint={VISUAL_HINTS.styleHint}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor={`${draft.id}-visual-style`}
+                label="Style hint"
+                hint={VISUAL_HINTS.styleHint}
+              />
+              <FieldCharCounter current={styleHint.length} max={200} />
+            </div>
             <Input
               id={`${draft.id}-visual-style`}
               value={styleHint}
