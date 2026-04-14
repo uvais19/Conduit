@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import type { Platform } from "@/lib/types";
+import { FieldCharCounter } from "@/components/field-char-counter";
 
 type RefinementEntry = {
   instruction: string;
@@ -76,13 +77,25 @@ export function ContentRefiner({
     setHistory((h) => h.filter((_, i) => i !== index));
   }
 
+  const hashtagTagCount = draft.hashtags.length;
+  const hashtagTextLen = draft.hashtags.join(" ").length;
+  const ctaMax =
+    draft.platform === "x" ? 200 : draft.platform === "gbp" ? 150 : 280;
+
   return (
     <div className="space-y-3 rounded-md border p-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium">Content Refiner</p>
-        <span className="text-xs text-muted-foreground">
-          {charCount}/{pk?.charLimit ?? "∞"} chars
-        </span>
+        <div className="flex flex-wrap gap-2">
+          <FieldCharCounter current={charCount} max={pk?.charLimit ?? null} label="Caption" />
+          <FieldCharCounter
+            label="Tags"
+            current={hashtagTagCount}
+            max={pk?.hashtagLimits.max && pk.hashtagLimits.max > 0 ? pk.hashtagLimits.max : null}
+          />
+          <FieldCharCounter label="Hashtag text" current={hashtagTextLen} max={null} />
+          <FieldCharCounter current={draft.cta.length} max={ctaMax} label="CTA" />
+        </div>
       </div>
 
       {error && (
@@ -130,7 +143,11 @@ export function ContentRefiner({
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-end">
+          <FieldCharCounter current={instruction.length} max={500} label="Instruction" />
+        </div>
+        <div className="flex gap-2">
         <input
           type="text"
           className="h-8 flex-1 rounded-md border bg-transparent px-3 text-sm"
@@ -153,6 +170,7 @@ export function ContentRefiner({
         >
           {loading ? "Refining..." : "Refine"}
         </button>
+        </div>
       </div>
     </div>
   );

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     }
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: "Image file is required" }, { status: 400 });
+      return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
     const draft = await getDraftById(tenantId, draftId);
@@ -48,7 +48,16 @@ export async function POST(request: Request) {
       imageUrl = `local-preview://${key}`;
     }
 
-    const updated = await appendDraftMediaUrl(tenantId, draftId, imageUrl, "image");
+    const isVideo =
+      (file.type && file.type.startsWith("video/")) ||
+      /\.(mp4|webm|mov|m4v|avi)$/i.test(file.name);
+
+    const updated = await appendDraftMediaUrl(
+      tenantId,
+      draftId,
+      imageUrl,
+      isVideo ? "video" : "image"
+    );
 
     return NextResponse.json({ imageUrl, draft: updated });
   } catch (error) {

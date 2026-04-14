@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
 
+    const aspectFromVisualPlan = Boolean(draft.visualPlanData?.recommendedAspectRatio);
     const aspectRatio =
       draft.visualPlanData?.recommendedAspectRatio ?? parsed.data.aspectRatio;
 
@@ -33,6 +34,9 @@ export async function POST(request: Request) {
       tenantId,
       prompt: parsed.data.prompt,
       aspectRatio,
+      platform: draft.platform,
+      mediaType: draft.mediaType,
+      aspectFromVisualPlan,
     });
 
     const updated = await appendDraftMediaUrl(

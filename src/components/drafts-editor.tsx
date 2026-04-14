@@ -13,6 +13,12 @@ import { buttonVariants } from "@/components/ui/button";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
 import { DraftTimeline } from "@/components/draft-timeline";
 import { ContentRefiner } from "@/components/content-refiner";
+import { FieldCharCounter } from "@/components/field-char-counter";
+import { ContentExplainerPanel } from "@/components/content-explainer-panel";
+import { DraftVersionHistory } from "@/components/draft-version-history";
+import { ExportDraftsButton } from "@/components/export-drafts-button";
+import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
+import type { Platform } from "@/lib/types";
 import { toast } from "sonner";
 import {
   groupVariants,
@@ -71,6 +77,9 @@ export function DraftsEditor() {
   const [strategy, setStrategy] = useState<ContentStrategy | null>(null);
   const [strategyLoading, setStrategyLoading] = useState(true);
   const [adaptingTo, setAdaptingTo] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
+  const [newCampaignName, setNewCampaignName] = useState("");
+  const [snapshotting, setSnapshotting] = useState(false);
 
   const selectedDraft = useMemo(
     () => drafts.find((draft) => draft.id === selectedId) ?? null,
@@ -136,6 +145,26 @@ export function DraftsEditor() {
   }, [filters.platform, filters.status, filters.pillar]);
 
   useEffect(() => {
+    async function loadCampaigns() {
+      try {
+        const res = await fetch("/api/campaigns");
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.campaigns)) {
+          setCampaigns(
+            data.campaigns.map((c: { id: string; name: string }) => ({
+              id: c.id,
+              name: c.name,
+            }))
+          );
+        }
+      } catch {
+        // optional
+      }
+    }
+    void loadCampaigns();
+  }, []);
+
+  useEffect(() => {
     async function loadStrategy() {
       try {
         const response = await fetch("/api/strategy");
@@ -195,6 +224,7 @@ export function DraftsEditor() {
           hashtags: selectedDraft.hashtags,
           cta: selectedDraft.cta,
           pillar: selectedDraft.pillar,
+          campaignId: selectedDraft.campaignId ?? null,
           mediaUrls: selectedDraft.mediaUrls,
           mediaType: selectedDraft.mediaType,
           carousel: selectedDraft.carousel,
@@ -207,11 +237,28 @@ export function DraftsEditor() {
         throw new Error(data.error || "Unable to save draft");
       }
 
+      const saved = data.draft as ContentDraftRecord;
       setDrafts((current) =>
         current.map((draft) =>
-          draft.id === selectedDraft.id ? (data.draft as ContentDraftRecord) : draft
+          draft.id === selectedDraft.id ? saved : draft
         )
       );
+
+      try {
+        await fetch("/api/drafts/versions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            draftId: saved.id,
+            caption: saved.caption,
+            hashtags: saved.hashtags,
+            cta: saved.cta,
+            changeDescription: "Auto-saved from drafts editor",
+          }),
+        });
+      } catch {
+        // Version snapshot is best-effort; save already succeeded
+      }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save draft");
     } finally {
@@ -226,6 +273,51 @@ export function DraftsEditor() {
         draft.id === selectedDraft.id ? { ...draft, ...patch } : draft
       )
     );
+  }
+
+  async function saveVersionSnapshot() {
+    if (!selectedDraft) return;
+    setSnapshotting(true);
+    try {
+      const res = await fetch("/api/drafts/versions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftId: selectedDraft.id,
+          caption: selectedDraft.caption,
+          hashtags: selectedDraft.hashtags,
+          cta: selectedDraft.cta,
+          changeDescription: "Manual snapshot from drafts editor",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Snapshot failed");
+      toast.success(`Saved ${data.version?.version ?? "version"} to history`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Snapshot failed");
+    } finally {
+      setSnapshotting(false);
+    }
+  }
+
+  async function createCampaign() {
+    const name = newCampaignName.trim();
+    if (!name) return;
+    try {
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not create campaign");
+      const c = data.campaign as { id: string; name: string };
+      setCampaigns((prev) => [{ id: c.id, name: c.name }, ...prev]);
+      setNewCampaignName("");
+      toast.success("Campaign created");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create campaign");
+    }
   }
 
   async function handleAdaptTo(targetPlatform: string) {
@@ -256,11 +348,14 @@ export function DraftsEditor() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Content Drafts</h1>
-        <p className="text-muted-foreground">
-          Edit generated drafts and review per-platform live preview.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Content Drafts</h1>
+          <p className="text-muted-foreground">
+            Edit generated drafts and review per-platform live preview.
+          </p>
+        </div>
+        <ExportDraftsButton />
       </div>
 
       {error && (
@@ -501,12 +596,113 @@ export function DraftsEditor() {
               <p className="text-sm text-muted-foreground">Select a draft to edit.</p>
             ) : (
               <>
-                <div className="space-y-2 text-sm">
-                  <FieldLabelWithHint
-                    htmlFor="draft-edit-caption"
-                    label="Caption"
-                    hint={DRAFT_EDIT_HINTS.caption}
+                {selectedDraft.writerRationale && (
+                  <ContentExplainerPanel
+                    title="Why this hook / angle (writer)"
+                    body={selectedDraft.writerRationale}
+                    defaultOpen
                   />
+                )}
+                {selectedDraft.visualPlanData?.designRationale && (
+                  <ContentExplainerPanel
+                    title="Why this visual angle (designer)"
+                    body={selectedDraft.visualPlanData.designRationale}
+                    defaultOpen
+                  />
+                )}
+
+                <div className="rounded-md border p-3 text-sm">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Campaign
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <div className="flex-1 space-y-1">
+                      <label htmlFor="draft-campaign" className="text-xs text-muted-foreground">
+                        Assign draft
+                      </label>
+                      <select
+                        id="draft-campaign"
+                        className="h-9 w-full rounded-md border bg-transparent px-3"
+                        value={selectedDraft.campaignId ?? ""}
+                        onChange={(e) =>
+                          patchSelectedDraft({
+                            campaignId: e.target.value || null,
+                          })
+                        }
+                      >
+                        <option value="">No campaign</option>
+                        {campaigns.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-1 gap-2">
+                      <Input
+                        placeholder="New campaign name"
+                        value={newCampaignName}
+                        onChange={(e) => setNewCampaignName(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void createCampaign()}
+                        className="shrink-0 rounded-md border px-3 text-xs font-medium"
+                      >
+                        Create
+                      </button>
+                    </div>
+                  </div>
+                  {selectedDraft.campaignId && (
+                    <button
+                      type="button"
+                      className="mt-3 inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium"
+                      onClick={async () => {
+                        const start = window.prompt(
+                          "First publish slot (ISO date/time, e.g. 2026-04-20T10:00:00)",
+                          new Date(Date.now() + 86400000).toISOString().slice(0, 16)
+                        );
+                        if (!start) return;
+                        const hours = window.prompt("Hours between posts", "24");
+                        const h = hours ? Number(hours) : 24;
+                        try {
+                          const res = await fetch(
+                            `/api/campaigns/${selectedDraft.campaignId}/schedule`,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                startAt: new Date(start).toISOString(),
+                                hoursBetween: Number.isFinite(h) && h > 0 ? h : 24,
+                              }),
+                            }
+                          );
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.error ?? "Schedule failed");
+                          toast.success(data.message ?? "Scheduled");
+                          void fetchDrafts();
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Schedule failed");
+                        }
+                      }}
+                    >
+                      Schedule approved drafts in campaign
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <FieldLabelWithHint
+                      htmlFor="draft-edit-caption"
+                      label="Caption"
+                      hint={DRAFT_EDIT_HINTS.caption}
+                    />
+                    <FieldCharCounter
+                      current={selectedDraft.caption.length}
+                      max={PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].charLimit}
+                    />
+                  </div>
                   <textarea
                     id="draft-edit-caption"
                     className="min-h-32 w-full rounded-md border bg-transparent px-3 py-2"
@@ -518,11 +714,25 @@ export function DraftsEditor() {
                 </div>
 
                 <div className="space-y-2 text-sm">
-                  <FieldLabelWithHint
-                    htmlFor="draft-edit-hashtags"
-                    label="Hashtags (space separated)"
-                    hint={DRAFT_EDIT_HINTS.hashtags}
-                  />
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <FieldLabelWithHint
+                      htmlFor="draft-edit-hashtags"
+                      label="Hashtags (space separated)"
+                      hint={DRAFT_EDIT_HINTS.hashtags}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <FieldCharCounter
+                        label="Tags"
+                        current={selectedDraft.hashtags.length}
+                        max={PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].hashtagLimits.max}
+                      />
+                      <FieldCharCounter
+                        label="Hashtag text"
+                        current={selectedDraft.hashtags.join(" ").length}
+                        max={null}
+                      />
+                    </div>
+                  </div>
                   <Input
                     id="draft-edit-hashtags"
                     value={selectedDraft.hashtags.join(" ")}
@@ -538,7 +748,19 @@ export function DraftsEditor() {
                 </div>
 
                 <div className="space-y-2 text-sm">
-                  <FieldLabelWithHint htmlFor="draft-edit-cta" label="CTA" hint={DRAFT_EDIT_HINTS.cta} />
+                  <div className="flex items-center justify-between gap-2">
+                    <FieldLabelWithHint htmlFor="draft-edit-cta" label="CTA" hint={DRAFT_EDIT_HINTS.cta} />
+                    <FieldCharCounter
+                      current={selectedDraft.cta.length}
+                      max={
+                        selectedDraft.platform === "x"
+                          ? 200
+                          : selectedDraft.platform === "gbp"
+                            ? 150
+                            : 280
+                      }
+                    />
+                  </div>
                   <Input
                     id="draft-edit-cta"
                     value={selectedDraft.cta}
@@ -586,6 +808,14 @@ export function DraftsEditor() {
                   >
                     {saving ? "Saving..." : "Save Draft"}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveVersionSnapshot()}
+                    disabled={snapshotting || saving}
+                    className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium disabled:opacity-50"
+                  >
+                    {snapshotting ? "Saving…" : "Snapshot to history"}
+                  </button>
 
                   {(selectedDraft.status === "draft" || selectedDraft.status === "revision-requested") && (
                     <button
@@ -629,6 +859,19 @@ export function DraftsEditor() {
                     );
                   }}
                 />
+
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Version history
+                  </p>
+                  <DraftVersionHistory
+                    key={`${selectedDraft.id}-${selectedDraft.updatedAt}`}
+                    draft={selectedDraft}
+                    onDraftUpdated={(d) => {
+                      setDrafts((current) => current.map((x) => (x.id === d.id ? d : x)));
+                    }}
+                  />
+                </div>
 
                 <ContentRefiner
                   draft={selectedDraft}

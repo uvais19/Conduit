@@ -3,6 +3,7 @@ import { runVisualDesignerAgent } from "@/lib/agents/content/visual-designer";
 import { runPlatformWriterAgent } from "@/lib/agents/content/writers";
 import { createDraftsFromVariants, updateDraft } from "@/lib/content/store";
 import { contentGenerationRequestSchema } from "@/lib/content/types";
+import { getCampaignForTenant } from "@/lib/campaigns/store";
 import type { VariantLabel, GeneratedVariant } from "@/lib/content/types";
 
 export async function POST(request: Request) {
@@ -20,6 +21,16 @@ export async function POST(request: Request) {
     }
 
     const input = parsed.data;
+    if (input.campaignId) {
+      const campaign = await getCampaignForTenant(tenantId, input.campaignId);
+      if (!campaign) {
+        return new Response(JSON.stringify({ error: "Campaign not found" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const labels: VariantLabel[] = input.generateVariants ? ["A", "B", "C"] : ["A"];
     const variantGroup = crypto.randomUUID();
 
@@ -48,6 +59,7 @@ export async function POST(request: Request) {
             pillar: input.pillar,
             variantGroup,
             variants,
+            campaignId: input.campaignId ?? null,
           });
 
           send("progress", { phase: "visual", status: "designing" });

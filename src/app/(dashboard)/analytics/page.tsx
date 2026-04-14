@@ -20,6 +20,7 @@ import { PerPostAnalyticsDetail } from "@/components/per-post-analytics-detail";
 import { MetricsDataSourceBadge } from "@/components/metrics-data-source-badge";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
+import { ExportDraftsButton } from "@/components/export-drafts-button";
 
 export default function AnalyticsPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
@@ -203,6 +204,12 @@ export default function AnalyticsPage() {
             <Download className="mr-1.5 size-3.5" />
             Export JSON
           </Button>
+          <div className="flex flex-col gap-1 border-l pl-3 sm:pl-4">
+            <span className="text-[10px] font-medium uppercase text-muted-foreground">
+              All drafts
+            </span>
+            <ExportDraftsButton />
+          </div>
         </CardContent>
       </Card>
 

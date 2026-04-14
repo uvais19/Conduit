@@ -43,6 +43,20 @@
       "when": 1775995800000,
       "tag": "0005_feature_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776000000000,
+      "tag": "0006_section2_writer_campaigns",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776100000000,
+      "tag": "0007_campaigns_updated_at",
+      "breakpoints": true
     }
   ]
 }

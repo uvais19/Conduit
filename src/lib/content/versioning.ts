@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { pgTable, uuid, text, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { contentDrafts, users } from "@/lib/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 // ============================================================
 //  Draft Versioning — tracks every edit to a draft for history.
@@ -30,6 +30,21 @@ export async function getDraftVersions(draftId: string): Promise<DraftVersion[]>
     .from(draftVersions)
     .where(eq(draftVersions.draftId, draftId))
     .orderBy(desc(draftVersions.createdAt));
+}
+
+/** One version row scoped to tenant (via owning draft). */
+export async function getDraftVersionForTenant(
+  versionId: string,
+  tenantId: string
+): Promise<DraftVersion | null> {
+  const rows = await db
+    .select({ v: draftVersions })
+    .from(draftVersions)
+    .innerJoin(contentDrafts, eq(draftVersions.draftId, contentDrafts.id))
+    .where(and(eq(draftVersions.id, versionId), eq(contentDrafts.tenantId, tenantId)))
+    .limit(1);
+
+  return rows[0]?.v ?? null;
 }
 
 /** Save a new version snapshot. Automatically increments version number. */

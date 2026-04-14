@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { contentDrafts } from "@/lib/db/schema";
@@ -27,6 +27,8 @@ function mapDraftRow(row: typeof contentDrafts.$inferSelect): ContentDraftRecord
     caption: row.caption,
     hashtags: row.hashtags ?? [],
     cta: row.cta ?? "",
+    writerRationale: row.writerRationale ?? null,
+    campaignId: row.campaignId ?? null,
     mediaUrls: row.mediaUrls ?? [],
     mediaType: row.mediaType,
     carousel: (row.carouselData as ContentDraftRecord["carousel"]) ?? [],
@@ -51,12 +53,14 @@ export async function createDraftsFromVariants({
   pillar,
   variantGroup,
   variants,
+  campaignId,
 }: {
   tenantId: string;
   platform: Platform;
   pillar: string;
   variantGroup: string;
   variants: GeneratedVariant[];
+  campaignId?: string | null;
 }): Promise<ContentDraftRecord[]> {
   if (!useDb()) {
     const now = new Date().toISOString();
@@ -69,6 +73,8 @@ export async function createDraftsFromVariants({
       caption: variant.caption,
       hashtags: variant.hashtags,
       cta: variant.cta,
+      writerRationale: variant.writerRationale ?? null,
+      campaignId: campaignId ?? null,
       mediaUrls: [],
       mediaType: "text-only" as const,
       carousel: [],
@@ -105,6 +111,8 @@ export async function createDraftsFromVariants({
         caption: variant.caption,
         hashtags: variant.hashtags,
         cta: variant.cta,
+        writerRationale: variant.writerRationale ?? null,
+        campaignId: campaignId ?? null,
         mediaUrls: [] as string[],
         mediaType: "text-only" as const,
         carouselData: [] as unknown[],
@@ -129,11 +137,15 @@ export async function listDrafts({
   platform,
   status,
   pillar,
+  campaignId,
+  unassignedOnly,
 }: {
   tenantId: string;
   platform?: Platform;
   status?: ContentDraftRecord["status"];
   pillar?: string;
+  campaignId?: string;
+  unassignedOnly?: boolean;
 }): Promise<ContentDraftRecord[]> {
   if (!useDb()) {
     const drafts = draftsByTenant.get(tenantId) ?? [];
@@ -142,6 +154,8 @@ export async function listDrafts({
       if (platform && draft.platform !== platform) return false;
       if (status && draft.status !== status) return false;
       if (pillar && draft.pillar.toLowerCase() !== pillar.toLowerCase()) return false;
+      if (unassignedOnly && draft.campaignId) return false;
+      if (campaignId && draft.campaignId !== campaignId) return false;
       return true;
     });
   }
@@ -153,7 +167,9 @@ export async function listDrafts({
       and(
         eq(contentDrafts.tenantId, tenantId),
         platform ? eq(contentDrafts.platform, platform) : undefined,
-        status ? eq(contentDrafts.status, status) : undefined
+        status ? eq(contentDrafts.status, status) : undefined,
+        campaignId ? eq(contentDrafts.campaignId, campaignId) : undefined,
+        unassignedOnly ? isNull(contentDrafts.campaignId) : undefined
       )
     )
     .orderBy(desc(contentDrafts.updatedAt));
@@ -164,6 +180,8 @@ export async function listDrafts({
     if (platform && draft.platform !== platform) return false;
     if (status && draft.status !== status) return false;
     if (pillar && draft.pillar.toLowerCase() !== pillar.toLowerCase()) return false;
+    if (unassignedOnly && draft.campaignId) return false;
+    if (campaignId && draft.campaignId !== campaignId) return false;
     return true;
   });
 }
@@ -196,6 +214,8 @@ export async function updateDraft(
       | "hashtags"
       | "cta"
       | "pillar"
+      | "campaignId"
+      | "writerRationale"
       | "status"
       | "mediaUrls"
       | "mediaType"
@@ -233,6 +253,8 @@ export async function updateDraft(
       hashtags: patch.hashtags,
       cta: patch.cta,
       pillar: patch.pillar,
+      campaignId: patch.campaignId,
+      writerRationale: patch.writerRationale,
       status: patch.status,
       mediaUrls: patch.mediaUrls,
       mediaType: patch.mediaType,

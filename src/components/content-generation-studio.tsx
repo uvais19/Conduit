@@ -18,6 +18,11 @@ import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
 import { DraftMediaGallery } from "@/components/draft-media-gallery";
 import { DraftVisualEditor } from "@/components/draft-visual-editor";
+import { FieldCharCounter } from "@/components/field-char-counter";
+import { ContentExplainerPanel } from "@/components/content-explainer-panel";
+import { ExportDraftsButton } from "@/components/export-drafts-button";
+import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
+import type { Platform } from "@/lib/types";
 
 type GenerationPayload = {
   platform: (typeof PLATFORMS)[number];
@@ -28,6 +33,8 @@ type GenerationPayload = {
   voice: string;
   cta: string;
   generateVariants: boolean;
+  /** Optional campaign — new variants are attached to this batch. */
+  campaignId?: string;
 };
 
 const GENERATION_HINTS = {
@@ -47,6 +54,8 @@ const GENERATION_HINTS = {
     "The action you want readers to take — comment keyword, link in bio, DM, sign up. Written into the close of the caption.",
   variants:
     "When enabled, Conduit produces multiple labeled variants (e.g. A/B/C) so you can compare hooks and structures side by side.",
+  campaign:
+    "Optional: attach generated drafts to a named campaign so you can batch-approve and schedule them together from Campaigns.",
 } as const;
 
 const initialPayload: GenerationPayload = {
@@ -68,9 +77,12 @@ const PLATFORM_MEDIA_SUPPORT: Record<string, { formats: string[]; maxDuration?: 
   gbp: { formats: ["Image", "Video"], maxDuration: "30s", notes: "Photos with businesses get 35% more clicks" },
 };
 
+type CampaignOption = { id: string; name: string };
+
 export function ContentGenerationStudio() {
   const searchParams = useSearchParams();
   const [payload, setPayload] = useState<GenerationPayload>(initialPayload);
+  const [campaignOptions, setCampaignOptions] = useState<CampaignOption[]>([]);
   const [manifesto, setManifesto] = useState<BrandManifesto | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -183,16 +195,38 @@ export function ContentGenerationStudio() {
     const platform = searchParams.get("platform");
     const pillar = searchParams.get("pillar");
     const topic = searchParams.get("topic");
+    const campaignId = searchParams.get("campaignId");
 
-    if (platform || pillar || topic) {
+    if (platform || pillar || topic || campaignId) {
       setPayload((current) => ({
         ...current,
         ...(platform && PLATFORMS.includes(platform as (typeof PLATFORMS)[number]) && { platform: platform as (typeof PLATFORMS)[number] }),
         ...(pillar && { pillar }),
         ...(topic && { topic }),
+        ...(campaignId && { campaignId }),
       }));
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    async function loadCampaigns() {
+      try {
+        const res = await fetch("/api/campaigns");
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.campaigns)) {
+          setCampaignOptions(
+            data.campaigns.map((c: { id: string; name: string }) => ({
+              id: c.id,
+              name: c.name,
+            }))
+          );
+        }
+      } catch {
+        // optional
+      }
+    }
+    void loadCampaigns();
+  }, []);
 
   const grouped = useMemo(() => {
     return drafts.sort((a, b) => a.variantLabel.localeCompare(b.variantLabel));
@@ -210,10 +244,14 @@ export function ContentGenerationStudio() {
     setGeneratingVariant(null);
 
     try {
+      const { campaignId, ...rest } = payload;
       const response = await fetch("/api/content/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...rest,
+          ...(campaignId ? { campaignId } : {}),
+        }),
       });
 
       if (!response.ok) {
@@ -273,13 +311,18 @@ export function ContentGenerationStudio() {
     }
   }
 
+  const pk = PLATFORM_KNOWLEDGE[payload.platform as Platform];
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Generate Content</h1>
-        <p className="text-muted-foreground">
-          Pick platform + pillar, then generate draft variants side-by-side.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Generate Content</h1>
+          <p className="text-muted-foreground">
+            Pick platform + pillar, then generate draft variants side-by-side.
+          </p>
+        </div>
+        <ExportDraftsButton />
       </div>
 
       {error && (
@@ -335,8 +378,44 @@ export function ContentGenerationStudio() {
             )}
           </div>
 
+          <div className="space-y-2 text-sm md:col-span-2">
+            <FieldLabelWithHint
+              htmlFor="gen-campaign"
+              label="Campaign (optional)"
+              hint={GENERATION_HINTS.campaign}
+            />
+            <select
+              id="gen-campaign"
+              className="h-9 w-full rounded-md border bg-transparent px-3"
+              value={payload.campaignId ?? ""}
+              onChange={(event) =>
+                setPayload((current) => ({
+                  ...current,
+                  campaignId: event.target.value || undefined,
+                }))
+              }
+            >
+              <option value="">None</option>
+              {campaignOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">
+              Create campaigns under{" "}
+              <a className="text-primary underline" href="/content/campaigns">
+                Content → Campaigns
+              </a>
+              .
+            </p>
+          </div>
+
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint htmlFor="gen-pillar" label="Pillar" hint={GENERATION_HINTS.pillar} />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint htmlFor="gen-pillar" label="Pillar" hint={GENERATION_HINTS.pillar} />
+              <FieldCharCounter current={payload.pillar.length} max={120} />
+            </div>
             <Input
               id="gen-pillar"
               value={payload.pillar}
@@ -347,7 +426,10 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm md:col-span-2">
-            <FieldLabelWithHint htmlFor="gen-topic" label="Topic" hint={GENERATION_HINTS.topic} />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint htmlFor="gen-topic" label="Topic" hint={GENERATION_HINTS.topic} />
+              <FieldCharCounter current={payload.topic.length} max={200} />
+            </div>
             <Input
               id="gen-topic"
               value={payload.topic}
@@ -358,11 +440,14 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint
-              htmlFor="gen-objective"
-              label="Objective"
-              hint={GENERATION_HINTS.objective}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor="gen-objective"
+                label="Objective"
+                hint={GENERATION_HINTS.objective}
+              />
+              <FieldCharCounter current={payload.objective.length} max={80} />
+            </div>
             <Input
               id="gen-objective"
               value={payload.objective}
@@ -373,11 +458,14 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint
-              htmlFor="gen-audience"
-              label="Audience"
-              hint={GENERATION_HINTS.audience}
-            />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint
+                htmlFor="gen-audience"
+                label="Audience"
+                hint={GENERATION_HINTS.audience}
+              />
+              <FieldCharCounter current={payload.audience.length} max={200} />
+            </div>
             <Input
               id="gen-audience"
               value={payload.audience}
@@ -388,7 +476,10 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint htmlFor="gen-voice" label="Voice" hint={GENERATION_HINTS.voice} />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint htmlFor="gen-voice" label="Voice" hint={GENERATION_HINTS.voice} />
+              <FieldCharCounter current={payload.voice.length} max={120} />
+            </div>
             <Input
               id="gen-voice"
               value={payload.voice}
@@ -399,7 +490,10 @@ export function ContentGenerationStudio() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <FieldLabelWithHint htmlFor="gen-cta" label="CTA" hint={GENERATION_HINTS.cta} />
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabelWithHint htmlFor="gen-cta" label="CTA" hint={GENERATION_HINTS.cta} />
+              <FieldCharCounter current={payload.cta.length} max={280} />
+            </div>
             <Input
               id="gen-cta"
               value={payload.cta}
@@ -511,14 +605,53 @@ export function ContentGenerationStudio() {
                       </button>
                     </div>
                   </div>
-                  <p className="flex-1 whitespace-pre-wrap text-sm">{draft.caption}</p>
-                  <p className="mt-2 text-muted-foreground text-xs">{draft.hashtags.join(" ")}</p>
-                  <p className="mt-1 text-xs font-medium">CTA: {draft.cta}</p>
+                  {draft.writerRationale && (
+                    <div className="mb-2">
+                      <ContentExplainerPanel
+                        title="Why this hook / angle (writer)"
+                        body={draft.writerRationale}
+                      />
+                    </div>
+                  )}
+                  {draft.visualPlanData?.designRationale && (
+                    <div className="mb-2">
+                      <ContentExplainerPanel
+                        title="Why this visual angle (designer)"
+                        body={draft.visualPlanData.designRationale}
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="flex-1 whitespace-pre-wrap text-sm">{draft.caption}</p>
+                    <FieldCharCounter current={draft.caption.length} max={pk.charLimit} />
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-start justify-between gap-2">
+                    <p className="flex-1 text-muted-foreground text-xs">{draft.hashtags.join(" ")}</p>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <FieldCharCounter
+                        label="Tags"
+                        current={draft.hashtags.length}
+                        max={pk.hashtagLimits.max > 0 ? pk.hashtagLimits.max : null}
+                      />
+                      <FieldCharCounter
+                        label="Hashtag text"
+                        current={draft.hashtags.join(" ").length}
+                        max={null}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium">CTA: {draft.cta}</p>
+                    <FieldCharCounter current={draft.cta.length} max={280} />
+                  </div>
                   {draft.mediaUrls.length > 0 && (
                     <div className="mt-3">
                       <DraftMediaGallery
                         key={draft.mediaUrls.join("|")}
                         urls={draft.mediaUrls}
+                        verticalShortForm={
+                          payload.platform === "instagram" && draft.mediaType === "video"
+                        }
                       />
                     </div>
                   )}

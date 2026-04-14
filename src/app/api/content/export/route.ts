@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { contentDrafts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 /** GET /api/content/export — export drafts as JSON/CSV */
 export async function GET(req: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const format = url.searchParams.get("format") ?? "json";
     const status = url.searchParams.get("status"); // optional filter
 
-    let query = db
+    const drafts = await db
       .select({
         id: contentDrafts.id,
         platform: contentDrafts.platform,
@@ -29,14 +29,14 @@ export async function GET(req: NextRequest) {
         createdAt: contentDrafts.createdAt,
       })
       .from(contentDrafts)
-      .where(eq(contentDrafts.tenantId, user.tenantId))
-      .$dynamic();
-
-    if (status) {
-      query = query.where(eq(contentDrafts.status, status as never));
-    }
-
-    const drafts = await query;
+      .where(
+        status
+          ? and(
+              eq(contentDrafts.tenantId, user.tenantId),
+              eq(contentDrafts.status, status as never)
+            )
+          : eq(contentDrafts.tenantId, user.tenantId)
+      );
 
     if (format === "csv") {
       const headers = [

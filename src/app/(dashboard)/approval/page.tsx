@@ -12,10 +12,14 @@ import { toast } from "sonner";
 import {
   MessageSquare,
   ShieldCheck,
-  Download,
   Trash2,
   Send,
 } from "lucide-react";
+import { ExportDraftsButton } from "@/components/export-drafts-button";
+import { FieldCharCounter } from "@/components/field-char-counter";
+import { ContentExplainerPanel } from "@/components/content-explainer-panel";
+import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
+import type { Platform } from "@/lib/types";
 
 const STATUS_OPTIONS: Array<{ value: "all" | ContentDraftRecord["status"]; label: string }> = [
   { value: "all", label: "All statuses" },
@@ -431,24 +435,6 @@ export default function ApprovalPage() {
     }
   }
 
-  // ── Export drafts ─────────────────────────────────────────
-  async function handleExportDrafts() {
-    try {
-      const res = await fetch("/api/content/export?format=csv");
-      if (!res.ok) throw new Error("Export failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "drafts-export.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Drafts exported as CSV");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Export failed");
-    }
-  }
-
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -488,14 +474,7 @@ export default function ApprovalPage() {
               </button>
             </>
           )}
-          <button
-            type="button"
-            onClick={() => void handleExportDrafts()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/80 bg-background px-3 text-xs font-medium hover:bg-muted/50 transition-colors"
-          >
-            <Download className="size-3.5" />
-            Export
-          </button>
+          <ExportDraftsButton />
         </div>
       </header>
 
@@ -672,18 +651,57 @@ export default function ApprovalPage() {
                   </Badge>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {selectedDraft.writerRationale && (
+                    <ContentExplainerPanel
+                      title="Why this hook / angle (writer)"
+                      body={selectedDraft.writerRationale}
+                    />
+                  )}
+                  {selectedDraft.visualPlanData?.designRationale && (
+                    <ContentExplainerPanel
+                      title="Why this visual angle (designer)"
+                      body={selectedDraft.visualPlanData.designRationale}
+                    />
+                  )}
+
                   <div>
-                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Caption
-                    </p>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Caption
+                      </p>
+                      <FieldCharCounter
+                        current={selectedDraft.caption.length}
+                        max={PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].charLimit}
+                      />
+                    </div>
                     <p className="whitespace-pre-wrap text-sm">{selectedDraft.caption}</p>
                   </div>
 
                   {selectedDraft.hashtags.length > 0 && (
                     <div>
-                      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Hashtags
-                      </p>
+                      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Hashtags
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <FieldCharCounter
+                            label="Tags"
+                            current={selectedDraft.hashtags.length}
+                            max={
+                              PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].hashtagLimits
+                                .max > 0
+                                ? PLATFORM_KNOWLEDGE[selectedDraft.platform as Platform].hashtagLimits
+                                    .max
+                                : null
+                            }
+                          />
+                          <FieldCharCounter
+                            label="Hashtag text"
+                            current={selectedDraft.hashtags.join(" ").length}
+                            max={null}
+                          />
+                        </div>
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {selectedDraft.hashtags.join(" ")}
                       </p>
@@ -692,9 +710,21 @@ export default function ApprovalPage() {
 
                   {selectedDraft.cta && (
                     <div>
-                      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        CTA
-                      </p>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          CTA
+                        </p>
+                        <FieldCharCounter
+                          current={selectedDraft.cta.length}
+                          max={
+                            selectedDraft.platform === "x"
+                              ? 200
+                              : selectedDraft.platform === "gbp"
+                                ? 150
+                                : 280
+                          }
+                        />
+                      </div>
                       <p className="text-sm">{selectedDraft.cta}</p>
                     </div>
                   )}
@@ -737,11 +767,14 @@ export default function ApprovalPage() {
                         ))}
                       </div>
                       <div className="block space-y-2 text-sm">
-                        <FieldLabelWithHint
-                          htmlFor="approval-revision-notes"
-                          label="Revision notes"
-                          hint={APPROVAL_FORM_HINTS.revisionNotes}
-                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <FieldLabelWithHint
+                            htmlFor="approval-revision-notes"
+                            label="Revision notes"
+                            hint={APPROVAL_FORM_HINTS.revisionNotes}
+                          />
+                          <FieldCharCounter current={revisionNotes.length} max={4000} />
+                        </div>
                         <textarea
                           id="approval-revision-notes"
                           className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"

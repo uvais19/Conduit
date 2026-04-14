@@ -34,7 +34,12 @@ export async function runPlatformWriterAgent(
       ? `\n\n${LINKEDIN_WRITER_ADDENDUM}\n`
       : "";
 
-  const result = await generateJson<{ caption: string; hashtags: string[]; cta: string }>({
+  const result = await generateJson<{
+    caption: string;
+    hashtags: string[];
+    cta: string;
+    rationale?: string;
+  }>({
     systemPrompt: [
       `You are a ${input.platform} content writing specialist for Conduit, an AI social media manager.`,
       `Write content that is native to ${input.platform} and follows its specific rules and best practices.`,
@@ -45,7 +50,8 @@ export async function runPlatformWriterAgent(
       platformContext,
       linkedinExtra,
       "",
-      "Return valid JSON only with: { caption, hashtags, cta }",
+      'Return valid JSON only with: { "caption", "hashtags", "cta", "rationale" }',
+      '"rationale": 2–4 sentences explaining the hook/angle choice for this variant and platform.',
     ]
       .filter(Boolean)
       .join("\n"),
@@ -69,12 +75,17 @@ export async function runPlatformWriterAgent(
         ? "- Caption must be structured for LinkedIn feed: hook → insight/bullets or short sections → CTA/question → hashtags."
         : "",
       "",
-      'Return JSON: { "caption": "...", "hashtags": ["#tag1", ...], "cta": "..." }',
+      'Return JSON: { "caption": "...", "hashtags": ["#tag1", ...], "cta": "...", "rationale": "..." }',
     ]
       .filter(Boolean)
       .join("\n"),
     temperature: 0.45,
-    fallback: null as unknown as { caption: string; hashtags: string[]; cta: string },
+    fallback: null as unknown as {
+      caption: string;
+      hashtags: string[];
+      cta: string;
+      rationale?: string;
+    },
   });
 
   if (!result || !result.caption) {
@@ -86,6 +97,7 @@ export async function runPlatformWriterAgent(
     caption: result.caption,
     hashtags: result.hashtags ?? [],
     cta: result.cta ?? input.cta,
+    writerRationale: result.rationale?.trim() || undefined,
   };
 }
 
