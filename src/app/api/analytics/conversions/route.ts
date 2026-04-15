@@ -5,6 +5,7 @@ import {
   recordConversionForDraft,
 } from "@/lib/analytics/store";
 import { parseAnalyticsQueryFromUrl } from "@/lib/analytics/query";
+import { logActivity } from "@/lib/audit-log";
 
 export async function GET(request: Request) {
   try {
@@ -49,6 +50,14 @@ export async function POST(request: Request) {
       visits,
       conversions,
       revenue,
+    });
+    await logActivity({
+      tenantId: session.user.tenantId,
+      userId: session.user.id,
+      action: "analytics.collected",
+      resourceType: "conversion",
+      resourceId: body.draftId,
+      metadata: { visits, conversions, revenue },
     });
     return NextResponse.json({ summary });
   } catch (error) {

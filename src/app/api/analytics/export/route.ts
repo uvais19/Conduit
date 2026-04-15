@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
         generatedAt: new Date(),
         rows: rows as Record<string, unknown>[],
       });
-      return new Response(pdf, {
+      return new Response(Buffer.from(pdf), {
         headers: attachmentHeaders(
           "application/pdf",
           `conduit-analytics-${dateStamp}.pdf`,

@@ -5,6 +5,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -47,6 +49,7 @@ export default function AnalyticsPage() {
   const [dateTo, setDateTo] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
+  const [runningScheduled, setRunningScheduled] = useState(false);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [audience, setAudience] = useState<{ demographics: string; psychographics: string } | null>(null);
   const [followerGrowth, setFollowerGrowth] = useState<FollowerGrowthPoint[]>([]);
@@ -56,6 +59,26 @@ export default function AnalyticsPage() {
   const [sentiment, setSentiment] = useState<SentimentSummary | null>(null);
   const [forecast, setForecast] = useState<ForecastPoint[]>([]);
   const [attribution, setAttribution] = useState<AnalyticsAttributionSummary | null>(null);
+  const [utmDestination, setUtmDestination] = useState("");
+  const [utmSource, setUtmSource] = useState("newsletter");
+  const [utmMedium, setUtmMedium] = useState("social");
+  const [utmCampaign, setUtmCampaign] = useState("");
+  const [generatedUtm, setGeneratedUtm] = useState("");
+  const [conversionDraftId, setConversionDraftId] = useState("");
+  const [conversionVisits, setConversionVisits] = useState(0);
+  const [conversionCount, setConversionCount] = useState(0);
+  const [conversionRevenue, setConversionRevenue] = useState(0);
+  const [prediction, setPrediction] = useState<{
+    predictedEngagementRate: number;
+    confidence: string;
+  } | null>(null);
+  const [predictionCaption, setPredictionCaption] = useState("");
+  const [predictionHashtags, setPredictionHashtags] = useState("");
+  const [predictionPlatform, setPredictionPlatform] = useState("instagram");
+  const [gaPropertyId, setGaPropertyId] = useState("");
+  const [gaVisits, setGaVisits] = useState(0);
+  const [gaConversions, setGaConversions] = useState(0);
+  const [gaRevenue, setGaRevenue] = useState(0);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -160,6 +183,135 @@ export default function AnalyticsPage() {
     }
   }
 
+  async function runScheduledCollection() {
+    setRunningScheduled(true);
+    try {
+      const response = await fetch("/api/analytics/collect/scheduled/manual", {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to run scheduled collection");
+      toast.success(data.message ?? "Scheduled analytics pipeline run complete");
+      await refreshAll(days);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Unable to run scheduled collection");
+    } finally {
+      setRunningScheduled(false);
+    }
+  }
+
+  async function buildUtm() {
+    try {
+      const response = await fetch("/api/analytics/utm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          destinationUrl: utmDestination,
+          source: utmSource,
+          medium: utmMedium,
+          campaign: utmCampaign,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to build UTM URL");
+      setGeneratedUtm(data.utmUrl ?? "");
+      toast.success("UTM link generated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Unable to build UTM URL");
+    }
+  }
+
+  async function recordConversion() {
+    try {
+      const response = await fetch("/api/analytics/conversions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftId: conversionDraftId,
+          visits: conversionVisits,
+          conversions: conversionCount,
+          revenue: conversionRevenue,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to record conversion");
+      setAttribution((data.summary as AnalyticsAttributionSummary) ?? null);
+      toast.success("Conversion event recorded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Unable to record conversion");
+    }
+  }
+
+  async function predictEngagement() {
+    try {
+      const response = await fetch("/api/analytics/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform: predictionPlatform,
+          caption: predictionCaption,
+          hashtags: predictionHashtags
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to predict engagement");
+      setPrediction(data.prediction ?? null);
+      toast.success("Engagement prediction generated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Unable to predict engagement");
+    }
+  }
+
+  async function scanAnomalies() {
+    try {
+      const response = await fetch("/api/analytics/anomalies/scan", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to scan anomalies");
+      setAnomalies((data.anomalies as EngagementAnomaly[]) ?? anomalies);
+      toast.success(data.alerted ? "Anomaly alert sent" : "Anomaly scan complete");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Unable to scan anomalies");
+    }
+  }
+
+  async function linkGaProperty() {
+    try {
+      const response = await fetch("/api/analytics/ga/link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ propertyId: gaPropertyId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to link GA property");
+      toast.success(`Linked GA property ${data.link?.propertyId ?? gaPropertyId}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Unable to link GA property");
+    }
+  }
+
+  async function importGaSummary() {
+    try {
+      const response = await fetch("/api/analytics/ga/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visits: gaVisits,
+          conversions: gaConversions,
+          revenue: gaRevenue,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to import GA summary");
+      toast.success("GA summary imported");
+      await refreshAll(days);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Unable to import GA summary");
+    }
+  }
+
   const handleExport = useCallback(async (format: "csv" | "json" | "pdf") => {
     setExporting(true);
     try {
@@ -210,6 +362,13 @@ export default function AnalyticsPage() {
           </select>
           <Button onClick={() => void collectAnalytics()} disabled={collecting || loading}>
             {collecting ? "Collecting..." : "Collect Analytics"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => void runScheduledCollection()}
+            disabled={runningScheduled || loading}
+          >
+            {runningScheduled ? "Running pipeline..." : "Run Scheduled Pipeline"}
           </Button>
         </div>
       </div>
@@ -389,6 +548,183 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Pre-Publish Engagement Prediction</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <select
+              className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+              value={predictionPlatform}
+              onChange={(e) => setPredictionPlatform(e.target.value)}
+            >
+              {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <textarea
+              className="min-h-[90px] w-full rounded-md border bg-transparent p-3 text-sm"
+              placeholder="Draft caption"
+              value={predictionCaption}
+              onChange={(e) => setPredictionCaption(e.target.value)}
+            />
+            <input
+              className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+              placeholder="hashtags,comma,separated"
+              value={predictionHashtags}
+              onChange={(e) => setPredictionHashtags(e.target.value)}
+            />
+            <div className="flex items-center gap-2">
+              <Button onClick={() => void predictEngagement()} disabled={!predictionCaption.trim()}>
+                Predict Engagement
+              </Button>
+              <Button variant="outline" onClick={() => void scanAnomalies()}>
+                Scan Anomalies
+              </Button>
+            </div>
+            {prediction ? (
+              <p className="text-sm text-muted-foreground">
+                Predicted ER {(prediction.predictedEngagementRate * 100).toFixed(2)}% ({prediction.confidence} confidence)
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Google Analytics Link and Import</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <input
+              className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+              placeholder="GA Property ID"
+              value={gaPropertyId}
+              onChange={(e) => setGaPropertyId(e.target.value)}
+            />
+            <Button onClick={() => void linkGaProperty()} disabled={!gaPropertyId.trim()}>
+              Link GA Property
+            </Button>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input type="number" className="h-9 rounded-md border bg-transparent px-3 text-sm" placeholder="GA visits" value={gaVisits} onChange={(e) => setGaVisits(Number(e.target.value))} />
+              <input type="number" className="h-9 rounded-md border bg-transparent px-3 text-sm" placeholder="GA conversions" value={gaConversions} onChange={(e) => setGaConversions(Number(e.target.value))} />
+              <input type="number" className="h-9 rounded-md border bg-transparent px-3 text-sm" placeholder="GA revenue" value={gaRevenue} onChange={(e) => setGaRevenue(Number(e.target.value))} />
+            </div>
+            <Button variant="outline" onClick={() => void importGaSummary()}>
+              Import GA Summary
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Follower Growth (Insights)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {insightsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading follower growth...</p>
+            ) : followerGrowth.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No follower growth points yet.</p>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={followerGrowth}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="followers" stroke="var(--color-chart-1, #2563eb)" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Forecast and Anomaly Trend</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {forecast.length > 0 ? (
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={forecast}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="predictedEngagementRate" stroke="var(--color-chart-2, #10b981)" strokeWidth={2} />
+                    <Line type="monotone" dataKey="lowerBound" stroke="var(--color-chart-3, #f59e0b)" strokeWidth={1} />
+                    <Line type="monotone" dataKey="upperBound" stroke="var(--color-chart-4, #8b5cf6)" strokeWidth={1} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No forecast data yet.</p>
+            )}
+            <div className="space-y-1">
+              {anomalies.slice(0, 4).map((anomaly) => (
+                <div key={anomaly.date} className="rounded-md border px-2 py-1 text-xs">
+                  {anomaly.date}: {anomaly.deltaPercent}% ({anomaly.severity})
+                </div>
+              ))}
+              {anomalies.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No anomalies detected.</p>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Hashtag Performance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {hashtags.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hashtag analytics yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {hashtags.slice(0, 8).map((tag) => (
+                  <div key={tag.hashtag} className="flex items-center justify-between rounded-md border px-2 py-1 text-sm">
+                    <span>#{tag.hashtag.replace(/^#/, "")}</span>
+                    <span className="text-muted-foreground">
+                      {(tag.avgEngagementRate * 100).toFixed(2)}% ER · {tag.uses} uses · {tag.source ?? "unknown"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Best Posting Windows</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {bestWindows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No posting windows learned yet.</p>
+            ) : (
+              bestWindows.slice(0, 8).map((window) => (
+                <div key={`${window.weekday}-${window.hour}`} className="flex items-center justify-between rounded-md border px-2 py-1 text-sm">
+                  <span>
+                    {window.weekday} {window.hour.toString().padStart(2, "0")}:00
+                  </span>
+                  <span className="text-muted-foreground">
+                    {(window.avgEngagementRate * 100).toFixed(2)}% ER · n={window.sampleSize}
+                  </span>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <PerPostAnalyticsDetail draftId={selectedDraftId} />
 
       <VariantComparisonView comparisons={comparisons} loading={loading} />
@@ -426,6 +762,73 @@ export default function AnalyticsPage() {
             <p><span className="font-medium">Follower growth points:</span> {followerGrowth.length}</p>
             <p><span className="font-medium">Top hashtags tracked:</span> {hashtags.length}</p>
             <p><span className="font-medium">Best posting windows:</span> {bestWindows.length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>UTM Builder</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <input
+              className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+              placeholder="Destination URL"
+              value={utmDestination}
+              onChange={(e) => setUtmDestination(e.target.value)}
+            />
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input className="h-9 rounded-md border bg-transparent px-3 text-sm" placeholder="Source" value={utmSource} onChange={(e) => setUtmSource(e.target.value)} />
+              <input className="h-9 rounded-md border bg-transparent px-3 text-sm" placeholder="Medium" value={utmMedium} onChange={(e) => setUtmMedium(e.target.value)} />
+              <input className="h-9 rounded-md border bg-transparent px-3 text-sm" placeholder="Campaign" value={utmCampaign} onChange={(e) => setUtmCampaign(e.target.value)} />
+            </div>
+            <Button onClick={() => void buildUtm()} disabled={!utmDestination || !utmCampaign}>
+              Generate UTM URL
+            </Button>
+            {generatedUtm ? (
+              <p className="rounded-md border p-2 text-xs text-muted-foreground break-all">{generatedUtm}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Conversion Capture</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <input
+              className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+              placeholder="Draft ID"
+              value={conversionDraftId}
+              onChange={(e) => setConversionDraftId(e.target.value)}
+            />
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input
+                type="number"
+                className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                placeholder="Visits"
+                value={conversionVisits}
+                onChange={(e) => setConversionVisits(Number(e.target.value))}
+              />
+              <input
+                type="number"
+                className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                placeholder="Conversions"
+                value={conversionCount}
+                onChange={(e) => setConversionCount(Number(e.target.value))}
+              />
+              <input
+                type="number"
+                className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                placeholder="Revenue"
+                value={conversionRevenue}
+                onChange={(e) => setConversionRevenue(Number(e.target.value))}
+              />
+            </div>
+            <Button onClick={() => void recordConversion()} disabled={!conversionDraftId}>
+              Record Conversion Event
+            </Button>
           </CardContent>
         </Card>
       </div>

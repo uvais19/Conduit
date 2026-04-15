@@ -29,6 +29,14 @@ export default function CompetitorsPage() {
   const [discovering, setDiscovering] = useState(false);
   const [analyzing, setAnalyzing] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [benchmark, setBenchmark] = useState<{
+    analyzedCompetitors: number;
+    yourAvgEngagementRate: number;
+    competitorAvgEngagementRate: number;
+    engagementDelta: number;
+    avgCompetitorPostsPerWeek: number;
+    yourPublishedPosts: number;
+  } | null>(null);
 
   // Add competitor form
   const [showAdd, setShowAdd] = useState(false);
@@ -50,6 +58,11 @@ export default function CompetitorsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to load competitors");
       setCompetitors(data.competitors ?? []);
+      const benchRes = await fetch("/api/competitors/benchmark");
+      const benchData = await benchRes.json();
+      if (benchRes.ok) {
+        setBenchmark(benchData.benchmark ?? null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load competitors");
     } finally {
@@ -165,6 +178,41 @@ export default function CompetitorsPage() {
           {error}
         </div>
       )}
+
+      {benchmark ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Your Account vs Competitors</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm md:grid-cols-3">
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Engagement delta</p>
+              <p className="font-medium">
+                {(benchmark.engagementDelta * 100).toFixed(2)}%
+              </p>
+              <p className="text-xs text-muted-foreground">
+                You {(benchmark.engagementDelta >= 0 ? "lead" : "trail")} vs analyzed competitors
+              </p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Competitor cadence</p>
+              <p className="font-medium">
+                {benchmark.avgCompetitorPostsPerWeek.toFixed(1)} posts/week
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Based on {benchmark.analyzedCompetitors} analyzed competitors
+              </p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Your published posts</p>
+              <p className="font-medium">{benchmark.yourPublishedPosts}</p>
+              <p className="text-xs text-muted-foreground">
+                Your avg ER {(benchmark.yourAvgEngagementRate * 100).toFixed(2)}%
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* AI Discovery form */}
       {showDiscover && (

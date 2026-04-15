@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { buildUtmLink } from "@/lib/analytics/store";
+import { logActivity } from "@/lib/audit-log";
 
 export async function POST(request: Request) {
   try {
-    await requirePermission("view_analytics");
+    const session = await requirePermission("view_analytics");
     const body = (await request.json()) as {
       destinationUrl?: unknown;
       source?: unknown;
@@ -33,6 +34,17 @@ export async function POST(request: Request) {
       campaign: body.campaign,
       term: typeof body.term === "string" ? body.term : undefined,
       content: typeof body.content === "string" ? body.content : undefined,
+    });
+    await logActivity({
+      tenantId: session.user.tenantId,
+      userId: session.user.id,
+      action: "analytics.collected",
+      resourceType: "utm",
+      metadata: {
+        source: body.source,
+        medium: body.medium,
+        campaign: body.campaign,
+      },
     });
     return NextResponse.json({ utmUrl });
   } catch (error) {

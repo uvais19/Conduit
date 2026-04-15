@@ -51,18 +51,29 @@ export async function suggestPostingTimeFromHistory(
   afterDate?: Date
 ): Promise<Date> {
   const windows = await getBestPostingWindows(tenantId, { platforms: [platform] });
-  if (windows.length === 0) {
+  if (windows.length === 0 || windows[0].sampleSize < 3) {
     return suggestPostingTime(platform, afterDate);
   }
 
   const base = afterDate ? new Date(afterDate) : new Date();
-  const topHour = windows[0].hour;
-  const candidate = new Date(base);
-  candidate.setHours(topHour, 0, 0, 0);
-  if (candidate <= new Date()) {
-    candidate.setDate(candidate.getDate() + 1);
+  const ranked = windows.filter((window) => window.sampleSize >= 3);
+  for (let offset = 0; offset < 14; offset += 1) {
+    const day = new Date(base);
+    day.setDate(base.getDate() + offset);
+    const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day.getDay()];
+    const sameDay = ranked
+      .filter((window) => window.weekday === weekday)
+      .sort((a, b) => b.avgEngagementRate - a.avgEngagementRate);
+    const choice = sameDay[0] ?? ranked[0];
+    if (!choice) break;
+    const candidate = new Date(day);
+    candidate.setHours(choice.hour, 0, 0, 0);
+    if (candidate > new Date()) {
+      return candidate;
+    }
   }
-  return candidate;
+
+  return suggestPostingTime(platform, afterDate);
 }
 
 // ---------------------------------------------------------------------------

@@ -22,6 +22,28 @@ export async function fetchXMe(accessToken: string): Promise<{
   };
 }
 
+export async function fetchXAudienceSnapshot(accessToken: string): Promise<{
+  followersCount: number;
+}> {
+  const response = await platformRequest<{
+    data?: {
+      public_metrics?: {
+        followers_count?: number;
+      };
+    };
+  }>({
+    platform: "x",
+    url: `${X_API_BASE}/users/me`,
+    token: accessToken,
+    query: {
+      "user.fields": "public_metrics",
+    },
+  });
+  return {
+    followersCount: response.data?.public_metrics?.followers_count ?? 0,
+  };
+}
+
 export async function publishXPost(params: {
   accessToken: string;
   draft: ContentDraftRecord;

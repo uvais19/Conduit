@@ -108,6 +108,7 @@ export type HashtagPerformance = {
   impressions: number;
   engagements: number;
   avgEngagementRate: number;
+  source?: "live" | "simulated" | "mixed";
 };
 
 export type BestPostingWindow = {

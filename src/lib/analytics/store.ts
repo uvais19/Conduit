@@ -22,12 +22,20 @@ import type {
   SentimentSummary,
 } from "@/lib/analytics/types";
 import { listDrafts, groupVariants } from "@/lib/content/store";
+import {
+  collectFollowerSnapshot,
+  collectLiveAudienceBreakdown,
+} from "@/lib/analytics/live-insights";
 
 // ---------------------------------------------------------------------------
 // In-memory metrics store (keyed by tenantId)
 // ---------------------------------------------------------------------------
 
 const metricsByTenant = new Map<string, PostMetrics[]>();
+const gaSummaryByTenant = new Map<
+  string,
+  { visits: number; conversions: number; revenue: number; importedAt: string }
+>();
 
 function isDbEnabled() {
   return Boolean(process.env.DATABASE_URL);
@@ -103,6 +111,17 @@ function extractAttribution(rawData: unknown): AttributionStats {
 
 function formatWeekday(index: number): string {
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][index] ?? "N/A";
+}
+
+function classifySentiment(text: string): "positive" | "negative" | "neutral" {
+  const normalized = text.toLowerCase();
+  const positiveLexicon = ["great", "love", "helpful", "awesome", "insightful", "amazing", "nice"];
+  const negativeLexicon = ["bad", "hate", "slow", "confusing", "problem", "awful", "terrible"];
+  const pos = positiveLexicon.some((word) => normalized.includes(word));
+  const neg = negativeLexicon.some((word) => normalized.includes(word));
+  if (pos && !neg) return "positive";
+  if (neg && !pos) return "negative";
+  return "neutral";
 }
 
 export async function recordMetrics(
@@ -432,6 +451,21 @@ export async function getFollowerGrowth(
   tenantId: string,
   query?: AnalyticsQuery
 ): Promise<FollowerGrowthPoint[]> {
+  const liveSnapshots = await collectFollowerSnapshot(tenantId);
+  if (liveSnapshots.length > 0) {
+    const platforms = query?.platforms?.length
+      ? new Set(query.platforms)
+      : null;
+    return liveSnapshots
+      .filter((snapshot) => (platforms ? platforms.has(snapshot.platform) : true))
+      .map((snapshot) => ({
+        date: snapshot.date,
+        platform: snapshot.platform,
+        followers: snapshot.followers,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   const trends = await getTrendData(tenantId, 90, query);
   const platforms = query?.platforms?.length
     ? query.platforms
@@ -459,7 +493,13 @@ export async function getHashtagAnalytics(
   const drafts = await listDrafts({ tenantId, status: "published" });
   const tagMap = new Map<
     string,
-    { uses: number; impressions: number; engagements: number }
+    {
+      uses: number;
+      impressions: number;
+      engagements: number;
+      liveRows: number;
+      simulatedRows: number;
+    }
   >();
 
   for (const draft of drafts) {
@@ -473,10 +513,18 @@ export async function getHashtagAnalytics(
     for (const tag of draft.hashtags) {
       const key = tag.trim().toLowerCase();
       if (!key) continue;
-      const item = tagMap.get(key) ?? { uses: 0, impressions: 0, engagements: 0 };
+      const item = tagMap.get(key) ?? {
+        uses: 0,
+        impressions: 0,
+        engagements: 0,
+        liveRows: 0,
+        simulatedRows: 0,
+      };
       item.uses += 1;
       item.impressions += latest.impressions;
       item.engagements += engagements;
+      if (latest.dataSource === "live") item.liveRows += 1;
+      else item.simulatedRows += 1;
       tagMap.set(key, item);
     }
   }
@@ -491,6 +539,12 @@ export async function getHashtagAnalytics(
         item.impressions > 0
           ? Math.round((item.engagements / item.impressions) * 10000) / 10000
           : 0,
+      source:
+        item.liveRows > 0 && item.simulatedRows > 0
+          ? ("mixed" as const)
+          : item.liveRows > 0
+            ? ("live" as const)
+            : ("simulated" as const),
     }))
     .sort((a, b) => b.avgEngagementRate - a.avgEngagementRate)
     .slice(0, 20);
@@ -570,8 +624,6 @@ export async function getSentimentSummary(
   query?: AnalyticsQuery
 ): Promise<SentimentSummary> {
   const drafts = await listDrafts({ tenantId, status: "published" });
-  const positiveLexicon = ["great", "love", "helpful", "awesome", "insightful"];
-  const negativeLexicon = ["bad", "hate", "slow", "confusing", "problem"];
 
   let positive = 0;
   let negative = 0;
@@ -583,12 +635,23 @@ export async function getSentimentSummary(
     )[0];
     if (!latest) continue;
 
-    const text = `${draft.caption} ${draft.hashtags.join(" ")}`.toLowerCase();
-    const pos = positiveLexicon.some((word) => text.includes(word));
-    const neg = negativeLexicon.some((word) => text.includes(word));
-    if (pos && !neg) positive += 1;
-    else if (neg && !pos) negative += 1;
-    else neutral += 1;
+    const payload = latest.rawData as
+      | { conduit?: { commentSamples?: string[] } }
+      | undefined;
+    const samples = payload?.conduit?.commentSamples ?? [];
+    if (samples.length > 0) {
+      for (const sample of samples) {
+        const sentiment = classifySentiment(sample);
+        if (sentiment === "positive") positive += 1;
+        else if (sentiment === "negative") negative += 1;
+        else neutral += 1;
+      }
+    } else {
+      const sentiment = classifySentiment(`${draft.caption} ${draft.hashtags.join(" ")}`);
+      if (sentiment === "positive") positive += 1;
+      else if (sentiment === "negative") negative += 1;
+      else neutral += 1;
+    }
   }
 
   const total = positive + neutral + negative;
@@ -615,6 +678,13 @@ export async function getEngagementForecast(
   }
   const slope = denominator > 0 ? numerator / denominator : 0;
   const intercept = yAvg - slope * xAvg;
+  const residuals = ys.map((y, idx) => y - (intercept + slope * xs[idx]));
+  const variance =
+    residuals.length > 0
+      ? residuals.reduce((sum, residual) => sum + residual * residual, 0) /
+        residuals.length
+      : 0;
+  const stdDev = Math.sqrt(Math.max(variance, 0));
 
   const points: ForecastPoint[] = [];
   const lastDate = new Date(trends[trends.length - 1].date);
@@ -626,11 +696,48 @@ export async function getEngagementForecast(
     points.push({
       date: nextDate.toISOString().slice(0, 10),
       predictedEngagementRate: Math.round(pred * 10000) / 10000,
-      lowerBound: Math.max(0, Math.round((pred * 0.85) * 10000) / 10000),
-      upperBound: Math.round((pred * 1.15) * 10000) / 10000,
+      lowerBound: Math.max(0, Math.round((pred - stdDev) * 10000) / 10000),
+      upperBound: Math.round((pred + stdDev) * 10000) / 10000,
     });
   }
   return points;
+}
+
+export async function upsertCommentSamplesForDraft(params: {
+  tenantId: string;
+  draftId: string;
+  comments: string[];
+}): Promise<void> {
+  const latest = await getLatestMetricsForDraft(params.tenantId, params.draftId);
+  if (!latest) throw new Error("No analytics metric found for draft");
+  const sanitized = params.comments
+    .map((comment) => comment.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+
+  if (isDbEnabled()) {
+    const rows = await db
+      .select({ metric: postAnalytics })
+      .from(postAnalytics)
+      .where(eq(postAnalytics.id, latest.id))
+      .limit(1);
+    const rawData = (rows[0]?.metric.rawData as Record<string, unknown> | null) ?? {};
+    const conduit = (rawData.conduit as Record<string, unknown> | undefined) ?? {};
+    conduit.commentSamples = sanitized;
+    await db
+      .update(postAnalytics)
+      .set({ rawData: { ...rawData, conduit } })
+      .where(eq(postAnalytics.id, latest.id));
+  } else {
+    const tenantMetrics = metricsByTenant.get(params.tenantId) ?? [];
+    const target = tenantMetrics.find((metric) => metric.id === latest.id);
+    if (target) {
+      const rawData = (target.rawData as Record<string, unknown> | undefined) ?? {};
+      const conduit = (rawData.conduit as Record<string, unknown> | undefined) ?? {};
+      conduit.commentSamples = sanitized;
+      target.rawData = { ...rawData, conduit };
+    }
+  }
 }
 
 export async function getAttributionSummary(
@@ -664,6 +771,12 @@ export async function getAttributionSummary(
     visits += attribution.visits;
     conversions += attribution.conversions;
     revenue += attribution.revenue;
+  }
+  const ga = gaSummaryByTenant.get(tenantId);
+  if (ga) {
+    visits += ga.visits;
+    conversions += ga.conversions;
+    revenue += ga.revenue;
   }
   return {
     trackedPosts: latestByDraft.size,
@@ -736,10 +849,32 @@ export function buildUtmLink(params: {
   return url.toString();
 }
 
+export async function importGaSummary(params: {
+  tenantId: string;
+  visits: number;
+  conversions: number;
+  revenue: number;
+}): Promise<void> {
+  gaSummaryByTenant.set(params.tenantId, {
+    visits: Math.max(0, params.visits),
+    conversions: Math.max(0, params.conversions),
+    revenue: Math.max(0, params.revenue),
+    importedAt: new Date().toISOString(),
+  });
+}
+
 export async function getAudienceBreakdown(tenantId: string): Promise<{
   demographics: string;
   psychographics: string;
 }> {
+  const live = await collectLiveAudienceBreakdown(tenantId);
+  if (live.source === "live" && (live.demographics || live.psychographics)) {
+    return {
+      demographics: live.demographics ?? "Live audience demographics unavailable for selected accounts",
+      psychographics: live.psychographics ?? "Live audience location/interests unavailable for selected accounts",
+    };
+  }
+
   if (!isDbEnabled()) {
     return {
       demographics: "Audience demographics available with database-backed brand manifesto.",
