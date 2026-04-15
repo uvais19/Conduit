@@ -4,12 +4,20 @@ import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { brandManifestos, contentStrategies } from "@/lib/db/schema";
 import { listPlatformConnections, getPlatformConnection } from "@/lib/platforms/store";
-import { fetchRecentPosts } from "@/lib/platforms/fetchers";
+import { fetchRecentPostsWithDiagnostics } from "@/lib/platforms/fetchers";
 import { saveFetchedPosts, saveAnalysis, getAnalyses } from "@/lib/platforms/post-store";
 import { runPostAnalyserAgent } from "@/lib/agents/analysis";
 import type { BrandManifesto, ContentStrategy } from "@/lib/types";
 
+type AnalysisRunDiagnostic = {
+  platform: string;
+  dataSource: "live" | "simulated";
+  fallbackReason: string | null;
+  postsFetched: number;
+};
+
 export async function POST() {
+    const diagnostics: AnalysisRunDiagnostic[] = [];
   try {
     const session = await requireAuth();
     const tenantId = session.user.tenantId;
@@ -55,8 +63,15 @@ export async function POST() {
       const fullConnection = getPlatformConnection(tenantId, conn.platform);
       if (!fullConnection) continue;
 
-      const posts = await fetchRecentPosts(fullConnection, 30);
+      const fetched = await fetchRecentPostsWithDiagnostics(fullConnection, 30);
+      const posts = fetched.posts;
       await saveFetchedPosts(tenantId, posts);
+      diagnostics.push({
+        platform: conn.platform,
+        dataSource: fetched.dataSource,
+        fallbackReason: fetched.fallbackReason,
+        postsFetched: posts.length,
+      });
 
       const analysis = await runPostAnalyserAgent({
         posts,
@@ -70,7 +85,7 @@ export async function POST() {
 
     const analyses = await getAnalyses(tenantId);
 
-    return NextResponse.json({ analyses });
+    return NextResponse.json({ analyses, diagnostics });
   } catch (error) {
     console.error("Post analysis failed:", error);
     return NextResponse.json(

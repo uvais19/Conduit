@@ -16,27 +16,27 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapability> = {
   instagram: {
     supportsImport: true,
     supportsMetrics: true,
-    supportedPublishFormats: ["single-image"],
+    supportedPublishFormats: ["single-image", "multi-image", "video"],
   },
   facebook: {
     supportsImport: true,
     supportsMetrics: true,
-    supportedPublishFormats: ["text-only", "single-image"],
+    supportedPublishFormats: ["text-only", "single-image", "multi-image", "video"],
   },
   linkedin: {
     supportsImport: true,
     supportsMetrics: true,
-    supportedPublishFormats: ["text-only"],
+    supportedPublishFormats: ["text-only", "single-image", "multi-image", "video"],
   },
   x: {
     supportsImport: true,
     supportsMetrics: true,
-    supportedPublishFormats: ["text-only"],
+    supportedPublishFormats: ["text-only", "single-image", "multi-image", "video"],
   },
   gbp: {
     supportsImport: true,
     supportsMetrics: true,
-    supportedPublishFormats: ["text-only"],
+    supportedPublishFormats: ["text-only", "single-image", "multi-image", "video"],
   },
 };
 

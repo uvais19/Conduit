@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { PLATFORMS } from "@/lib/constants";
 import { getPlatformConnection } from "@/lib/platforms/store";
-import { refreshConnectionToken } from "@/lib/platforms/token-lifecycle";
+import { enqueueTokenRefreshJob, processTokenRefreshJobs } from "@/lib/jobs/queue";
+import { listTenantIdsWithPlatformConnections } from "@/lib/platforms/store";
 
 function shouldRefreshSoon(tokenExpiresAt: string | null): boolean {
   if (!tokenExpiresAt) return false;
@@ -23,23 +24,24 @@ export async function POST(request: Request) {
     const session = cronRequest ? null : await requirePermission("connect_platforms");
     const tenantId = session?.user.tenantId;
 
-    const results: Array<{ platform: string; ok: boolean; error?: string }> = [];
-    const tenantIds = tenantId ? [tenantId] : ["default"];
+    const results: Array<{ tenantId: string; platform: string; enqueued: boolean }> = [];
+    const tenantIds = tenantId ? [tenantId] : listTenantIdsWithPlatformConnections();
     for (const targetTenantId of tenantIds) {
       for (const platform of PLATFORMS) {
         const connection = getPlatformConnection(targetTenantId, platform);
         if (!connection) continue;
         if (!shouldRefreshSoon(connection.tokenExpiresAt)) continue;
-        const refreshed = await refreshConnectionToken(connection);
-        if (refreshed.ok) {
-          results.push({ platform, ok: true });
-        } else {
-          results.push({ platform, ok: false, error: refreshed.error });
-        }
+        enqueueTokenRefreshJob({ tenantId: targetTenantId, platform });
+        results.push({ tenantId: targetTenantId, platform, enqueued: true });
       }
     }
+    const processed = await processTokenRefreshJobs();
 
-    return NextResponse.json({ refreshed: results, triggeredBy: cronRequest ? "cron" : "user" });
+    return NextResponse.json({
+      refreshed: results,
+      queue: processed,
+      triggeredBy: cronRequest ? "cron" : "user",
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "Unauthorized") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

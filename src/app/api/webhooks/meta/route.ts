@@ -1,6 +1,10 @@
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
-import { classifyWebhookEventType, ingestWebhookEvent } from "@/lib/platforms/webhook-events";
+import {
+  classifyWebhookEventType,
+  ingestWebhookEvent,
+  processWebhookJobs,
+} from "@/lib/platforms/webhook-events";
 
 /**
  * Meta (Facebook / Instagram) Webhooks — verification + ingest endpoint.
@@ -69,6 +73,6 @@ export async function POST(request: Request) {
     // ignore malformed body
   }
 
-  // Future: route comments / mentions to notifications or inbox.
-  return NextResponse.json({ received: true });
+  const processed = processWebhookJobs(50);
+  return NextResponse.json({ received: true, processed });
 }

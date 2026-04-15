@@ -1,6 +1,10 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { classifyWebhookEventType, ingestWebhookEvent } from "@/lib/platforms/webhook-events";
+import {
+  classifyWebhookEventType,
+  ingestWebhookEvent,
+  processWebhookJobs,
+} from "@/lib/platforms/webhook-events";
 
 export async function GET() {
   return NextResponse.json({ ok: true });
@@ -29,5 +33,6 @@ export async function POST(request: Request) {
   } catch {
     // acknowledge to avoid retries for malformed payloads
   }
-  return NextResponse.json({ received: true });
+  const processed = processWebhookJobs(50);
+  return NextResponse.json({ received: true, processed });
 }

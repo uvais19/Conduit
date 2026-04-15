@@ -13,12 +13,25 @@ export type NormalizedPlatformWebhookEvent = {
   processingStatus?: "ingested" | "deduped" | "processed";
 };
 
+type WebhookQueueJob = {
+  id: string;
+  tenantId: string;
+  event: NormalizedPlatformWebhookEvent;
+  status: "pending" | "running" | "processed" | "failed";
+  attempts: number;
+  maxAttempts: number;
+  lastError?: string;
+  scheduledAt: string;
+  processedAt?: string;
+};
+
 const webhookEventsByTenant = new Map<string, NormalizedPlatformWebhookEvent[]>();
 const seenWebhookKeysByTenant = new Map<string, Set<string>>();
 const webhookDeliveryMetricsByTenant = new Map<
   string,
   { ingested: number; deduped: number; processed: number }
 >();
+const webhookJobsByTenant = new Map<string, WebhookQueueJob[]>();
 
 function bumpWebhookMetric(
   tenantId: string,
@@ -72,7 +85,7 @@ export function ingestWebhookEvent(
   };
   const existing = webhookEventsByTenant.get(tenantId) ?? [];
   webhookEventsByTenant.set(tenantId, [withStatus, ...existing].slice(0, 500));
-  processWebhookDownstream(tenantId, withStatus);
+  enqueueWebhookEvent(tenantId, withStatus);
 }
 
 export function classifyWebhookEventType(value: unknown): NormalizedPlatformWebhookEvent["eventType"] {
@@ -103,6 +116,68 @@ function processWebhookDownstream(
     message: `Received ${typeLabel}.`,
   });
   bumpWebhookMetric(tenantId, "processed");
+}
+
+function enqueueWebhookEvent(
+  tenantId: string,
+  event: NormalizedPlatformWebhookEvent
+): WebhookQueueJob {
+  const job: WebhookQueueJob = {
+    id: event.id,
+    tenantId,
+    event,
+    status: "pending",
+    attempts: 0,
+    maxAttempts: 3,
+    scheduledAt: new Date().toISOString(),
+  };
+  const existing = webhookJobsByTenant.get(tenantId) ?? [];
+  webhookJobsByTenant.set(tenantId, [job, ...existing].slice(0, 1000));
+  return job;
+}
+
+export function processWebhookJobs(maxJobs = 100): {
+  processed: number;
+  succeeded: number;
+  failed: number;
+} {
+  const now = Date.now();
+  const jobs: WebhookQueueJob[] = [];
+  webhookJobsByTenant.forEach((tenantJobs) => {
+    tenantJobs.forEach((job) => jobs.push(job));
+  });
+  const pending = jobs
+    .filter(
+      (job) =>
+        job.status === "pending" &&
+        new Date(job.scheduledAt).getTime() <= now
+    )
+    .slice(0, maxJobs);
+  let processed = 0;
+  let succeeded = 0;
+  let failed = 0;
+  for (const job of pending) {
+    processed += 1;
+    job.status = "running";
+    job.attempts += 1;
+    try {
+      processWebhookDownstream(job.tenantId, { ...job.event, processingStatus: "processed" });
+      job.status = "processed";
+      job.processedAt = new Date().toISOString();
+      succeeded += 1;
+    } catch (error) {
+      if (job.attempts < job.maxAttempts) {
+        job.status = "pending";
+        job.lastError = error instanceof Error ? error.message : "webhook-processing-error";
+        job.scheduledAt = new Date(Date.now() + 1000 * 2 ** job.attempts).toISOString();
+      } else {
+        job.status = "failed";
+        job.lastError = error instanceof Error ? error.message : "webhook-processing-error";
+        failed += 1;
+      }
+    }
+  }
+  return { processed, succeeded, failed };
 }
 
 export function getWebhookDeliveryMetrics(tenantId: string): {

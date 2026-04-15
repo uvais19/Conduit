@@ -190,6 +190,66 @@ export async function publishInstagramFeedPhoto(params: {
   return { id: published.post_id ?? published.id };
 }
 
+export async function publishInstagramCarousel(params: {
+  igUserId: string;
+  accessToken: string;
+  imageUrls: string[];
+  caption: string;
+  hashtags: string[];
+}): Promise<{ id: string }> {
+  if (params.imageUrls.length < 2) {
+    throw new MetaGraphError("Instagram carousel requires at least 2 image URLs", 400);
+  }
+  const childIds: string[] = [];
+  for (const imageUrl of params.imageUrls.slice(0, 10)) {
+    const child = await graphPostForm<{ id: string }>(`/${params.igUserId}/media`, {
+      image_url: imageUrl,
+      is_carousel_item: true,
+      access_token: params.accessToken,
+    });
+    childIds.push(child.id);
+  }
+  const caption = buildCaption(params.caption, params.hashtags);
+  const container = await graphPostForm<{ id: string }>(`/${params.igUserId}/media`, {
+    media_type: "CAROUSEL",
+    children: childIds.join(","),
+    caption,
+    access_token: params.accessToken,
+  });
+  const published = await graphPostForm<{ id: string; post_id?: string }>(
+    `/${params.igUserId}/media_publish`,
+    {
+      creation_id: container.id,
+      access_token: params.accessToken,
+    }
+  );
+  return { id: published.post_id ?? published.id };
+}
+
+export async function publishInstagramVideo(params: {
+  igUserId: string;
+  accessToken: string;
+  videoUrl: string;
+  caption: string;
+  hashtags: string[];
+}): Promise<{ id: string }> {
+  const caption = buildCaption(params.caption, params.hashtags);
+  const container = await graphPostForm<{ id: string }>(`/${params.igUserId}/media`, {
+    media_type: "REELS",
+    video_url: params.videoUrl,
+    caption,
+    access_token: params.accessToken,
+  });
+  const published = await graphPostForm<{ id: string; post_id?: string }>(
+    `/${params.igUserId}/media_publish`,
+    {
+      creation_id: container.id,
+      access_token: params.accessToken,
+    }
+  );
+  return { id: published.post_id ?? published.id };
+}
+
 export async function publishFacebookPagePhoto(params: {
   pageId: string;
   accessToken: string;
@@ -219,6 +279,53 @@ export async function publishFacebookFeedPost(params: {
   const message = buildCaption(params.message, params.hashtags);
   const out = await graphPostForm<{ id: string }>(`/${params.pageId}/feed`, {
     message,
+    access_token: params.accessToken,
+  });
+  return out;
+}
+
+export async function publishFacebookPageCarousel(params: {
+  pageId: string;
+  accessToken: string;
+  imageUrls: string[];
+  message: string;
+  hashtags: string[];
+}): Promise<{ id: string }> {
+  if (params.imageUrls.length < 2) {
+    throw new MetaGraphError("Facebook carousel requires at least 2 image URLs", 400);
+  }
+  const attachedMedia: string[] = [];
+  for (const imageUrl of params.imageUrls.slice(0, 10)) {
+    const photo = await graphPostForm<{ id: string }>(`/${params.pageId}/photos`, {
+      url: imageUrl,
+      published: false,
+      access_token: params.accessToken,
+    });
+    attachedMedia.push(JSON.stringify({ media_fbid: photo.id }));
+  }
+  const message = buildCaption(params.message, params.hashtags);
+  const payload: Record<string, string | number | boolean | undefined> = {
+    message,
+    access_token: params.accessToken,
+  };
+  attachedMedia.forEach((value, index) => {
+    payload[`attached_media[${index}]`] = value;
+  });
+  const out = await graphPostForm<{ id: string }>(`/${params.pageId}/feed`, payload);
+  return out;
+}
+
+export async function publishFacebookPageVideo(params: {
+  pageId: string;
+  accessToken: string;
+  videoUrl: string;
+  message: string;
+  hashtags: string[];
+}): Promise<{ id: string }> {
+  const description = buildCaption(params.message, params.hashtags);
+  const out = await graphPostForm<{ id: string }>(`/${params.pageId}/videos`, {
+    file_url: params.videoUrl,
+    description,
     access_token: params.accessToken,
   });
   return out;

@@ -1,17 +1,29 @@
 import { NextResponse } from "next/server";
-import { processScheduledPosts, getQueueStats, getRecentJobs } from "@/lib/jobs/queue";
+import {
+  processScheduledPosts,
+  getQueueStats,
+  getRecentJobs,
+  processTokenRefreshJobs,
+} from "@/lib/jobs/queue";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { processWebhookJobs } from "@/lib/platforms/webhook-events";
 
 /**
  * POST: Trigger processing of scheduled posts (called by cron).
  * GET: Return queue stats and recent jobs.
  */
-export async function POST() {
+export async function POST(request: Request) {
   const limited = rateLimitResponse("cron-publish", { limit: 5, windowSeconds: 60 });
   if (limited) return limited;
+  const jobKind = new URL(request.url).searchParams.get("kind") ?? "publish";
 
   try {
-    const processed = await processScheduledPosts();
+    const processed =
+      jobKind === "token-refresh"
+        ? await processTokenRefreshJobs()
+        : jobKind === "webhooks"
+          ? processWebhookJobs()
+          : await processScheduledPosts();
     const stats = getQueueStats();
     return NextResponse.json({ processed, stats });
   } catch {

@@ -30,7 +30,23 @@ export async function publishLinkedInPost(params: {
   authorUrn: string;
   draft: ContentDraftRecord;
 }): Promise<{ id: string }> {
-  const text = `${params.draft.caption}\n\n${params.draft.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")}`.trim();
+  const normalizedTags = params.draft.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`));
+  const mediaUrls = params.draft.mediaUrls.filter((url) => url.trim().length > 0);
+  const text = `${params.draft.caption}\n\n${normalizedTags.join(" ")}${
+    mediaUrls.length ? `\n\n${mediaUrls.join("\n")}` : ""
+  }`.trim();
+  const shareMediaCategory = mediaUrls.length > 0 ? "ARTICLE" : "NONE";
+  const media =
+    mediaUrls.length > 0
+      ? [
+          {
+            status: "READY",
+            originalUrl: mediaUrls[0],
+            description: { text: params.draft.caption.slice(0, 200) },
+            title: { text: "Shared from Conduit" },
+          },
+        ]
+      : undefined;
   const payload = await platformRequest<{ id?: string }>({
     platform: "linkedin",
     url: `${LINKEDIN_API_BASE}/ugcPosts`,
@@ -43,7 +59,8 @@ export async function publishLinkedInPost(params: {
       specificContent: {
         "com.linkedin.ugc.ShareContent": {
           shareCommentary: { text },
-          shareMediaCategory: "NONE",
+          shareMediaCategory,
+          media,
         },
       },
       visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },

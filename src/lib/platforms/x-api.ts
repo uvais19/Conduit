@@ -26,7 +26,10 @@ export async function publishXPost(params: {
   accessToken: string;
   draft: ContentDraftRecord;
 }): Promise<{ id: string }> {
-  const text = `${params.draft.caption}\n\n${params.draft.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")}`.trim();
+  const mediaUrls = params.draft.mediaUrls.filter((url) => url.trim().length > 0);
+  const text = `${params.draft.caption}\n\n${params.draft.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")}${
+    mediaUrls.length ? `\n\n${mediaUrls.join(" ")}` : ""
+  }`.trim();
   const response = await platformRequest<{ data?: { id?: string } }>({
     platform: "x",
     url: `${X_API_BASE}/tweets`,

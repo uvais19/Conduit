@@ -12,8 +12,12 @@ import type { PlatformConnection } from "@/lib/platforms/store";
 import {
   MetaGraphError,
   publishFacebookFeedPost,
+  publishFacebookPageCarousel,
   publishFacebookPagePhoto,
+  publishFacebookPageVideo,
+  publishInstagramCarousel,
   publishInstagramFeedPhoto,
+  publishInstagramVideo,
   resolveInstagramUserId,
 } from "@/lib/platforms/meta-graph";
 import { publishLinkedInPost } from "@/lib/platforms/linkedin-api";
@@ -23,6 +27,25 @@ import {
   inferDraftPublishFormat,
   supportsPublishFormat,
 } from "@/lib/platforms/capabilities";
+
+function validateMediaUrls(
+  draft: ContentDraftRecord,
+  format: ReturnType<typeof inferDraftPublishFormat>
+): string | null {
+  const urls = draft.mediaUrls.filter((url) => url.trim().length > 0);
+  const invalid = urls.find((url) => !/^https:\/\//i.test(url));
+  if (invalid) return `All media URLs must be public HTTPS URLs. Invalid: ${invalid}`;
+  if (format === "single-image" && urls.length !== 1) {
+    return "Single-image publish requires exactly one media URL.";
+  }
+  if (format === "multi-image" && urls.length < 2) {
+    return "Multi-image publish requires at least two media URLs.";
+  }
+  if (format === "video" && urls.length < 1) {
+    return "Video publish requires at least one media URL.";
+  }
+  return null;
+}
 
 export type PublishResult = {
   success: boolean;
@@ -53,6 +76,10 @@ async function publishToInstagram(
       error: `Instagram does not currently support "${format}" publishing in this adapter`,
     };
   }
+  const mediaValidationError = validateMediaUrls(draft, format);
+  if (mediaValidationError) {
+    return { success: false, platformPostId: "", publishedAt: now, error: mediaValidationError };
+  }
 
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
@@ -66,15 +93,7 @@ async function publishToInstagram(
     };
   }
 
-  const imageUrl = draft.mediaUrls[0]?.trim();
-  if (!imageUrl) {
-    return {
-      success: false,
-      platformPostId: "",
-      publishedAt: now,
-      error: "Instagram publishing requires at least one image URL (publicly reachable HTTPS)",
-    };
-  }
+  const mediaUrls = draft.mediaUrls.filter((url) => url.trim().length > 0);
 
   try {
     const igUserId = await resolveInstagramUserId(connection);
@@ -88,13 +107,30 @@ async function publishToInstagram(
       };
     }
 
-    const published = await publishInstagramFeedPhoto({
-      igUserId,
-      accessToken: connection.accessToken,
-      imageUrl,
-      caption: draft.caption,
-      hashtags: draft.hashtags,
-    });
+    const published =
+      format === "multi-image"
+        ? await publishInstagramCarousel({
+            igUserId,
+            accessToken: connection.accessToken,
+            imageUrls: mediaUrls,
+            caption: draft.caption,
+            hashtags: draft.hashtags,
+          })
+        : format === "video"
+          ? await publishInstagramVideo({
+              igUserId,
+              accessToken: connection.accessToken,
+              videoUrl: mediaUrls[0],
+              caption: draft.caption,
+              hashtags: draft.hashtags,
+            })
+          : await publishInstagramFeedPhoto({
+              igUserId,
+              accessToken: connection.accessToken,
+              imageUrl: mediaUrls[0],
+              caption: draft.caption,
+              hashtags: draft.hashtags,
+            });
 
     return { success: true, platformPostId: published.id, publishedAt: now };
   } catch (e) {
@@ -126,6 +162,10 @@ async function publishToFacebook(
       error: `Facebook does not currently support "${format}" publishing in this adapter`,
     };
   }
+  const mediaValidationError = validateMediaUrls(draft, format);
+  if (mediaValidationError) {
+    return { success: false, platformPostId: "", publishedAt: now, error: mediaValidationError };
+  }
 
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
@@ -141,12 +181,32 @@ async function publishToFacebook(
   }
 
   try {
-    const imageUrl = draft.mediaUrls[0]?.trim();
-    if (imageUrl) {
+    const mediaUrls = draft.mediaUrls.filter((url) => url.trim().length > 0);
+    if (format === "multi-image") {
+      const published = await publishFacebookPageCarousel({
+        pageId,
+        accessToken: connection.accessToken,
+        imageUrls: mediaUrls,
+        message: draft.caption,
+        hashtags: draft.hashtags,
+      });
+      return { success: true, platformPostId: published.id, publishedAt: now };
+    }
+    if (format === "video") {
+      const published = await publishFacebookPageVideo({
+        pageId,
+        accessToken: connection.accessToken,
+        videoUrl: mediaUrls[0],
+        message: draft.caption,
+        hashtags: draft.hashtags,
+      });
+      return { success: true, platformPostId: published.id, publishedAt: now };
+    }
+    if (format === "single-image") {
       const published = await publishFacebookPagePhoto({
         pageId,
         accessToken: connection.accessToken,
-        imageUrl,
+        imageUrl: mediaUrls[0],
         message: draft.caption,
         hashtags: draft.hashtags,
       });
@@ -188,6 +248,10 @@ async function publishToLinkedIn(
       publishedAt: now,
       error: `LinkedIn does not currently support "${format}" publishing in this adapter`,
     };
+  }
+  const mediaValidationError = validateMediaUrls(draft, format);
+  if (mediaValidationError) {
+    return { success: false, platformPostId: "", publishedAt: now, error: mediaValidationError };
   }
 
   if (!connection.accessToken) {
@@ -235,6 +299,10 @@ async function publishToX(
       error: `X does not currently support "${format}" publishing in this adapter`,
     };
   }
+  const mediaValidationError = validateMediaUrls(draft, format);
+  if (mediaValidationError) {
+    return { success: false, platformPostId: "", publishedAt: now, error: mediaValidationError };
+  }
 
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
@@ -266,6 +334,10 @@ async function publishToGBP(
       publishedAt: now,
       error: `Google Business Profile does not currently support "${format}" publishing in this adapter`,
     };
+  }
+  const mediaValidationError = validateMediaUrls(draft, format);
+  if (mediaValidationError) {
+    return { success: false, platformPostId: "", publishedAt: now, error: mediaValidationError };
   }
 
   if (!connection.accessToken) {

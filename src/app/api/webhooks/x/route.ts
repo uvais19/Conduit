@@ -1,6 +1,10 @@
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
-import { classifyWebhookEventType, ingestWebhookEvent } from "@/lib/platforms/webhook-events";
+import {
+  classifyWebhookEventType,
+  ingestWebhookEvent,
+  processWebhookJobs,
+} from "@/lib/platforms/webhook-events";
 
 function verifyXSignature(payload: string, signature: string | null, secret: string): boolean {
   if (!signature) return false;
@@ -50,5 +54,6 @@ export async function POST(request: Request) {
   } catch {
     // swallow malformed payloads
   }
-  return NextResponse.json({ received: true });
+  const processed = processWebhookJobs(50);
+  return NextResponse.json({ received: true, processed });
 }

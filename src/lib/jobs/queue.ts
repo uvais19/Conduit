@@ -11,8 +11,14 @@ import { logActivity } from "@/lib/audit-log";
 import { getPlatformConnection } from "@/lib/platforms/store";
 import { publishDraft, simulatePublish } from "@/lib/agents/publishing/publisher";
 import type { ContentDraftRecord } from "@/lib/content/types";
+import { refreshConnectionToken } from "@/lib/platforms/token-lifecycle";
+import type { Platform } from "@/lib/types";
 
-export type JobType = "publish_scheduled" | "collect_analytics" | "send_digest";
+export type JobType =
+  | "publish_scheduled"
+  | "collect_analytics"
+  | "send_digest"
+  | "refresh_platform_tokens";
 
 interface Job {
   id: string;
@@ -24,6 +30,7 @@ interface Job {
   maxAttempts: number;
   lastError?: string;
   createdAt: Date;
+  completedAt?: Date;
 }
 
 // In-memory queue for the stub implementation
@@ -68,6 +75,66 @@ export function getRecentJobs(limit = 20): Job[] {
   return [...jobQueue]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, limit);
+}
+
+type TokenRefreshPayload = {
+  tenantId: string;
+  platform: Platform;
+};
+
+export function enqueueTokenRefreshJob(payload: TokenRefreshPayload): Job {
+  return enqueueJob("refresh_platform_tokens", payload);
+}
+
+export async function processTokenRefreshJobs(maxJobs = 100): Promise<{
+  processed: number;
+  succeeded: number;
+  failed: number;
+}> {
+  const pending = jobQueue
+    .filter((job) => job.type === "refresh_platform_tokens" && job.status === "pending")
+    .slice(0, maxJobs);
+  let processed = 0;
+  let succeeded = 0;
+  let failed = 0;
+  for (const job of pending) {
+    processed += 1;
+    job.status = "running";
+    job.attempts += 1;
+    const payload = job.payload as Partial<TokenRefreshPayload>;
+    const tenantId = typeof payload.tenantId === "string" ? payload.tenantId : "";
+    const platform = payload.platform as Platform | undefined;
+    if (!tenantId || !platform) {
+      job.status = "failed";
+      job.lastError = "Invalid refresh job payload";
+      failed += 1;
+      continue;
+    }
+    const connection = getPlatformConnection(tenantId, platform);
+    if (!connection) {
+      job.status = "completed";
+      job.completedAt = new Date();
+      continue;
+    }
+    const refreshed = await refreshConnectionToken(connection);
+    if (refreshed.ok) {
+      job.status = "completed";
+      job.lastError = undefined;
+      job.completedAt = new Date();
+      succeeded += 1;
+    } else if (job.attempts < job.maxAttempts) {
+      job.status = "pending";
+      job.lastError = refreshed.error;
+      const backoffMs = Math.min(300_000, 1000 * 2 ** job.attempts);
+      job.scheduledAt = new Date(Date.now() + backoffMs);
+    } else {
+      job.status = "failed";
+      job.lastError = refreshed.error;
+      job.completedAt = new Date();
+      failed += 1;
+    }
+  }
+  return { processed, succeeded, failed };
 }
 
 /**
