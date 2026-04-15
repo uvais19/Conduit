@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getVariantComparisons } from "@/lib/analytics/store";
+import { parseAnalyticsQueryFromUrl } from "@/lib/analytics/query";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("view_analytics");
-    const comparisons = await getVariantComparisons(session.user.tenantId);
+    const query = parseAnalyticsQueryFromUrl(new URL(request.url));
+    const comparisons = await getVariantComparisons(session.user.tenantId, query);
     return NextResponse.json({ comparisons });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

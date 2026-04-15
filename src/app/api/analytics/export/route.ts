@@ -3,6 +3,11 @@ import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { postAnalytics, contentDrafts } from "@/lib/db/schema";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
+import {
+  attachmentHeaders,
+  buildAnalyticsPdf,
+  buildCsv,
+} from "@/lib/exports/reporting";
 
 /** GET /api/analytics/export — export analytics report as CSV or JSON */
 export async function GET(req: NextRequest) {
@@ -41,52 +46,56 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(postAnalytics.collectedAt))
       .limit(5000);
 
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const headers = [
+      "draftId",
+      "platform",
+      "caption",
+      "pillar",
+      "impressions",
+      "reach",
+      "likes",
+      "comments",
+      "shares",
+      "saves",
+      "clicks",
+      "engagementRate",
+      "collectedAt",
+    ];
+
     if (format === "csv") {
-      const headers = [
-        "draftId",
-        "platform",
-        "caption",
-        "pillar",
-        "impressions",
-        "reach",
-        "likes",
-        "comments",
-        "shares",
-        "saves",
-        "clicks",
-        "engagementRate",
-        "collectedAt",
-      ];
-
-      const escapeCSV = (val: unknown) => {
-        if (val === null || val === undefined) return "";
-        const str = String(val);
-        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-          return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-      };
-
-      const csvRows = rows.map((r) =>
-        headers
-          .map((h) => escapeCSV((r as Record<string, unknown>)[h]))
-          .join(","),
-      );
-      const csv = [headers.join(","), ...csvRows].join("\n");
-
+      const csv = buildCsv(headers, rows as Record<string, unknown>[]);
       return new Response(csv, {
-        headers: {
-          "Content-Type": "text/csv",
-          "Content-Disposition": `attachment; filename="conduit-analytics-${new Date().toISOString().slice(0, 10)}.csv"`,
-        },
+        headers: attachmentHeaders(
+          "text/csv",
+          `conduit-analytics-${dateStamp}.csv`,
+        ),
+      });
+    }
+
+    if (format === "pdf") {
+      const pdf = await buildAnalyticsPdf({
+        title: "Conduit Analytics Report",
+        subtitle:
+          from || to
+            ? `Date range: ${from ?? "start"} to ${to ?? "end"}`
+            : "Date range: all available data",
+        generatedAt: new Date(),
+        rows: rows as Record<string, unknown>[],
+      });
+      return new Response(pdf, {
+        headers: attachmentHeaders(
+          "application/pdf",
+          `conduit-analytics-${dateStamp}.pdf`,
+        ),
       });
     }
 
     return new Response(JSON.stringify({ analytics: rows }, null, 2), {
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Disposition": `attachment; filename="conduit-analytics-${new Date().toISOString().slice(0, 10)}.json"`,
-      },
+      headers: attachmentHeaders(
+        "application/json",
+        `conduit-analytics-${dateStamp}.json`,
+      ),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";

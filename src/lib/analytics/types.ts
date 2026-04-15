@@ -18,6 +18,7 @@ export type PostMetrics = {
   engagementRate: number;
   /** Live platform API vs internal simulation */
   dataSource?: "live" | "simulated";
+  rawData?: unknown;
 };
 
 export type DashboardOverview = {
@@ -79,4 +80,61 @@ export type TrendPoint = {
   engagements: number;
   engagementRate: number;
   posts: number;
+};
+
+export type AnalyticsQuery = {
+  from?: string;
+  to?: string;
+  platforms?: Platform[];
+};
+
+export type AnalyticsAttributionSummary = {
+  trackedPosts: number;
+  visits: number;
+  conversions: number;
+  revenue: number;
+  conversionRate: number;
+};
+
+export type FollowerGrowthPoint = {
+  date: string;
+  platform: Platform;
+  followers: number;
+};
+
+export type HashtagPerformance = {
+  hashtag: string;
+  uses: number;
+  impressions: number;
+  engagements: number;
+  avgEngagementRate: number;
+};
+
+export type BestPostingWindow = {
+  weekday: string;
+  hour: number;
+  avgEngagementRate: number;
+  sampleSize: number;
+};
+
+export type EngagementAnomaly = {
+  date: string;
+  currentEngagementRate: number;
+  expectedEngagementRate: number;
+  deltaPercent: number;
+  severity: "warning" | "critical";
+};
+
+export type SentimentSummary = {
+  positive: number;
+  neutral: number;
+  negative: number;
+  score: number;
+};
+
+export type ForecastPoint = {
+  date: string;
+  predictedEngagementRate: number;
+  lowerBound: number;
+  upperBound: number;
 };

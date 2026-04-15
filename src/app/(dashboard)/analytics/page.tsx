@@ -13,7 +13,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PLATFORM_LABELS } from "@/lib/constants";
-import type { DashboardOverview, TrendPoint, VariantComparison } from "@/lib/analytics/types";
+import type {
+  DashboardOverview,
+  TrendPoint,
+  VariantComparison,
+  AnalyticsAttributionSummary,
+  BestPostingWindow,
+  EngagementAnomaly,
+  FollowerGrowthPoint,
+  ForecastPoint,
+  HashtagPerformance,
+  SentimentSummary,
+} from "@/lib/analytics/types";
 import { VariantComparisonView } from "@/components/variant-comparison-view";
 import { TrendCharts } from "@/components/trend-charts";
 import { PerPostAnalyticsDetail } from "@/components/per-post-analytics-detail";
@@ -34,34 +45,73 @@ export default function AnalyticsPage() {
   const [notice, setNotice] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [audience, setAudience] = useState<{ demographics: string; psychographics: string } | null>(null);
+  const [followerGrowth, setFollowerGrowth] = useState<FollowerGrowthPoint[]>([]);
+  const [hashtags, setHashtags] = useState<HashtagPerformance[]>([]);
+  const [bestWindows, setBestWindows] = useState<BestPostingWindow[]>([]);
+  const [anomalies, setAnomalies] = useState<EngagementAnomaly[]>([]);
+  const [sentiment, setSentiment] = useState<SentimentSummary | null>(null);
+  const [forecast, setForecast] = useState<ForecastPoint[]>([]);
+  const [attribution, setAttribution] = useState<AnalyticsAttributionSummary | null>(null);
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams();
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    if (selectedPlatforms.length > 0) params.set("platforms", selectedPlatforms.join(","));
+    return params.toString();
+  }, [dateFrom, dateTo, selectedPlatforms]);
 
   async function fetchOverview() {
-    const response = await fetch("/api/analytics");
+    const response = await fetch(`/api/analytics${queryString ? `?${queryString}` : ""}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? "Unable to load analytics overview");
     setOverview(data.overview as DashboardOverview);
   }
 
   async function fetchComparisons() {
-    const response = await fetch("/api/analytics/variants");
+    const response = await fetch(`/api/analytics/variants${queryString ? `?${queryString}` : ""}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? "Unable to load variant comparisons");
     setComparisons((data.comparisons as VariantComparison[]) ?? []);
   }
 
   async function fetchTrends(nextDays: 7 | 30) {
-    const response = await fetch(`/api/analytics/trends?days=${nextDays}`);
+    const params = new URLSearchParams(queryString);
+    params.set("days", String(nextDays));
+    const response = await fetch(`/api/analytics/trends?${params.toString()}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? "Unable to load trend data");
     setTrends((data.trends as TrendPoint[]) ?? []);
+  }
+
+  async function fetchInsights() {
+    setInsightsLoading(true);
+    try {
+      const response = await fetch(`/api/analytics/insights${queryString ? `?${queryString}` : ""}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to load analytics insights");
+      setAudience(data.audience ?? null);
+      setFollowerGrowth((data.followerGrowth as FollowerGrowthPoint[]) ?? []);
+      setHashtags((data.hashtags as HashtagPerformance[]) ?? []);
+      setBestWindows((data.bestWindows as BestPostingWindow[]) ?? []);
+      setAnomalies((data.anomalies as EngagementAnomaly[]) ?? []);
+      setSentiment((data.sentiment as SentimentSummary) ?? null);
+      setForecast((data.forecast as ForecastPoint[]) ?? []);
+      setAttribution((data.attribution as AnalyticsAttributionSummary) ?? null);
+    } finally {
+      setInsightsLoading(false);
+    }
   }
 
   async function refreshAll(nextDays: 7 | 30 = days) {
     setLoading(true);
     setError("");
     try {
-      await Promise.all([fetchOverview(), fetchComparisons(), fetchTrends(nextDays)]);
+      await Promise.all([fetchOverview(), fetchComparisons(), fetchTrends(nextDays), fetchInsights()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to load analytics");
     } finally {
@@ -72,7 +122,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     void refreshAll(days);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+  }, [days, queryString]);
 
   useEffect(() => {
     if (!overview) return;
@@ -110,12 +160,11 @@ export default function AnalyticsPage() {
     }
   }
 
-  const handleExport = useCallback(async (format: "csv" | "json") => {
+  const handleExport = useCallback(async (format: "csv" | "json" | "pdf") => {
     setExporting(true);
     try {
-      const params = new URLSearchParams({ format });
-      if (dateFrom) params.set("from", dateFrom);
-      if (dateTo) params.set("to", dateTo);
+      const params = new URLSearchParams(queryString);
+      params.set("format", format);
       const response = await fetch(`/api/analytics/export?${params.toString()}`);
       if (!response.ok) throw new Error("Export failed");
       const blob = await response.blob();
@@ -131,7 +180,7 @@ export default function AnalyticsPage() {
     } finally {
       setExporting(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [queryString]);
 
   return (
     <div className="space-y-6">
@@ -204,6 +253,32 @@ export default function AnalyticsPage() {
             <Download className="mr-1.5 size-3.5" />
             Export JSON
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={exporting}
+            onClick={() => void handleExport("pdf")}
+          >
+            <Download className="mr-1.5 size-3.5" />
+            Export PDF
+          </Button>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Platforms</label>
+            <select
+              className="h-9 rounded-md border bg-transparent px-3 text-sm"
+              value={selectedPlatforms[0] ?? ""}
+              onChange={(e) =>
+                setSelectedPlatforms(e.target.value ? [e.target.value] : [])
+              }
+            >
+              <option value="">All platforms</option>
+              {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex flex-col gap-1 border-l pl-3 sm:pl-4">
             <span className="text-[10px] font-medium uppercase text-muted-foreground">
               All drafts
@@ -324,6 +399,36 @@ export default function AnalyticsPage() {
         periodDays={days}
         metricsSourceBreakdown={overview?.metricsSourceBreakdown}
       />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Audience and Attribution</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {insightsLoading ? <p className="text-muted-foreground">Loading insights...</p> : null}
+            <p><span className="font-medium">Demographics:</span> {audience?.demographics ?? "N/A"}</p>
+            <p><span className="font-medium">Psychographics:</span> {audience?.psychographics ?? "N/A"}</p>
+            <p><span className="font-medium">Tracked posts:</span> {attribution?.trackedPosts ?? 0}</p>
+            <p><span className="font-medium">Visits:</span> {attribution?.visits ?? 0}</p>
+            <p><span className="font-medium">Conversions:</span> {attribution?.conversions ?? 0}</p>
+            <p><span className="font-medium">Revenue:</span> ${attribution?.revenue ?? 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Predictive and Quality Signals</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p><span className="font-medium">Sentiment score:</span> {sentiment ? sentiment.score : 0}</p>
+            <p><span className="font-medium">Anomalies:</span> {anomalies.length}</p>
+            <p><span className="font-medium">Forecast points:</span> {forecast.length}</p>
+            <p><span className="font-medium">Follower growth points:</span> {followerGrowth.length}</p>
+            <p><span className="font-medium">Top hashtags tracked:</span> {hashtags.length}</p>
+            <p><span className="font-medium">Best posting windows:</span> {bestWindows.length}</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

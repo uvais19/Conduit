@@ -7,7 +7,7 @@
  */
 
 import type { Platform } from "@/lib/types";
-import type { ContentDraftRecord } from "@/lib/content/types";
+import { getBestPostingWindows } from "@/lib/analytics/store";
 
 // ---------------------------------------------------------------------------
 // Optimal posting windows (simplified heuristics)
@@ -40,6 +40,29 @@ export function suggestPostingTime(platform: Platform, afterDate?: Date): Date {
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(hours[0], 0, 0, 0);
   return tomorrow;
+}
+
+/**
+ * Learns best posting windows from historical engagement and falls back to defaults.
+ */
+export async function suggestPostingTimeFromHistory(
+  tenantId: string,
+  platform: Platform,
+  afterDate?: Date
+): Promise<Date> {
+  const windows = await getBestPostingWindows(tenantId, { platforms: [platform] });
+  if (windows.length === 0) {
+    return suggestPostingTime(platform, afterDate);
+  }
+
+  const base = afterDate ? new Date(afterDate) : new Date();
+  const topHour = windows[0].hour;
+  const candidate = new Date(base);
+  candidate.setHours(topHour, 0, 0, 0);
+  if (candidate <= new Date()) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return candidate;
 }
 
 // ---------------------------------------------------------------------------
