@@ -103,8 +103,11 @@ async function refreshGoogleToken(refreshToken: string): Promise<{
 
 export async function refreshConnectionToken(
   connection: PlatformConnection
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; mode?: "refresh_token" | "reauth_required" } | { ok: false; error: string }> {
   if (!connection.refreshToken?.trim()) {
+    if (connection.platform === "facebook" || connection.platform === "instagram") {
+      return { ok: true, mode: "reauth_required" };
+    }
     return { ok: false, error: "Missing refresh token" };
   }
   try {
@@ -119,7 +122,7 @@ export async function refreshConnectionToken(
       refreshed = await refreshGoogleToken(connection.refreshToken);
     } else {
       // Meta long-lived user/page tokens are refreshed via reauth.
-      return { ok: true };
+      return { ok: true, mode: "reauth_required" };
     }
     const tokenExpiresAt = refreshed.expiresIn
       ? new Date(Date.now() + refreshed.expiresIn * 1000).toISOString()
@@ -132,7 +135,7 @@ export async function refreshConnectionToken(
       tokenExpiresAt,
       refreshError: null,
     });
-    return { ok: true };
+    return { ok: true, mode: "refresh_token" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Token refresh failed";
     updatePlatformConnectionTokens({

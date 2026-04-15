@@ -1,6 +1,10 @@
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
-import { classifyWebhookEventType, ingestWebhookEvent } from "@/lib/platforms/webhook-events";
+import {
+  classifyWebhookEventType,
+  ingestWebhookEvent,
+  processWebhookJobs,
+} from "@/lib/platforms/webhook-events";
 
 function verifyLinkedInSignature(body: string, signature: string | null, secret: string): boolean {
   if (!signature) return false;
@@ -27,16 +31,25 @@ export async function POST(request: Request) {
     const parsed = raw ? JSON.parse(raw) : {};
     const events = Array.isArray(parsed?.elements) ? parsed.elements : [parsed];
     for (const event of events) {
+      const eventId =
+        typeof event?.activity === "string"
+          ? event.activity
+          : typeof event?.id === "string"
+            ? event.id
+            : randomUUID();
       ingestWebhookEvent(String(event?.organization ?? "global"), {
-        id: randomUUID(),
+        id: eventId,
         platform: "linkedin",
         eventType: classifyWebhookEventType(event),
         occurredAt: new Date().toISOString(),
+        postId: typeof event?.activity === "string" ? event.activity : undefined,
+        dedupeKey: `${event?.organization ?? "global"}:${eventId}`,
         payload: event,
       });
     }
   } catch {
     // swallow malformed payloads to avoid provider retries storms
   }
-  return NextResponse.json({ received: true });
+  const processed = processWebhookJobs(50);
+  return NextResponse.json({ received: true, processed });
 }

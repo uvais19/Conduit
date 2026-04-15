@@ -41,6 +41,7 @@ export async function publishGbpPost(params: {
   locationName: string;
   draft: ContentDraftRecord;
 }): Promise<{ id: string }> {
+  const mediaUrls = params.draft.mediaUrls.filter((url) => url.trim().length > 0);
   const response = await platformRequest<{ name?: string }>({
     platform: "gbp",
     url: `${GBP_POSTS_BASE}/${params.locationName}/localPosts`,
@@ -50,6 +51,14 @@ export async function publishGbpPost(params: {
       languageCode: "en-US",
       summary: params.draft.caption.slice(0, 1500),
       topicType: "STANDARD",
+      media: mediaUrls.length
+        ? [
+            {
+              mediaFormat: params.draft.mediaType === "video" ? "VIDEO" : "PHOTO",
+              sourceUrl: mediaUrls[0],
+            },
+          ]
+        : undefined,
     },
   });
   if (!response.name) throw new Error("GBP publish response did not include a resource id");

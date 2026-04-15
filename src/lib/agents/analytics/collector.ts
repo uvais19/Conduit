@@ -151,6 +151,7 @@ async function fetchRealMetrics(
     >
   | null
 > {
+  if (!connection.accessToken?.trim()) return null;
   const meta = await fetchMetaRealMetrics(draft, connection);
   if (meta) return meta;
   const postId = draft.platformPostId?.trim();
@@ -226,11 +227,25 @@ export async function collectMetricsForDraft(
     : 24;
 
   let metrics: Omit<PostMetrics, "id" | "draftId" | "tenantId" | "platform" | "platformPostId" | "collectedAt">;
+  let fallbackReason: string | null = null;
 
   if (connection) {
-    const real = await fetchRealMetrics(draft, connection);
-    metrics = real ?? simulateMetrics(draft.platform, hoursAfterPublish);
+    try {
+      const real = await fetchRealMetrics(draft, connection);
+      if (real) {
+        metrics = real;
+      } else {
+        fallbackReason = draft.platformPostId?.startsWith("sim_")
+          ? "simulated_publish_id"
+          : "missing_live_metric_preconditions";
+        metrics = simulateMetrics(draft.platform, hoursAfterPublish);
+      }
+    } catch (error) {
+      fallbackReason = error instanceof Error ? `metrics_error:${error.message}` : "metrics_error:unknown";
+      metrics = simulateMetrics(draft.platform, hoursAfterPublish);
+    }
   } else {
+    fallbackReason = "missing_platform_connection";
     metrics = simulateMetrics(draft.platform, hoursAfterPublish);
   }
 
@@ -239,6 +254,7 @@ export async function collectMetricsForDraft(
     tenantId,
     platform: draft.platform,
     platformPostId: draft.platformPostId ?? "",
+    fallbackReason,
     ...metrics,
   });
 }

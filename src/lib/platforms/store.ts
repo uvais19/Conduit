@@ -24,6 +24,10 @@ export type PlatformConnection = {
 
 const connectionsByTenant = new Map<string, PlatformConnection[]>();
 
+export function listTenantIdsWithPlatformConnections(): string[] {
+  return [...connectionsByTenant.keys()];
+}
+
 function hasEncryptionKey(): boolean {
   return !!process.env.ENCRYPTION_KEY;
 }

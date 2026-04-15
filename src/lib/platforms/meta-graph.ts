@@ -16,55 +16,114 @@ export class MetaGraphError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly body?: unknown
+    readonly body?: unknown,
+    readonly code: "rate_limited" | "auth" | "forbidden" | "bad_request" | "upstream" = "upstream"
   ) {
     super(message);
     this.name = "MetaGraphError";
   }
 }
 
+function classifyGraphStatus(status: number): MetaGraphError["code"] {
+  if (status === 400) return "bad_request";
+  if (status === 401) return "auth";
+  if (status === 403) return "forbidden";
+  if (status === 429) return "rate_limited";
+  return "upstream";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function graphGet<T = unknown>(
   path: string,
-  params: Record<string, string | number | undefined>
+  params: Record<string, string | number | undefined>,
+  maxAttempts: number = 3
 ): Promise<T> {
   const url = new URL(`${GRAPH_BASE}${path.startsWith("/") ? path : `/${path}`}`);
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined) url.searchParams.set(k, String(v));
   }
-  const res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
-  const json = (await res.json()) as T & GraphErrorBody;
-  if (!res.ok || (json as GraphErrorBody).error) {
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    const startedAt = Date.now();
+    const res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+    const json = (await res.json()) as T & GraphErrorBody;
+    const durationMs = Date.now() - startedAt;
+    if (res.ok && !(json as GraphErrorBody).error) {
+      console.info("[platform.meta] graph_get_ok", { path, attempt, durationMs });
+      return json;
+    }
     const msg =
       (json as GraphErrorBody).error?.message ??
       `Graph request failed (${res.status})`;
-    throw new MetaGraphError(msg, res.status, json);
+    const code = classifyGraphStatus(res.status);
+    const retriable = code === "rate_limited" || res.status >= 500;
+    console.warn("[platform.meta] graph_get_failed", {
+      path,
+      status: res.status,
+      code,
+      attempt,
+      durationMs,
+      retriable,
+    });
+    if (retriable && attempt < maxAttempts) {
+      await sleep(Math.min(1500, 250 * 2 ** (attempt - 1)));
+      continue;
+    }
+    throw new MetaGraphError(msg, res.status, json, code);
   }
-  return json;
+  throw new MetaGraphError("Meta Graph request exhausted retries", 500);
 }
 
 export async function graphPostForm<T = unknown>(
   path: string,
-  params: Record<string, string | number | boolean | undefined>
+  params: Record<string, string | number | boolean | undefined>,
+  maxAttempts: number = 3
 ): Promise<T> {
   const url = `${GRAPH_BASE}${path.startsWith("/") ? path : `/${path}`}`;
   const body = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined) body.set(k, String(v));
   }
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-    cache: "no-store",
-  });
-  const json = (await res.json()) as T & GraphErrorBody;
-  if (!res.ok || (json as GraphErrorBody).error) {
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    const startedAt = Date.now();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+      cache: "no-store",
+    });
+    const json = (await res.json()) as T & GraphErrorBody;
+    const durationMs = Date.now() - startedAt;
+    if (res.ok && !(json as GraphErrorBody).error) {
+      console.info("[platform.meta] graph_post_ok", { path, attempt, durationMs });
+      return json;
+    }
     const msg =
       (json as GraphErrorBody).error?.message ??
       `Graph POST failed (${res.status})`;
-    throw new MetaGraphError(msg, res.status, json);
+    const code = classifyGraphStatus(res.status);
+    const retriable = code === "rate_limited" || res.status >= 500;
+    console.warn("[platform.meta] graph_post_failed", {
+      path,
+      status: res.status,
+      code,
+      attempt,
+      durationMs,
+      retriable,
+    });
+    if (retriable && attempt < maxAttempts) {
+      await sleep(Math.min(1500, 250 * 2 ** (attempt - 1)));
+      continue;
+    }
+    throw new MetaGraphError(msg, res.status, json, code);
   }
-  return json;
+  throw new MetaGraphError("Meta Graph POST exhausted retries", 500);
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +190,66 @@ export async function publishInstagramFeedPhoto(params: {
   return { id: published.post_id ?? published.id };
 }
 
+export async function publishInstagramCarousel(params: {
+  igUserId: string;
+  accessToken: string;
+  imageUrls: string[];
+  caption: string;
+  hashtags: string[];
+}): Promise<{ id: string }> {
+  if (params.imageUrls.length < 2) {
+    throw new MetaGraphError("Instagram carousel requires at least 2 image URLs", 400);
+  }
+  const childIds: string[] = [];
+  for (const imageUrl of params.imageUrls.slice(0, 10)) {
+    const child = await graphPostForm<{ id: string }>(`/${params.igUserId}/media`, {
+      image_url: imageUrl,
+      is_carousel_item: true,
+      access_token: params.accessToken,
+    });
+    childIds.push(child.id);
+  }
+  const caption = buildCaption(params.caption, params.hashtags);
+  const container = await graphPostForm<{ id: string }>(`/${params.igUserId}/media`, {
+    media_type: "CAROUSEL",
+    children: childIds.join(","),
+    caption,
+    access_token: params.accessToken,
+  });
+  const published = await graphPostForm<{ id: string; post_id?: string }>(
+    `/${params.igUserId}/media_publish`,
+    {
+      creation_id: container.id,
+      access_token: params.accessToken,
+    }
+  );
+  return { id: published.post_id ?? published.id };
+}
+
+export async function publishInstagramVideo(params: {
+  igUserId: string;
+  accessToken: string;
+  videoUrl: string;
+  caption: string;
+  hashtags: string[];
+}): Promise<{ id: string }> {
+  const caption = buildCaption(params.caption, params.hashtags);
+  const container = await graphPostForm<{ id: string }>(`/${params.igUserId}/media`, {
+    media_type: "REELS",
+    video_url: params.videoUrl,
+    caption,
+    access_token: params.accessToken,
+  });
+  const published = await graphPostForm<{ id: string; post_id?: string }>(
+    `/${params.igUserId}/media_publish`,
+    {
+      creation_id: container.id,
+      access_token: params.accessToken,
+    }
+  );
+  return { id: published.post_id ?? published.id };
+}
+
 export async function publishFacebookPagePhoto(params: {
   pageId: string;
   accessToken: string;
@@ -160,6 +279,53 @@ export async function publishFacebookFeedPost(params: {
   const message = buildCaption(params.message, params.hashtags);
   const out = await graphPostForm<{ id: string }>(`/${params.pageId}/feed`, {
     message,
+    access_token: params.accessToken,
+  });
+  return out;
+}
+
+export async function publishFacebookPageCarousel(params: {
+  pageId: string;
+  accessToken: string;
+  imageUrls: string[];
+  message: string;
+  hashtags: string[];
+}): Promise<{ id: string }> {
+  if (params.imageUrls.length < 2) {
+    throw new MetaGraphError("Facebook carousel requires at least 2 image URLs", 400);
+  }
+  const attachedMedia: string[] = [];
+  for (const imageUrl of params.imageUrls.slice(0, 10)) {
+    const photo = await graphPostForm<{ id: string }>(`/${params.pageId}/photos`, {
+      url: imageUrl,
+      published: false,
+      access_token: params.accessToken,
+    });
+    attachedMedia.push(JSON.stringify({ media_fbid: photo.id }));
+  }
+  const message = buildCaption(params.message, params.hashtags);
+  const payload: Record<string, string | number | boolean | undefined> = {
+    message,
+    access_token: params.accessToken,
+  };
+  attachedMedia.forEach((value, index) => {
+    payload[`attached_media[${index}]`] = value;
+  });
+  const out = await graphPostForm<{ id: string }>(`/${params.pageId}/feed`, payload);
+  return out;
+}
+
+export async function publishFacebookPageVideo(params: {
+  pageId: string;
+  accessToken: string;
+  videoUrl: string;
+  message: string;
+  hashtags: string[];
+}): Promise<{ id: string }> {
+  const description = buildCaption(params.message, params.hashtags);
+  const out = await graphPostForm<{ id: string }>(`/${params.pageId}/videos`, {
+    file_url: params.videoUrl,
+    description,
     access_token: params.accessToken,
   });
   return out;

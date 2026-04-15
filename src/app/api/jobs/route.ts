@@ -3,8 +3,10 @@ import {
   processScheduledPosts,
   getQueueStatsAsync,
   getRecentJobsAsync,
+  processTokenRefreshJobs,
 } from "@/lib/jobs/queue";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { processWebhookJobs } from "@/lib/platforms/webhook-events";
 
 /**
  * POST: Trigger processing of scheduled posts (called by cron).
@@ -13,6 +15,7 @@ import { rateLimitResponse } from "@/lib/rate-limit";
 export async function POST(request: Request) {
   const limited = rateLimitResponse("cron-publish", { limit: 5, windowSeconds: 60 });
   if (limited) return limited;
+  const jobKind = new URL(request.url).searchParams.get("kind") ?? "publish";
 
   const secret = process.env.CRON_JOB_SECRET;
   if (secret) {
@@ -23,7 +26,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const processed = await processScheduledPosts();
+    const processed =
+      jobKind === "token-refresh"
+        ? await processTokenRefreshJobs()
+        : jobKind === "webhooks"
+          ? processWebhookJobs()
+          : await processScheduledPosts();
     const stats = await getQueueStatsAsync();
     return NextResponse.json({ processed, stats });
   } catch {

@@ -19,6 +19,7 @@ import {
 import { fetchLinkedInMetrics } from "@/lib/platforms/linkedin-api";
 import { fetchXTweetMetrics } from "@/lib/platforms/x-api";
 import { fetchGbpPostMetrics } from "@/lib/platforms/gbp-api";
+import { PLATFORM_CAPABILITIES } from "@/lib/platforms/capabilities";
 
 // ---------------------------------------------------------------------------
 // Real API integrations (per-platform)
@@ -28,6 +29,7 @@ async function fetchFromInstagram(
   connection: PlatformConnection,
   limit: number
 ): Promise<FetchedPost[] | null> {
+  if (!PLATFORM_CAPABILITIES.instagram.supportsImport) return null;
   if (!connection.accessToken?.trim()) return null;
   try {
     const igUserId = await resolveInstagramUserId(connection);
@@ -84,6 +86,7 @@ async function fetchFromFacebook(
   connection: PlatformConnection,
   limit: number
 ): Promise<FetchedPost[] | null> {
+  if (!PLATFORM_CAPABILITIES.facebook.supportsImport) return null;
   const pageId = connection.platformPageId?.trim();
   if (!connection.accessToken?.trim() || !pageId) return null;
 
@@ -134,6 +137,7 @@ async function fetchFromLinkedIn(
   connection: PlatformConnection,
   limit: number
 ): Promise<FetchedPost[] | null> {
+  if (!PLATFORM_CAPABILITIES.linkedin.supportsImport) return null;
   if (!connection.accessToken?.trim() || !connection.platformUserId?.trim()) return null;
   try {
     const authorUrn = connection.platformUserId.startsWith("urn:")
@@ -196,6 +200,7 @@ async function fetchFromX(
   connection: PlatformConnection,
   limit: number
 ): Promise<FetchedPost[] | null> {
+  if (!PLATFORM_CAPABILITIES.x.supportsImport) return null;
   if (!connection.accessToken?.trim() || !connection.platformUserId?.trim()) return null;
   try {
     const base = process.env.X_API_BASE_URL ?? "https://api.twitter.com/2";
@@ -246,6 +251,7 @@ async function fetchFromGBP(
   connection: PlatformConnection,
   limit: number
 ): Promise<FetchedPost[] | null> {
+  if (!PLATFORM_CAPABILITIES.gbp.supportsImport) return null;
   if (!connection.accessToken?.trim() || !connection.platformPageId?.trim()) return null;
   try {
     const base = process.env.GBP_POSTS_BASE_URL ?? "https://mybusiness.googleapis.com/v4";
@@ -506,12 +512,31 @@ export async function fetchRecentPosts(
   connection: PlatformConnection,
   limit: number = 30
 ): Promise<FetchedPost[]> {
-  const fetcher = platformFetchers[connection.platform];
+  const result = await fetchRecentPostsWithDiagnostics(connection, limit);
+  return result.posts;
+}
 
+export async function fetchRecentPostsWithDiagnostics(
+  connection: PlatformConnection,
+  limit: number = 30
+): Promise<{ posts: FetchedPost[]; dataSource: "live" | "simulated"; fallbackReason: string | null }> {
+  const fetcher = platformFetchers[connection.platform];
+  const hasToken = Boolean(connection.accessToken?.trim());
+  const hasIdentity = Boolean(connection.platformUserId?.trim() || connection.platformPageId?.trim());
   const realPosts = await fetcher(connection, limit);
   if (realPosts && realPosts.length > 0) {
-    return realPosts;
+    return { posts: realPosts, dataSource: "live", fallbackReason: null };
   }
-
-  return simulatePosts(connection.platform, Math.min(limit, 30));
+  let fallbackReason = "provider_error_or_empty";
+  if (!hasToken) fallbackReason = "missing_access_token";
+  else if (!hasIdentity) fallbackReason = "missing_platform_identity";
+  console.warn("[platform.fetchers] using_simulated_posts", {
+    platform: connection.platform,
+    fallbackReason,
+  });
+  return {
+    posts: simulatePosts(connection.platform, Math.min(limit, 30)),
+    dataSource: "simulated",
+    fallbackReason,
+  };
 }

@@ -26,7 +26,10 @@ function useDb() {
 }
 
 type MetricRawPayload = {
-  conduit?: { dataSource?: "live" | "simulated" };
+  conduit?: {
+    dataSource?: "live" | "simulated";
+    fallbackReason?: string | null;
+  };
 } | null;
 
 function mapMetricRow(
@@ -55,6 +58,7 @@ function mapMetricRow(
     clicks: row.clicks ?? 0,
     engagementRate: Number(row.engagementRate ?? 0),
     dataSource,
+    fallbackReason: raw?.conduit?.fallbackReason ?? null,
   };
 }
 
@@ -67,6 +71,7 @@ export async function recordMetrics(
       id: randomUUID(),
       collectedAt: new Date().toISOString(),
       dataSource: params.dataSource ?? "simulated",
+      fallbackReason: params.fallbackReason ?? null,
     };
 
     const existing = metricsByTenant.get(params.tenantId) ?? [];
@@ -75,6 +80,7 @@ export async function recordMetrics(
   }
 
   const dataSource = params.dataSource ?? "simulated";
+  const fallbackReason = params.fallbackReason ?? null;
 
   const [created] = await db
     .insert(postAnalytics)
@@ -91,7 +97,7 @@ export async function recordMetrics(
       saves: params.saves,
       clicks: params.clicks,
       engagementRate: params.engagementRate.toString(),
-      rawData: { conduit: { dataSource } },
+      rawData: { conduit: { dataSource, fallbackReason } },
     })
     .returning();
 
