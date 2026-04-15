@@ -150,6 +150,74 @@ export async function resolveInstagramUserId(
   return getInstagramBusinessAccountId(platformPageId, accessToken);
 }
 
+export async function getInstagramAccountInsights(params: {
+  igUserId: string;
+  accessToken: string;
+}): Promise<{
+  followersCount: number;
+  audienceGenderAge: Record<string, number>;
+  audienceCity: Record<string, number>;
+  audienceCountry: Record<string, number>;
+}> {
+  const profile = await graphGet<{ followers_count?: number }>(
+    `/${params.igUserId}`,
+    {
+      fields: "followers_count",
+      access_token: params.accessToken,
+    }
+  );
+
+  const insights = await graphGet<{
+    data?: Array<{ name?: string; values?: Array<{ value?: Record<string, number> }> }>;
+  }>(`/${params.igUserId}/insights`, {
+    metric: "audience_gender_age,audience_city,audience_country",
+    period: "lifetime",
+    access_token: params.accessToken,
+  }).catch(() => ({ data: [] }));
+
+  const pick = (name: string): Record<string, number> => {
+    const row = insights.data?.find((item) => item.name === name);
+    return (row?.values?.[0]?.value as Record<string, number> | undefined) ?? {};
+  };
+
+  return {
+    followersCount: profile.followers_count ?? 0,
+    audienceGenderAge: pick("audience_gender_age"),
+    audienceCity: pick("audience_city"),
+    audienceCountry: pick("audience_country"),
+  };
+}
+
+export async function getFacebookPageInsights(params: {
+  pageId: string;
+  accessToken: string;
+}): Promise<{
+  followersCount: number;
+  pageFansCountry: Record<string, number>;
+}> {
+  const profile = await graphGet<{ fan_count?: number }>(`/${params.pageId}`, {
+    fields: "fan_count",
+    access_token: params.accessToken,
+  });
+
+  const insights = await graphGet<{
+    data?: Array<{ name?: string; values?: Array<{ value?: Record<string, number> }> }>;
+  }>(`/${params.pageId}/insights`, {
+    metric: "page_fans_country",
+    period: "lifetime",
+    access_token: params.accessToken,
+  }).catch(() => ({ data: [] }));
+
+  const country =
+    (insights.data?.find((item) => item.name === "page_fans_country")?.values?.[0]
+      ?.value as Record<string, number> | undefined) ?? {};
+
+  return {
+    followersCount: profile.fan_count ?? 0,
+    pageFansCountry: country,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Publish
 // ---------------------------------------------------------------------------

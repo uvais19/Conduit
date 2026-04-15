@@ -4,7 +4,10 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { recordAuditEvent } from "@/lib/content/audit";
 import { fireNotification } from "@/lib/notifications/store";
-import { enqueue, suggestPostingTime } from "@/lib/agents/publishing/scheduler";
+import {
+  enqueue,
+  suggestPostingTimeFromHistory,
+} from "@/lib/agents/publishing/scheduler";
 
 const bodySchema = z.object({
   scheduledAt: z.string().optional(),
@@ -37,7 +40,7 @@ export async function POST(
 
     const scheduledAt = requestedTime
       ? new Date(requestedTime).toISOString()
-      : suggestPostingTime(draft.platform).toISOString();
+      : (await suggestPostingTimeFromHistory(tenantId, draft.platform)).toISOString();
 
     const updated = await updateDraft(tenantId, id, {
       status: "scheduled",

@@ -7,7 +7,7 @@
  */
 
 import type { Platform } from "@/lib/types";
-import type { ContentDraftRecord } from "@/lib/content/types";
+import { getBestPostingWindows } from "@/lib/analytics/store";
 
 // ---------------------------------------------------------------------------
 // Optimal posting windows (simplified heuristics)
@@ -40,6 +40,40 @@ export function suggestPostingTime(platform: Platform, afterDate?: Date): Date {
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(hours[0], 0, 0, 0);
   return tomorrow;
+}
+
+/**
+ * Learns best posting windows from historical engagement and falls back to defaults.
+ */
+export async function suggestPostingTimeFromHistory(
+  tenantId: string,
+  platform: Platform,
+  afterDate?: Date
+): Promise<Date> {
+  const windows = await getBestPostingWindows(tenantId, { platforms: [platform] });
+  if (windows.length === 0 || windows[0].sampleSize < 3) {
+    return suggestPostingTime(platform, afterDate);
+  }
+
+  const base = afterDate ? new Date(afterDate) : new Date();
+  const ranked = windows.filter((window) => window.sampleSize >= 3);
+  for (let offset = 0; offset < 14; offset += 1) {
+    const day = new Date(base);
+    day.setDate(base.getDate() + offset);
+    const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day.getDay()];
+    const sameDay = ranked
+      .filter((window) => window.weekday === weekday)
+      .sort((a, b) => b.avgEngagementRate - a.avgEngagementRate);
+    const choice = sameDay[0] ?? ranked[0];
+    if (!choice) break;
+    const candidate = new Date(day);
+    candidate.setHours(choice.hour, 0, 0, 0);
+    if (candidate > new Date()) {
+      return candidate;
+    }
+  }
+
+  return suggestPostingTime(platform, afterDate);
 }
 
 // ---------------------------------------------------------------------------

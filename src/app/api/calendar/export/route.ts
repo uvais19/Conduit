@@ -3,15 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { contentDrafts } from "@/lib/db/schema";
-
-function escapeCsv(val: unknown) {
-  if (val === null || val === undefined) return "";
-  const str = String(val);
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
+import { attachmentHeaders, buildCsv } from "@/lib/exports/reporting";
 
 function toIcsDate(date: Date) {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -23,6 +15,7 @@ export async function GET(req: NextRequest) {
     const { user } = await requireAuth();
     const url = new URL(req.url);
     const format = url.searchParams.get("format") ?? "csv";
+    const dateStamp = new Date().toISOString().slice(0, 10);
 
     const drafts = await db
       .select({
@@ -71,28 +64,23 @@ export async function GET(req: NextRequest) {
       ].join("\r\n");
 
       return new Response(ics, {
-        headers: {
-          "Content-Type": "text/calendar; charset=utf-8",
-          "Content-Disposition": `attachment; filename="conduit-calendar-${new Date().toISOString().slice(0, 10)}.ics"`,
-        },
+        headers: attachmentHeaders(
+          "text/calendar; charset=utf-8",
+          `conduit-calendar-${dateStamp}.ics`,
+        ),
       });
     }
 
     const headers = ["id", "platform", "scheduledAt", "caption"];
-    const rows = scheduled.map((draft) =>
-      [
-        escapeCsv(draft.id),
-        escapeCsv(draft.platform),
-        escapeCsv((draft.scheduledAt as Date).toISOString()),
-        escapeCsv(draft.caption),
-      ].join(","),
-    );
-    const csv = [headers.join(","), ...rows].join("\n");
+    const csvRows = scheduled.map((draft) => ({
+      id: draft.id,
+      platform: draft.platform,
+      scheduledAt: (draft.scheduledAt as Date).toISOString(),
+      caption: draft.caption,
+    }));
+    const csv = buildCsv(headers, csvRows);
     return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv",
-        "Content-Disposition": `attachment; filename="conduit-calendar-${new Date().toISOString().slice(0, 10)}.csv"`,
-      },
+      headers: attachmentHeaders("text/csv", `conduit-calendar-${dateStamp}.csv`),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";

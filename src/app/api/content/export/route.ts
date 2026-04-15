@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { contentDrafts } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+import { attachmentHeaders, buildCsv } from "@/lib/exports/reporting";
 
 /** GET /api/content/export — export drafts as JSON/CSV */
 export async function GET(req: NextRequest) {
@@ -12,6 +13,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const format = url.searchParams.get("format") ?? "json";
     const status = url.searchParams.get("status"); // optional filter
+    const dateStamp = new Date().toISOString().slice(0, 10);
 
     const drafts = await db
       .select({
@@ -53,35 +55,18 @@ export async function GET(req: NextRequest) {
         "publishedAt",
         "createdAt",
       ];
-
-      const escapeCSV = (val: unknown) => {
-        if (val === null || val === undefined) return "";
-        const str = Array.isArray(val) ? val.join("; ") : String(val);
-        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-          return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-      };
-
-      const rows = drafts.map((d) =>
-        headers.map((h) => escapeCSV((d as Record<string, unknown>)[h])).join(","),
-      );
-
-      const csv = [headers.join(","), ...rows].join("\n");
+      const csv = buildCsv(headers, drafts as Record<string, unknown>[]);
       return new Response(csv, {
-        headers: {
-          "Content-Type": "text/csv",
-          "Content-Disposition": `attachment; filename="conduit-drafts-${new Date().toISOString().slice(0, 10)}.csv"`,
-        },
+        headers: attachmentHeaders("text/csv", `conduit-drafts-${dateStamp}.csv`),
       });
     }
 
     // Default: JSON
     return new Response(JSON.stringify({ drafts }, null, 2), {
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Disposition": `attachment; filename="conduit-drafts-${new Date().toISOString().slice(0, 10)}.json"`,
-      },
+      headers: attachmentHeaders(
+        "application/json",
+        `conduit-drafts-${dateStamp}.json`,
+      ),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";

@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getTrendData } from "@/lib/analytics/store";
+import { parseAnalyticsQueryFromUrl } from "@/lib/analytics/query";
 
 export async function GET(request: Request) {
   try {
     const session = await requirePermission("view_analytics");
-    const { searchParams } = new URL(request.url);
+    const url = new URL(request.url);
+    const { searchParams } = url;
     const days = parseInt(searchParams.get("days") ?? "30", 10);
+    const query = parseAnalyticsQueryFromUrl(url);
 
-    const trends = await getTrendData(session.user.tenantId, days);
+    const trends = await getTrendData(session.user.tenantId, days, query);
     return NextResponse.json({ trends });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
