@@ -10,25 +10,36 @@ function shouldRefreshSoon(tokenExpiresAt: string | null): boolean {
   return ms <= 1000 * 60 * 60 * 24 * 7;
 }
 
-export async function POST() {
+function isAuthorizedCronRequest(request: Request): boolean {
+  const secret = process.env.CRON_JOB_SECRET;
+  if (!secret) return false;
+  const token = request.headers.get("x-cron-secret");
+  return Boolean(token && token === secret);
+}
+
+export async function POST(request: Request) {
   try {
-    const session = await requirePermission("connect_platforms");
-    const tenantId = session.user.tenantId;
+    const cronRequest = isAuthorizedCronRequest(request);
+    const session = cronRequest ? null : await requirePermission("connect_platforms");
+    const tenantId = session?.user.tenantId;
 
     const results: Array<{ platform: string; ok: boolean; error?: string }> = [];
-    for (const platform of PLATFORMS) {
-      const connection = getPlatformConnection(tenantId, platform);
-      if (!connection) continue;
-      if (!shouldRefreshSoon(connection.tokenExpiresAt)) continue;
-      const refreshed = await refreshConnectionToken(connection);
-      if (refreshed.ok) {
-        results.push({ platform, ok: true });
-      } else {
-        results.push({ platform, ok: false, error: refreshed.error });
+    const tenantIds = tenantId ? [tenantId] : ["default"];
+    for (const targetTenantId of tenantIds) {
+      for (const platform of PLATFORMS) {
+        const connection = getPlatformConnection(targetTenantId, platform);
+        if (!connection) continue;
+        if (!shouldRefreshSoon(connection.tokenExpiresAt)) continue;
+        const refreshed = await refreshConnectionToken(connection);
+        if (refreshed.ok) {
+          results.push({ platform, ok: true });
+        } else {
+          results.push({ platform, ok: false, error: refreshed.error });
+        }
       }
     }
 
-    return NextResponse.json({ refreshed: results });
+    return NextResponse.json({ refreshed: results, triggeredBy: cronRequest ? "cron" : "user" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "Unauthorized") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -27,11 +27,19 @@ export async function POST(request: Request) {
     const parsed = raw ? JSON.parse(raw) : {};
     const events = Array.isArray(parsed?.elements) ? parsed.elements : [parsed];
     for (const event of events) {
+      const eventId =
+        typeof event?.activity === "string"
+          ? event.activity
+          : typeof event?.id === "string"
+            ? event.id
+            : randomUUID();
       ingestWebhookEvent(String(event?.organization ?? "global"), {
-        id: randomUUID(),
+        id: eventId,
         platform: "linkedin",
         eventType: classifyWebhookEventType(event),
         occurredAt: new Date().toISOString(),
+        postId: typeof event?.activity === "string" ? event.activity : undefined,
+        dedupeKey: `${event?.organization ?? "global"}:${eventId}`,
         payload: event,
       });
     }

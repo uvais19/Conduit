@@ -11,11 +11,19 @@ export async function POST(request: Request) {
   try {
     const parsed = raw ? JSON.parse(raw) : {};
     const message = parsed?.message ?? parsed;
+    const eventId =
+      typeof message?.eventId === "string"
+        ? message.eventId
+        : typeof message?.name === "string"
+          ? message.name
+          : randomUUID();
     ingestWebhookEvent(String(message?.locationName ?? "global"), {
-      id: randomUUID(),
+      id: eventId,
       platform: "gbp",
       eventType: classifyWebhookEventType(message),
       occurredAt: new Date().toISOString(),
+      postId: typeof message?.localPostName === "string" ? message.localPostName : undefined,
+      dedupeKey: `${message?.locationName ?? "global"}:${eventId}`,
       payload: parsed,
     });
   } catch {

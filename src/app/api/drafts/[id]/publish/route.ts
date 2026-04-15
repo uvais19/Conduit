@@ -5,6 +5,7 @@ import { recordAuditEvent } from "@/lib/content/audit";
 import { fireNotification } from "@/lib/notifications/store";
 import { getPlatformConnection } from "@/lib/platforms/store";
 import { publishDraft, simulatePublish } from "@/lib/agents/publishing/publisher";
+import { refreshConnectionToken } from "@/lib/platforms/token-lifecycle";
 import {
   dequeue,
   recordRetry,
@@ -33,10 +34,22 @@ export async function POST(
     }
 
     // Try real publish if platform is connected, otherwise simulate
-    const connection = getPlatformConnection(tenantId, draft.platform);
-    const result = connection
-      ? await publishDraft(draft, connection)
-      : await simulatePublish(draft);
+    let connection = getPlatformConnection(tenantId, draft.platform);
+    if (connection?.tokenExpiresAt) {
+      const msToExpiry = new Date(connection.tokenExpiresAt).getTime() - Date.now();
+      if (msToExpiry <= 1000 * 60 * 60 * 24) {
+        const refreshed = await refreshConnectionToken(connection);
+        if (!refreshed.ok) {
+          console.warn("[publish] token_pre_refresh_failed", {
+            tenantId,
+            platform: draft.platform,
+            error: refreshed.error,
+          });
+        }
+        connection = getPlatformConnection(tenantId, draft.platform);
+      }
+    }
+    const result = connection ? await publishDraft(draft, connection) : await simulatePublish(draft);
 
     if (result.success) {
       const updated = await updateDraft(tenantId, id, {

@@ -18,6 +18,8 @@ export type PostMetrics = {
   engagementRate: number;
   /** Live platform API vs internal simulation */
   dataSource?: "live" | "simulated";
+  /** Optional reason when simulation fallback is used */
+  fallbackReason?: string | null;
 };
 
 export type DashboardOverview = {

@@ -27,11 +27,23 @@ export async function POST(request: Request) {
     const parsed = raw ? JSON.parse(raw) : {};
     const events = Array.isArray(parsed?.events) ? parsed.events : [parsed];
     for (const event of events) {
+      const eventId =
+        typeof event?.id_str === "string"
+          ? event.id_str
+          : typeof event?.tweet_create_events?.[0]?.id_str === "string"
+            ? event.tweet_create_events[0].id_str
+            : randomUUID();
+      const postId =
+        typeof event?.tweet_create_events?.[0]?.id_str === "string"
+          ? event.tweet_create_events[0].id_str
+          : undefined;
       ingestWebhookEvent(String(event?.for_user_id ?? "global"), {
-        id: randomUUID(),
+        id: eventId,
         platform: "x",
         eventType: classifyWebhookEventType(event),
         occurredAt: new Date().toISOString(),
+        postId,
+        dedupeKey: `${event?.for_user_id ?? "global"}:${eventId}`,
         payload: event,
       });
     }

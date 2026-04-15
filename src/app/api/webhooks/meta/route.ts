@@ -52,11 +52,16 @@ export async function POST(request: Request) {
     const entries = Array.isArray(parsed?.entry) ? parsed.entry : [];
     for (const entry of entries) {
       const tenantId = String(entry?.id ?? "global");
+      const changed = Array.isArray(entry?.changes) ? entry.changes : [];
+      const postId = changed[0]?.value?.post_id;
+      const dedupeKey = `${entry?.id ?? "global"}:${entry?.time ?? "0"}:${changed[0]?.field ?? "unknown"}`;
       ingestWebhookEvent(tenantId, {
         id: randomUUID(),
         platform: entry?.id ? "facebook" : "instagram",
         eventType: classifyWebhookEventType(entry),
         occurredAt: new Date().toISOString(),
+        postId: typeof postId === "string" ? postId : undefined,
+        dedupeKey,
         payload: entry,
       });
     }

@@ -16,55 +16,114 @@ export class MetaGraphError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly body?: unknown
+    readonly body?: unknown,
+    readonly code: "rate_limited" | "auth" | "forbidden" | "bad_request" | "upstream" = "upstream"
   ) {
     super(message);
     this.name = "MetaGraphError";
   }
 }
 
+function classifyGraphStatus(status: number): MetaGraphError["code"] {
+  if (status === 400) return "bad_request";
+  if (status === 401) return "auth";
+  if (status === 403) return "forbidden";
+  if (status === 429) return "rate_limited";
+  return "upstream";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function graphGet<T = unknown>(
   path: string,
-  params: Record<string, string | number | undefined>
+  params: Record<string, string | number | undefined>,
+  maxAttempts: number = 3
 ): Promise<T> {
   const url = new URL(`${GRAPH_BASE}${path.startsWith("/") ? path : `/${path}`}`);
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined) url.searchParams.set(k, String(v));
   }
-  const res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
-  const json = (await res.json()) as T & GraphErrorBody;
-  if (!res.ok || (json as GraphErrorBody).error) {
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    const startedAt = Date.now();
+    const res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+    const json = (await res.json()) as T & GraphErrorBody;
+    const durationMs = Date.now() - startedAt;
+    if (res.ok && !(json as GraphErrorBody).error) {
+      console.info("[platform.meta] graph_get_ok", { path, attempt, durationMs });
+      return json;
+    }
     const msg =
       (json as GraphErrorBody).error?.message ??
       `Graph request failed (${res.status})`;
-    throw new MetaGraphError(msg, res.status, json);
+    const code = classifyGraphStatus(res.status);
+    const retriable = code === "rate_limited" || res.status >= 500;
+    console.warn("[platform.meta] graph_get_failed", {
+      path,
+      status: res.status,
+      code,
+      attempt,
+      durationMs,
+      retriable,
+    });
+    if (retriable && attempt < maxAttempts) {
+      await sleep(Math.min(1500, 250 * 2 ** (attempt - 1)));
+      continue;
+    }
+    throw new MetaGraphError(msg, res.status, json, code);
   }
-  return json;
+  throw new MetaGraphError("Meta Graph request exhausted retries", 500);
 }
 
 export async function graphPostForm<T = unknown>(
   path: string,
-  params: Record<string, string | number | boolean | undefined>
+  params: Record<string, string | number | boolean | undefined>,
+  maxAttempts: number = 3
 ): Promise<T> {
   const url = `${GRAPH_BASE}${path.startsWith("/") ? path : `/${path}`}`;
   const body = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined) body.set(k, String(v));
   }
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-    cache: "no-store",
-  });
-  const json = (await res.json()) as T & GraphErrorBody;
-  if (!res.ok || (json as GraphErrorBody).error) {
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    const startedAt = Date.now();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+      cache: "no-store",
+    });
+    const json = (await res.json()) as T & GraphErrorBody;
+    const durationMs = Date.now() - startedAt;
+    if (res.ok && !(json as GraphErrorBody).error) {
+      console.info("[platform.meta] graph_post_ok", { path, attempt, durationMs });
+      return json;
+    }
     const msg =
       (json as GraphErrorBody).error?.message ??
       `Graph POST failed (${res.status})`;
-    throw new MetaGraphError(msg, res.status, json);
+    const code = classifyGraphStatus(res.status);
+    const retriable = code === "rate_limited" || res.status >= 500;
+    console.warn("[platform.meta] graph_post_failed", {
+      path,
+      status: res.status,
+      code,
+      attempt,
+      durationMs,
+      retriable,
+    });
+    if (retriable && attempt < maxAttempts) {
+      await sleep(Math.min(1500, 250 * 2 ** (attempt - 1)));
+      continue;
+    }
+    throw new MetaGraphError(msg, res.status, json, code);
   }
-  return json;
+  throw new MetaGraphError("Meta Graph POST exhausted retries", 500);
 }
 
 // ---------------------------------------------------------------------------

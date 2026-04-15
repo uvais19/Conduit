@@ -19,6 +19,10 @@ import {
 import { publishLinkedInPost } from "@/lib/platforms/linkedin-api";
 import { publishXPost } from "@/lib/platforms/x-api";
 import { publishGbpPost } from "@/lib/platforms/gbp-api";
+import {
+  inferDraftPublishFormat,
+  supportsPublishFormat,
+} from "@/lib/platforms/capabilities";
 
 export type PublishResult = {
   success: boolean;
@@ -36,6 +40,19 @@ async function publishToInstagram(
   connection: PlatformConnection
 ): Promise<PublishResult> {
   const now = new Date().toISOString();
+  const format = inferDraftPublishFormat({
+    mediaUrls: draft.mediaUrls,
+    mediaType: draft.mediaType,
+  });
+
+  if (!supportsPublishFormat("instagram", format)) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: `Instagram does not currently support "${format}" publishing in this adapter`,
+    };
+  }
 
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
@@ -96,6 +113,19 @@ async function publishToFacebook(
   connection: PlatformConnection
 ): Promise<PublishResult> {
   const now = new Date().toISOString();
+  const format = inferDraftPublishFormat({
+    mediaUrls: draft.mediaUrls,
+    mediaType: draft.mediaType,
+  });
+
+  if (!supportsPublishFormat("facebook", format)) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: `Facebook does not currently support "${format}" publishing in this adapter`,
+    };
+  }
 
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
@@ -146,6 +176,19 @@ async function publishToLinkedIn(
   connection: PlatformConnection
 ): Promise<PublishResult> {
   const now = new Date().toISOString();
+  const format = inferDraftPublishFormat({
+    mediaUrls: draft.mediaUrls,
+    mediaType: draft.mediaType,
+  });
+
+  if (!supportsPublishFormat("linkedin", format)) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: `LinkedIn does not currently support "${format}" publishing in this adapter`,
+    };
+  }
 
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
@@ -179,6 +222,19 @@ async function publishToX(
   connection: PlatformConnection
 ): Promise<PublishResult> {
   const now = new Date().toISOString();
+  const format = inferDraftPublishFormat({
+    mediaUrls: draft.mediaUrls,
+    mediaType: draft.mediaType,
+  });
+
+  if (!supportsPublishFormat("x", format)) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: `X does not currently support "${format}" publishing in this adapter`,
+    };
+  }
 
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
@@ -198,6 +254,19 @@ async function publishToGBP(
   connection: PlatformConnection
 ): Promise<PublishResult> {
   const now = new Date().toISOString();
+  const format = inferDraftPublishFormat({
+    mediaUrls: draft.mediaUrls,
+    mediaType: draft.mediaType,
+  });
+
+  if (!supportsPublishFormat("gbp", format)) {
+    return {
+      success: false,
+      platformPostId: "",
+      publishedAt: now,
+      error: `Google Business Profile does not currently support "${format}" publishing in this adapter`,
+    };
+  }
 
   if (!connection.accessToken) {
     return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
