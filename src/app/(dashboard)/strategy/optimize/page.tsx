@@ -57,14 +57,18 @@ export default function OptimizePage() {
     }
   }
 
-  async function resolveProposal(id: string, action: "approved" | "rejected") {
-    setResolving(id);
+  async function resolveProposal(
+    id: string,
+    action: "approved" | "rejected",
+    operationId?: string
+  ) {
+    setResolving(operationId ? `${id}:${operationId}` : id);
     setError("");
     try {
       const res = await fetch(`/api/proposals/${id}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, operationId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to resolve proposal");
@@ -202,17 +206,75 @@ export default function OptimizePage() {
                   </p>
                   <p className="text-sm">{proposal.reasoning}</p>
                 </div>
-                {proposal.data &&
-                  Object.keys(proposal.data).length > 0 && (
-                    <div className="rounded-md bg-muted p-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">
-                        Proposed Changes
-                      </p>
-                      <pre className="text-xs overflow-x-auto">
-                        {JSON.stringify(proposal.data, null, 2)}
-                      </pre>
-                    </div>
-                  )}
+                {proposal.data.impactProjection ? (
+                  <div className="rounded-md bg-muted p-3 text-xs">
+                    <p className="mb-1 font-medium text-muted-foreground">
+                      Projected impact
+                    </p>
+                    <p>
+                      {proposal.data.impactProjection.metric}: baseline{" "}
+                      {proposal.data.impactProjection.baseline.toFixed(2)} → projected{" "}
+                      {proposal.data.impactProjection.projectedValue.toFixed(2)} (
+                      {proposal.data.impactProjection.projectedDelta >= 0 ? "+" : ""}
+                      {proposal.data.impactProjection.projectedDelta.toFixed(2)})
+                    </p>
+                    <p className="text-muted-foreground">
+                      Confidence {(proposal.data.impactProjection.confidence * 100).toFixed(0)}% · Window{" "}
+                      {proposal.data.impactProjection.evaluationWindowDays} days
+                    </p>
+                    <p className="text-muted-foreground">
+                      Risk: {proposal.data.impactProjection.downsideRisk}
+                    </p>
+                  </div>
+                ) : null}
+                {proposal.data.operations.length > 0 ? (
+                  <div className="space-y-2 rounded-md border p-3">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Operation-level decisions
+                    </p>
+                    {proposal.data.operations.map((op) => (
+                      <div key={op.id} className="rounded-md bg-muted p-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium">
+                            {op.field}: {String(op.from ?? "—")} → {String(op.to ?? "—")}
+                          </p>
+                          <Badge variant={STATUS_VARIANT[op.status]}>
+                            {op.status}
+                          </Badge>
+                        </div>
+                        <p className="text-muted-foreground">{op.reason}</p>
+                        {proposal.status === "pending" && op.status === "pending" ? (
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => resolveProposal(proposal.id, "approved", op.id)}
+                              disabled={resolving === `${proposal.id}:${op.id}`}
+                            >
+                              Accept
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => resolveProposal(proposal.id, "rejected", op.id)}
+                              disabled={resolving === `${proposal.id}:${op.id}`}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : proposal.data.legacyData && Object.keys(proposal.data.legacyData).length > 0 ? (
+                  <div className="rounded-md bg-muted p-3">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      Legacy proposed changes
+                    </p>
+                    <pre className="text-xs overflow-x-auto">
+                      {JSON.stringify(proposal.data.legacyData, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
                 {proposal.resolvedAt && (
                   <p className="text-xs text-muted-foreground">
                     Resolved on{" "}

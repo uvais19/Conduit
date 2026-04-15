@@ -9,7 +9,7 @@ import type {
   ContentGenerationRequest,
   VisualPlanPersisted,
 } from "@/lib/content/types";
-import type { Platform } from "@/lib/types";
+import type { BrandManifesto, Platform } from "@/lib/types";
 
 export type VisualPlan = {
   imagePrompt: string;
@@ -146,6 +146,42 @@ function platformVisualDirectives(platform: Platform, generation?: ContentGenera
   return getPlatformPromptContext(platform);
 }
 
+function buildVisualConstraintDirectives(manifesto?: BrandManifesto | null): {
+  directives: string;
+  requested: string[];
+} {
+  if (!manifesto) {
+    return { directives: "", requested: [] };
+  }
+
+  const requested: string[] = [];
+  const lines: string[] = [];
+
+  if (manifesto.logoUrl) {
+    requested.push("logo usage");
+    lines.push(`- Apply approved logo usage constraints. Preferred logo asset: ${manifesto.logoUrl}`);
+  }
+  if (manifesto.brandColors) {
+    requested.push("brand palette");
+    lines.push(
+      `- Follow palette: primary ${manifesto.brandColors.primary}, secondary ${manifesto.brandColors.secondary}, accent ${manifesto.brandColors.accent}.`
+    );
+  }
+  if (manifesto.fontPreferences?.length) {
+    requested.push("font preferences");
+    lines.push(`- Respect preferred fonts/typography: ${manifesto.fontPreferences.join(", ")}.`);
+  }
+  if (manifesto.visualStyle) {
+    requested.push("visual style");
+    lines.push(`- Visual style directive: ${manifesto.visualStyle}`);
+  }
+
+  return {
+    directives: lines.join("\n"),
+    requested,
+  };
+}
+
 async function expandProductionImagePrompt(params: {
   draft: ContentDraftRecord;
   model: VisualPlanModelJson;
@@ -238,11 +274,13 @@ export async function runVisualDesignerAgent({
   objective,
   styleHint,
   generationContext,
+  manifesto,
 }: {
   draft: ContentDraftRecord;
   objective: string;
   styleHint: string;
   generationContext?: ContentGenerationRequest;
+  manifesto?: BrandManifesto | null;
 }): Promise<VisualDesignerOutput> {
   const pk = PLATFORM_KNOWLEDGE[draft.platform];
   const supportsCarousel = pk.visualFormats.includes("carousel");
@@ -261,11 +299,13 @@ export async function runVisualDesignerAgent({
         `Provided style hint: "${styleHint}"`,
       ].join("\n");
 
+  const visualConstraints = buildVisualConstraintDirectives(manifesto);
   const visualInstructions: string[] = [
     "Return strict JSON only matching the schema shape given.",
     'Include "designRationale": 2–4 sentences on why this visual plan, hook, and layout serve the caption and platform.',
     inferenceNote,
     platformVisualDirectives(draft.platform, generationContext),
+    visualConstraints.directives,
   ];
   if (supportsCarousel) {
     visualInstructions.push(
@@ -380,6 +420,16 @@ export async function runVisualDesignerAgent({
     merged.designRationale?.trim() ||
     `Visual objective "${merged.objective.trim()}" with ${merged.styleHint.trim()} styling aligns imagery with the caption's main hook for ${draft.platform}.`;
 
+  const promptLower = detailedImagePrompt.toLowerCase();
+  const satisfied = visualConstraints.requested.filter((rule) => {
+    if (rule === "logo usage") return promptLower.includes("logo");
+    if (rule === "brand palette") return promptLower.includes("color");
+    if (rule === "font preferences") return promptLower.includes("font") || promptLower.includes("typography");
+    if (rule === "visual style") return promptLower.includes("style");
+    return false;
+  });
+  const unsatisfied = visualConstraints.requested.filter((rule) => !satisfied.includes(rule));
+
   const visualPlanData: VisualPlanPersisted = {
     objective: merged.objective.trim(),
     styleHint: merged.styleHint.trim(),
@@ -388,6 +438,23 @@ export async function runVisualDesignerAgent({
     recommendedAspectRatio: aspectRatio,
     recommendedResolutionNote: resolutionNote,
     designRationale,
+    visualConstraints: manifesto
+      ? {
+          logoUrl: manifesto.logoUrl,
+          brandColors: manifesto.brandColors,
+          fontPreferences: manifesto.fontPreferences,
+          visualStyle: manifesto.visualStyle,
+        }
+      : undefined,
+    visualCompliance: {
+      requested: visualConstraints.requested,
+      satisfied,
+      unsatisfied,
+      notes:
+        unsatisfied.length > 0
+          ? "Some requested visual constraints were not explicitly represented in the generated prompt."
+          : "All requested visual constraints were represented in the generated prompt.",
+    },
   };
 
   const plan: VisualPlan = {

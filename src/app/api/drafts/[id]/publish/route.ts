@@ -11,6 +11,7 @@ import {
   recordRetry,
   hasExceededRetries,
 } from "@/lib/agents/publishing/scheduler";
+import { validateDraftAgainstBrand } from "@/lib/brand/validation";
 
 export async function POST(
   _request: Request,
@@ -29,6 +30,18 @@ export async function POST(
     if (draft.status !== "scheduled" && draft.status !== "approved") {
       return NextResponse.json(
         { error: `Cannot publish a draft with status "${draft.status}"` },
+        { status: 422 }
+      );
+    }
+
+    const validation = await validateDraftAgainstBrand({
+      tenantId,
+      draft,
+      mode: "block",
+    });
+    if (!validation.compliance.canProceed) {
+      return NextResponse.json(
+        { error: "Draft failed brand compliance checks.", validation },
         { status: 422 }
       );
     }
@@ -81,7 +94,7 @@ export async function POST(
         message: `Draft successfully published to ${draft.platform}.`,
       });
 
-      return NextResponse.json({ draft: updated, result });
+      return NextResponse.json({ draft: updated, result, validation });
     }
 
     // Handle failure — retry or mark as failed

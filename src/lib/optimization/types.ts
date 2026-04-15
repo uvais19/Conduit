@@ -9,6 +9,35 @@ export type ProposalType =
 
 export type ProposalStatus = "pending" | "approved" | "rejected";
 
+export type ProposalOperationStatus = "pending" | "approved" | "rejected";
+
+export type ProposalOperation = {
+  id: string;
+  field: string;
+  from?: string | number | boolean | null;
+  to: string | number | boolean | null;
+  reason: string;
+  status: ProposalOperationStatus;
+  resolvedAt?: string | null;
+  resolvedBy?: string | null;
+};
+
+export type ProposalImpactProjection = {
+  metric: string;
+  baseline: number;
+  projectedDelta: number;
+  projectedValue: number;
+  confidence: number;
+  evaluationWindowDays: number;
+  downsideRisk: string;
+};
+
+export type OptimizationProposalPayload = {
+  operations: ProposalOperation[];
+  impactProjection?: ProposalImpactProjection;
+  legacyData?: Record<string, unknown>;
+};
+
 export type OptimizationProposal = {
   id: string;
   tenantId: string;
@@ -16,7 +45,7 @@ export type OptimizationProposal = {
   title: string;
   description: string;
   reasoning: string;
-  data: Record<string, unknown>;
+  data: OptimizationProposalPayload;
   status: ProposalStatus;
   proposedAt: string;
   resolvedAt: string | null;

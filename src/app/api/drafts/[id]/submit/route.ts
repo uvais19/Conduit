@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { recordAuditEvent, resolveTransition } from "@/lib/content/audit";
 import { fireNotification } from "@/lib/notifications/store";
+import { validateDraftAgainstBrand } from "@/lib/brand/validation";
 
 const bodySchema = z.object({
   notes: z.string().default(""),
@@ -35,6 +36,18 @@ export async function POST(
       );
     }
 
+    const validation = await validateDraftAgainstBrand({
+      tenantId,
+      draft,
+      mode: "block",
+    });
+    if (!validation.compliance.canProceed) {
+      return NextResponse.json(
+        { error: "Draft failed brand compliance checks.", validation },
+        { status: 422 }
+      );
+    }
+
     const updated = await updateDraft(tenantId, id, { status: toStatus });
 
     recordAuditEvent({
@@ -56,7 +69,7 @@ export async function POST(
       message: `Draft submitted for review by ${session.user.name ?? session.user.email}.`,
     });
 
-    return NextResponse.json({ draft: updated });
+    return NextResponse.json({ draft: updated, validation });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "Unauthorized") {

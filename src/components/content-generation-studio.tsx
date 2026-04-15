@@ -23,6 +23,7 @@ import { ContentExplainerPanel } from "@/components/content-explainer-panel";
 import { ExportDraftsButton } from "@/components/export-drafts-button";
 import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type { Platform } from "@/lib/types";
+import { OnBrandScoreCard } from "@/components/on-brand-score-card";
 
 type GenerationPayload = {
   platform: (typeof PLATFORMS)[number];
@@ -90,8 +91,27 @@ export function ContentGenerationStudio() {
   const [selectedId, setSelectedId] = useState("");
   const [generatingVariant, setGeneratingVariant] = useState<string | null>(null);
   const [brandCheck, setBrandCheck] = useState<{
-    overallScore: number;
-    issues: { field: string; severity: string; message: string }[];
+    score: {
+      overallScore: number;
+      toneScore: number;
+      messageAlignmentScore: number;
+      guidelinesScore: number;
+      source: "live" | "recomputed" | "fallback";
+      computedAt: string;
+    };
+    issues: Array<{
+      severity: "error" | "warning" | "info";
+      category:
+        | "tone"
+        | "banned_word"
+        | "missing_disclosure"
+        | "off_brand"
+        | "guideline_violation"
+        | "length";
+      message: string;
+      suggestion: string;
+      blocking: boolean;
+    }>;
     strengths: string[];
     summary: string;
   } | null>(null);
@@ -145,12 +165,12 @@ export function ContentGenerationStudio() {
         const res = await fetch("/api/brand/check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content, platform: payload.platform }),
+          body: JSON.stringify({ caption: content, platform: payload.platform }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Brand check failed");
         setBrandCheck(data.result);
-        toast.success(`Brand score: ${data.result.overallScore}/100`);
+        toast.success(`Brand score: ${data.result.score.overallScore}/100`);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Brand check failed");
       } finally {
@@ -691,65 +711,16 @@ export function ContentGenerationStudio() {
               Verify your generated content against your brand guidelines before submitting.
             </CardDescription>
           </CardHeader>
-          {brandCheck && (
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div
-                  className={`flex size-14 items-center justify-center rounded-xl text-xl font-bold ${
-                    brandCheck.overallScore >= 80
-                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                      : brandCheck.overallScore >= 60
-                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                        : "bg-red-500/10 text-red-700 dark:text-red-400"
-                  }`}
-                >
-                  {brandCheck.overallScore}
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Overall Brand Score</p>
-                  <p className="text-xs text-muted-foreground">{brandCheck.summary}</p>
-                </div>
-              </div>
-              {brandCheck.issues.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                    Issues
-                  </p>
-                  <ul className="space-y-1.5">
-                    {brandCheck.issues.map((issue, i) => (
-                      <li
-                        key={i}
-                        className={`rounded-lg border px-3 py-2 text-sm ${
-                          issue.severity === "high"
-                            ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
-                            : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950"
-                        }`}
-                      >
-                        <span className="font-medium">{issue.field}:</span> {issue.message}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {brandCheck.strengths.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                    Strengths
-                  </p>
-                  <ul className="flex flex-wrap gap-2">
-                    {brandCheck.strengths.map((s) => (
-                      <li
-                        key={s}
-                        className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400"
-                      >
-                        {s}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+          {brandCheck ? (
+            <CardContent>
+              <OnBrandScoreCard
+                score={brandCheck.score}
+                summary={brandCheck.summary}
+                issues={brandCheck.issues}
+                strengths={brandCheck.strengths}
+              />
             </CardContent>
-          )}
+          ) : null}
         </Card>
       )}
 

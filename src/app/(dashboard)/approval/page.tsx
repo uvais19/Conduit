@@ -18,6 +18,7 @@ import {
 import { ExportDraftsButton } from "@/components/export-drafts-button";
 import { FieldCharCounter } from "@/components/field-char-counter";
 import { ContentExplainerPanel } from "@/components/content-explainer-panel";
+import { OnBrandScoreCard } from "@/components/on-brand-score-card";
 import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type { Platform } from "@/lib/types";
 
@@ -104,11 +105,27 @@ export default function ApprovalPage() {
 
   // Brand check state
   const [brandCheck, setBrandCheck] = useState<{
-    overallScore: number;
-    toneScore: number;
-    messageAlignmentScore: number;
-    guidelinesScore: number;
-    issues: Array<{ severity: string; category: string; message: string; suggestion: string }>;
+    score: {
+      overallScore: number;
+      toneScore: number;
+      messageAlignmentScore: number;
+      guidelinesScore: number;
+      source: "live" | "recomputed" | "fallback";
+      computedAt: string;
+    };
+    issues: Array<{
+      severity: "error" | "warning" | "info";
+      category:
+        | "tone"
+        | "banned_word"
+        | "missing_disclosure"
+        | "off_brand"
+        | "guideline_violation"
+        | "length";
+      message: string;
+      suggestion: string;
+      blocking: boolean;
+    }>;
     strengths: string[];
     summary: string;
   } | null>(null);
@@ -1078,55 +1095,14 @@ export default function ApprovalPage() {
                   >
                     {brandChecking ? "Checking..." : "Run Brand Check"}
                   </button>
-                  {brandCheck && (
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span
-                          className={`rounded-full px-3 py-1 text-sm font-bold ${
-                            brandCheck.overallScore >= 70
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                              : brandCheck.overallScore >= 40
-                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                          }`}
-                        >
-                          {brandCheck.overallScore}/100
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Tone: {brandCheck.toneScore} · Message: {brandCheck.messageAlignmentScore} · Guidelines: {brandCheck.guidelinesScore}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{brandCheck.summary}</p>
-                      {brandCheck.issues.length > 0 && (
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Issues</p>
-                          {brandCheck.issues.map((issue, i) => (
-                            <div key={i} className="rounded-md border p-2 text-xs">
-                              <div className="flex items-center gap-2">
-                                <Badge
-                                  variant={issue.severity === "high" ? "destructive" : "secondary"}
-                                  className="text-[10px]"
-                                >
-                                  {issue.severity}
-                                </Badge>
-                                <span className="font-medium">{issue.category}</span>
-                              </div>
-                              <p className="mt-1 text-muted-foreground">{issue.message}</p>
-                              <p className="mt-0.5 text-primary">{issue.suggestion}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {brandCheck.strengths.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Strengths</p>
-                          {brandCheck.strengths.map((s, i) => (
-                            <p key={i} className="text-xs text-emerald-700 dark:text-emerald-400">✓ {s}</p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {brandCheck ? (
+                    <OnBrandScoreCard
+                      score={brandCheck.score}
+                      summary={brandCheck.summary}
+                      issues={brandCheck.issues}
+                      strengths={brandCheck.strengths}
+                    />
+                  ) : null}
                 </CardContent>
               </Card>
 

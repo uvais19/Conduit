@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { recordAuditEvent } from "@/lib/content/audit";
 import { fireNotification } from "@/lib/notifications/store";
+import { validateDraftAgainstBrand } from "@/lib/brand/validation";
 import {
   enqueue,
   suggestPostingTimeFromHistory,
@@ -34,6 +35,18 @@ export async function POST(
     if (draft.status !== "approved") {
       return NextResponse.json(
         { error: `Cannot schedule a draft with status "${draft.status}". Draft must be approved first.` },
+        { status: 422 }
+      );
+    }
+
+    const validation = await validateDraftAgainstBrand({
+      tenantId,
+      draft,
+      mode: "block",
+    });
+    if (!validation.compliance.canProceed) {
+      return NextResponse.json(
+        { error: "Draft failed brand compliance checks.", validation },
         { status: 422 }
       );
     }
@@ -73,7 +86,7 @@ export async function POST(
       message: `Draft scheduled for ${new Date(scheduledAt).toLocaleString()}.`,
     });
 
-    return NextResponse.json({ draft: updated, scheduledAt });
+    return NextResponse.json({ draft: updated, scheduledAt, validation });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "Unauthorized") {
