@@ -748,8 +748,6 @@ export function ContentGenerationStudio() {
               />
             </CardContent>
           ) : null}
-            </CardContent>
-          ) : null}
         </Card>
       )}
 
