@@ -23,6 +23,7 @@ import { ContentExplainerPanel } from "@/components/content-explainer-panel";
 import { ExportDraftsButton } from "@/components/export-drafts-button";
 import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type { Platform } from "@/lib/types";
+import { ExplainedScoreTooltip } from "@/components/explained-score-tooltip";
 
 type GenerationPayload = {
   platform: (typeof PLATFORMS)[number];
@@ -694,17 +695,19 @@ export function ContentGenerationStudio() {
           {brandCheck && (
             <CardContent className="space-y-4">
               <div className="flex items-center gap-4">
-                <div
-                  className={`flex size-14 items-center justify-center rounded-xl text-xl font-bold ${
-                    brandCheck.overallScore >= 80
-                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                      : brandCheck.overallScore >= 60
-                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                        : "bg-red-500/10 text-red-700 dark:text-red-400"
-                  }`}
-                >
-                  {brandCheck.overallScore}
-                </div>
+                <ExplainedScoreTooltip variant="brand" side="bottom">
+                  <div
+                    className={`flex size-14 items-center justify-center rounded-xl text-xl font-bold ${
+                      brandCheck.overallScore >= 80
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                        : brandCheck.overallScore >= 60
+                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                          : "bg-red-500/10 text-red-700 dark:text-red-400"
+                    }`}
+                  >
+                    {brandCheck.overallScore}
+                  </div>
+                </ExplainedScoreTooltip>
                 <div>
                   <p className="text-sm font-medium">Overall Brand Score</p>
                   <p className="text-xs text-muted-foreground">{brandCheck.summary}</p>

@@ -21,6 +21,7 @@ import {
   RefreshCw,
   ArrowRight,
 } from "lucide-react";
+import { ExplainedScoreTooltip } from "@/components/explained-score-tooltip";
 
 type AnalysisEntry = {
   platform: Platform;
@@ -55,7 +56,11 @@ function PlatformAnalysisSection({ entry }: { entry: AnalysisEntry }) {
           <p className="mb-1 text-xs font-medium text-muted-foreground">
             Alignment Score
           </p>
-          <ScoreBadge score={data.overallScore} />
+          <ExplainedScoreTooltip variant="analysis" side="bottom">
+            <span className="inline-flex">
+              <ScoreBadge score={data.overallScore} />
+            </span>
+          </ExplainedScoreTooltip>
         </div>
         <div className="space-y-1 text-sm">
           <div>

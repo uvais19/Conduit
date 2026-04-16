@@ -20,6 +20,7 @@ import { FieldCharCounter } from "@/components/field-char-counter";
 import { ContentExplainerPanel } from "@/components/content-explainer-panel";
 import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type { Platform } from "@/lib/types";
+import { ExplainedScoreTooltip } from "@/components/explained-score-tooltip";
 
 const STATUS_OPTIONS: Array<{ value: "all" | ContentDraftRecord["status"]; label: string }> = [
   { value: "all", label: "All statuses" },
@@ -1081,20 +1082,25 @@ export default function ApprovalPage() {
                   {brandCheck && (
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-3">
-                        <span
-                          className={`rounded-full px-3 py-1 text-sm font-bold ${
-                            brandCheck.overallScore >= 70
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                              : brandCheck.overallScore >= 40
-                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                          }`}
-                        >
-                          {brandCheck.overallScore}/100
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Tone: {brandCheck.toneScore} · Message: {brandCheck.messageAlignmentScore} · Guidelines: {brandCheck.guidelinesScore}
-                        </span>
+                        <ExplainedScoreTooltip variant="brand" side="bottom">
+                          <span
+                            className={`rounded-full px-3 py-1 text-sm font-bold ${
+                              brandCheck.overallScore >= 70
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                : brandCheck.overallScore >= 40
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                                  : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                            }`}
+                          >
+                            {brandCheck.overallScore}/100
+                          </span>
+                        </ExplainedScoreTooltip>
+                        <ExplainedScoreTooltip variant="brand-subscores" side="bottom">
+                          <span className="text-xs text-muted-foreground">
+                            Tone: {brandCheck.toneScore} · Message: {brandCheck.messageAlignmentScore} · Guidelines:{" "}
+                            {brandCheck.guidelinesScore}
+                          </span>
+                        </ExplainedScoreTooltip>
                       </div>
                       <p className="text-sm text-muted-foreground">{brandCheck.summary}</p>
                       {brandCheck.issues.length > 0 && (

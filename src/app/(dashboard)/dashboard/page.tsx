@@ -27,6 +27,7 @@ import { eq, and, sql, gte, inArray } from "drizzle-orm";
 import type { PostAnalysis, Platform } from "@/lib/types";
 import { PLATFORM_LABELS } from "@/lib/constants";
 import { getRecentActivity } from "@/lib/audit-log";
+import { ExplainedScoreTooltip } from "@/components/explained-score-tooltip";
 
 /** Per-tenant checklist must reflect latest manifesto, strategy, drafts, and connections. */
 export const dynamic = "force-dynamic";
@@ -388,17 +389,19 @@ export default async function DashboardPage() {
                     <span className="text-sm font-semibold">
                       {PLATFORM_LABELS[a.platform as Platform]}
                     </span>
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
-                        data.overallScore >= 70
-                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                          : data.overallScore >= 40
-                            ? "bg-amber-500/10 text-amber-800 dark:text-amber-400"
-                            : "bg-red-500/10 text-red-700 dark:text-red-400"
-                      }`}
-                    >
-                      {data.overallScore}/100
-                    </span>
+                    <ExplainedScoreTooltip variant="analysis" side="bottom">
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
+                          data.overallScore >= 70
+                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                            : data.overallScore >= 40
+                              ? "bg-amber-500/10 text-amber-800 dark:text-amber-400"
+                              : "bg-red-500/10 text-red-700 dark:text-red-400"
+                        }`}
+                      >
+                        {data.overallScore}/100
+                      </span>
+                    </ExplainedScoreTooltip>
                     <span className="text-xs text-muted-foreground">
                       {a.postsAnalysed} posts analysed
                     </span>
