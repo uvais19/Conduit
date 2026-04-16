@@ -29,10 +29,26 @@ export async function POST(request: Request) {
     const aspectFromVisualPlan = Boolean(draft.visualPlanData?.recommendedAspectRatio);
     const aspectRatio =
       draft.visualPlanData?.recommendedAspectRatio ?? parsed.data.aspectRatio;
+    const constraints = draft.visualPlanData?.visualConstraints;
+    const constraintPrompt = [
+      constraints?.brandColors
+        ? `Use brand colors: primary ${constraints.brandColors.primary}, secondary ${constraints.brandColors.secondary}, accent ${constraints.brandColors.accent}.`
+        : "",
+      constraints?.fontPreferences?.length
+        ? `Respect typography preferences: ${constraints.fontPreferences.join(", ")}.`
+        : "",
+      constraints?.logoUrl
+        ? `Use approved logo placement if logo appears. Approved logo URL: ${constraints.logoUrl}.`
+        : "",
+      constraints?.visualStyle ? `Style direction: ${constraints.visualStyle}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const prompt = [parsed.data.prompt, constraintPrompt].filter(Boolean).join("\n\n");
 
     const generated = await generateImageAsset({
       tenantId,
-      prompt: parsed.data.prompt,
+      prompt,
       aspectRatio,
       platform: draft.platform,
       mediaType: draft.mediaType,

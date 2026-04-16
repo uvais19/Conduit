@@ -66,6 +66,8 @@ const VOICE_GUARDRAIL_HINTS = {
     "Encouraged habits for every post — one per line. Reinforces what “good” looks like for your brand.",
   contentDonts:
     "Hard stops and off-limits — one per line. Reduces mistakes before content goes to review.",
+  requiredDisclosures:
+    "Mandatory compliance phrases/tags (one per line), e.g. #ad, paid partnership.",
 } as const;
 
 export function BrandVoiceEditor() {
@@ -378,6 +380,24 @@ export function BrandVoiceEditor() {
                 setManifesto((current) => ({
                   ...current,
                   contentDonts: textToList(event.target.value),
+                }))
+              }
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <FieldLabelWithHint
+              htmlFor="requiredDisclosures"
+              label="Required disclosures (one per line)"
+              hint={VOICE_GUARDRAIL_HINTS.requiredDisclosures}
+            />
+            <textarea
+              id="requiredDisclosures"
+              className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+              value={listToText(manifesto.requiredDisclosures)}
+              onChange={(event) =>
+                setManifesto((current) => ({
+                  ...current,
+                  requiredDisclosures: textToList(event.target.value),
                 }))
               }
             />

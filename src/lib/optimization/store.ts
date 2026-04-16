@@ -9,7 +9,10 @@ import type {
   CompetitorAnalysis,
   CompetitorProfile,
   DiscoveryMethod,
+  OptimizationProposalPayload,
   OptimizationProposal,
+  ProposalOperation,
+  ProposalOperationStatus,
   ProposalStatus,
   ProposalType,
 } from "./types";
@@ -22,7 +25,73 @@ function useDb() {
   return Boolean(process.env.DATABASE_URL);
 }
 
+function deriveProposalStatusFromOperations(
+  operations: ProposalOperation[],
+  fallback: ProposalStatus = "pending"
+): ProposalStatus {
+  if (!operations.length) return fallback;
+  if (operations.every((op) => op.status === "approved")) return "approved";
+  if (operations.every((op) => op.status === "rejected")) return "rejected";
+  return "pending";
+}
+
+function parseOperationStatus(value: unknown): ProposalOperationStatus {
+  if (value === "approved" || value === "rejected") return value;
+  return "pending";
+}
+
+function normalizeProposalPayload(data: unknown): OptimizationProposalPayload {
+  const asObject = (data ?? {}) as Record<string, unknown>;
+  const incomingOps = Array.isArray(asObject.operations) ? asObject.operations : [];
+  const operations: ProposalOperation[] = incomingOps
+    .filter((op): op is Record<string, unknown> => Boolean(op) && typeof op === "object")
+    .map((op, index) => ({
+      id: typeof op.id === "string" && op.id.length > 0 ? op.id : `op-${index + 1}`,
+      field: typeof op.field === "string" && op.field.length > 0 ? op.field : "strategy",
+      from:
+        typeof op.from === "string" ||
+        typeof op.from === "number" ||
+        typeof op.from === "boolean" ||
+        op.from === null
+          ? op.from
+          : undefined,
+      to:
+        typeof op.to === "string" ||
+        typeof op.to === "number" ||
+        typeof op.to === "boolean" ||
+        op.to === null
+          ? op.to
+          : null,
+      reason: typeof op.reason === "string" ? op.reason : "Proposed optimization change",
+      status: parseOperationStatus(op.status),
+      resolvedAt: typeof op.resolvedAt === "string" ? op.resolvedAt : null,
+      resolvedBy: typeof op.resolvedBy === "string" ? op.resolvedBy : null,
+    }));
+
+  if (operations.length > 0) {
+    return {
+      operations,
+      impactProjection:
+        asObject.impactProjection && typeof asObject.impactProjection === "object"
+          ? (asObject.impactProjection as OptimizationProposalPayload["impactProjection"])
+          : undefined,
+      legacyData:
+        asObject.legacyData && typeof asObject.legacyData === "object"
+          ? (asObject.legacyData as Record<string, unknown>)
+          : undefined,
+    };
+  }
+
+  return {
+    operations: [],
+    impactProjection: undefined,
+    legacyData: asObject,
+  };
+}
+
 function mapProposalRow(row: typeof optimizationProposals.$inferSelect): OptimizationProposal {
+  const payload = normalizeProposalPayload(row.data);
+  const derivedStatus = deriveProposalStatusFromOperations(payload.operations, row.status);
   return {
     id: row.id,
     tenantId: row.tenantId,
@@ -30,8 +99,8 @@ function mapProposalRow(row: typeof optimizationProposals.$inferSelect): Optimiz
     title: row.title,
     description: row.description,
     reasoning: row.reasoning ?? "",
-    data: (row.data as Record<string, unknown>) ?? {},
-    status: row.status,
+    data: payload,
+    status: derivedStatus,
     proposedAt: row.proposedAt.toISOString(),
     resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
     resolvedBy: row.resolvedBy,
@@ -58,9 +127,10 @@ export async function createProposal(params: {
   title: string;
   description: string;
   reasoning: string;
-  data: Record<string, unknown>;
+  data: OptimizationProposalPayload;
 }): Promise<OptimizationProposal> {
   if (!useDb()) {
+    const payload = normalizeProposalPayload(params.data);
     const proposal: OptimizationProposal = {
       id: randomUUID(),
       tenantId: params.tenantId,
@@ -68,8 +138,8 @@ export async function createProposal(params: {
       title: params.title,
       description: params.description,
       reasoning: params.reasoning,
-      data: params.data,
-      status: "pending",
+      data: payload,
+      status: deriveProposalStatusFromOperations(payload.operations, "pending"),
       proposedAt: new Date().toISOString(),
       resolvedAt: null,
       resolvedBy: null,
@@ -88,7 +158,7 @@ export async function createProposal(params: {
       title: params.title,
       description: params.description,
       reasoning: params.reasoning,
-      data: params.data,
+      data: normalizeProposalPayload(params.data),
       status: "pending",
     })
     .returning();
@@ -148,15 +218,31 @@ export async function resolveProposal(
   tenantId: string,
   proposalId: string,
   action: "approved" | "rejected",
-  resolvedBy: string
+  resolvedBy: string,
+  operationId?: string
 ): Promise<OptimizationProposal | null> {
   if (!useDb()) {
     const all = proposalsByTenant.get(tenantId) ?? [];
     const proposal = all.find((p) => p.id === proposalId);
     if (!proposal || proposal.status !== "pending") return null;
-
-    proposal.status = action;
-    proposal.resolvedAt = new Date().toISOString();
+    const now = new Date().toISOString();
+    if (operationId && proposal.data.operations.length > 0) {
+      const operation = proposal.data.operations.find((op) => op.id === operationId);
+      if (!operation) return null;
+      operation.status = action;
+      operation.resolvedAt = now;
+      operation.resolvedBy = resolvedBy;
+      proposal.status = deriveProposalStatusFromOperations(proposal.data.operations, proposal.status);
+    } else {
+      proposal.status = action;
+      proposal.data.operations = proposal.data.operations.map((op) => ({
+        ...op,
+        status: action,
+        resolvedAt: now,
+        resolvedBy,
+      }));
+    }
+    proposal.resolvedAt = now;
     proposal.resolvedBy = resolvedBy;
     return proposal;
   }
@@ -172,15 +258,34 @@ export async function resolveProposal(
     )
     .limit(1);
 
-  if (!existing || existing.status !== "pending") {
+  if (!existing || (existing.status !== "pending" && !operationId)) {
     return null;
   }
+
+  const payload = normalizeProposalPayload(existing.data);
+  const now = new Date();
+  if (operationId && payload.operations.length > 0) {
+    const operation = payload.operations.find((op) => op.id === operationId);
+    if (!operation) return null;
+    operation.status = action;
+    operation.resolvedAt = now.toISOString();
+    operation.resolvedBy = resolvedBy;
+  } else {
+    payload.operations = payload.operations.map((op) => ({
+      ...op,
+      status: action,
+      resolvedAt: now.toISOString(),
+      resolvedBy,
+    }));
+  }
+  const nextStatus = deriveProposalStatusFromOperations(payload.operations, action);
 
   const [updated] = await db
     .update(optimizationProposals)
     .set({
-      status: action,
-      resolvedAt: new Date(),
+      status: nextStatus,
+      data: payload,
+      resolvedAt: now,
       resolvedBy,
     })
     .where(

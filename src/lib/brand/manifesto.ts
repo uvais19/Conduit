@@ -140,3 +140,41 @@ export function createEmptyBrandManifesto(
 
   return brandManifestoSchema.parse(manifesto);
 }
+
+export type CanonicalVoiceModel = {
+  voiceAttributes: string[];
+  toneSpectrum: BrandManifesto["toneSpectrum"];
+  languageStyle: BrandManifesto["languageStyle"];
+  contentDos: string[];
+  contentDonts: string[];
+  bannedWords: string[];
+  requiredDisclosures: string[];
+};
+
+export function getCanonicalVoiceModel(manifesto: BrandManifesto): CanonicalVoiceModel {
+  return {
+    voiceAttributes: normalizeList(manifesto.voiceAttributes, []),
+    toneSpectrum: manifesto.toneSpectrum,
+    languageStyle: manifesto.languageStyle,
+    contentDos: normalizeList(manifesto.contentDos, []),
+    contentDonts: normalizeList(manifesto.contentDonts, []),
+    bannedWords: normalizeList(manifesto.bannedWords, []),
+    requiredDisclosures: normalizeList(manifesto.requiredDisclosures, []),
+  };
+}
+
+export function applyCanonicalVoiceModel(
+  manifesto: BrandManifesto,
+  voice: Partial<CanonicalVoiceModel>
+): BrandManifesto {
+  return createEmptyBrandManifesto({
+    ...manifesto,
+    voiceAttributes: voice.voiceAttributes ?? manifesto.voiceAttributes,
+    toneSpectrum: voice.toneSpectrum ?? manifesto.toneSpectrum,
+    languageStyle: voice.languageStyle ?? manifesto.languageStyle,
+    contentDos: voice.contentDos ?? manifesto.contentDos,
+    contentDonts: voice.contentDonts ?? manifesto.contentDonts,
+    bannedWords: voice.bannedWords ?? manifesto.bannedWords,
+    requiredDisclosures: voice.requiredDisclosures ?? manifesto.requiredDisclosures,
+  });
+}

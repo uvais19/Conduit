@@ -16,16 +16,19 @@ export async function POST(req: NextRequest) {
     if (limited) return limited;
 
     const body = await req.json();
-    const { caption, hashtags, cta, platform } = body as {
+    const { caption, content, hashtags, cta, platform, strict } = body as {
       caption?: string;
+      content?: string;
       hashtags?: string[];
       cta?: string;
       platform?: string;
+      strict?: boolean;
     };
+    const effectiveCaption = caption ?? content;
 
-    if (!caption || !platform) {
+    if (!effectiveCaption || !platform) {
       return NextResponse.json(
-        { error: "caption and platform are required" },
+        { error: "caption/content and platform are required" },
         { status: 400 },
       );
     }
@@ -46,13 +49,18 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await checkBrandConsistency({
-      caption,
+      caption: effectiveCaption,
       hashtags: hashtags ?? [],
       cta: cta ?? null,
       platform,
       manifesto: row.data as BrandManifesto,
     });
-
+    if (strict && !result.compliance.canProceed) {
+      return NextResponse.json(
+        { error: "Brand compliance failed", result },
+        { status: 422 },
+      );
+    }
     return NextResponse.json({ result });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";

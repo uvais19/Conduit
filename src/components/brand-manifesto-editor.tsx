@@ -508,7 +508,9 @@ export function BrandManifestoEditor() {
       <Card>
         <CardHeader>
           <CardTitle>Voice & Guardrails</CardTitle>
-          <CardDescription>These rules guide every caption, strategy, and asset.</CardDescription>
+          <CardDescription>
+            These rules guide every caption, strategy, and asset. Canonical edits now live in the Brand Voice screen to keep one source of truth.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -521,12 +523,8 @@ export function BrandManifestoEditor() {
               id="voiceAttributes"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
               value={listToText(manifesto.voiceAttributes)}
-              onChange={(event) =>
-                setManifesto((current) => ({
-                  ...current,
-                  voiceAttributes: textToList(event.target.value),
-                }))
-              }
+              disabled
+              readOnly
             />
           </div>
           <div className="space-y-2">
@@ -557,12 +555,8 @@ export function BrandManifestoEditor() {
               id="contentDos"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
               value={listToText(manifesto.contentDos)}
-              onChange={(event) =>
-                setManifesto((current) => ({
-                  ...current,
-                  contentDos: textToList(event.target.value),
-                }))
-              }
+              disabled
+              readOnly
             />
           </div>
           <div className="space-y-2">
@@ -575,12 +569,8 @@ export function BrandManifestoEditor() {
               id="contentDonts"
               className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
               value={listToText(manifesto.contentDonts)}
-              onChange={(event) =>
-                setManifesto((current) => ({
-                  ...current,
-                  contentDonts: textToList(event.target.value),
-                }))
-              }
+              disabled
+              readOnly
             />
           </div>
           <div className="space-y-2">

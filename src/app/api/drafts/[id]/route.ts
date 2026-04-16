@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/lib/auth/permissions";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { draftUpdateSchema } from "@/lib/content/types";
+import { validateDraftAgainstBrand } from "@/lib/brand/validation";
 
 export async function GET(
   _request: Request,
@@ -45,6 +46,37 @@ export async function PUT(
         { error: parsed.error.issues[0]?.message ?? "Invalid update payload" },
         { status: 400 }
       );
+    }
+
+    const existing = await getDraftById(tenantId, id);
+    if (!existing) {
+      return NextResponse.json({ error: "Draft not found" }, { status: 404 });
+    }
+
+    const shouldStrictValidate =
+      parsed.data.status === "in-review" ||
+      parsed.data.status === "approved" ||
+      parsed.data.status === "scheduled" ||
+      parsed.data.status === "published";
+    if (shouldStrictValidate) {
+      const candidate = {
+        ...existing,
+        ...parsed.data,
+      };
+      const validation = await validateDraftAgainstBrand({
+        tenantId,
+        draft: candidate,
+        mode: "block",
+      });
+      if (!validation.compliance.canProceed) {
+        return NextResponse.json(
+          {
+            error: "Draft failed brand compliance checks.",
+            validation,
+          },
+          { status: 422 }
+        );
+      }
     }
 
     const updated = await updateDraft(tenantId, id, parsed.data);

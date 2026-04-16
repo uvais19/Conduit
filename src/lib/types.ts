@@ -67,6 +67,42 @@ export const brandManifestoSchema = z.object({
 
 export type BrandManifesto = z.infer<typeof brandManifestoSchema>;
 
+export type OnBrandScoreSource = "live" | "recomputed" | "fallback";
+
+export type OnBrandScore = {
+  overallScore: number;
+  toneScore: number;
+  messageAlignmentScore: number;
+  guidelinesScore: number;
+  source: OnBrandScoreSource;
+  computedAt: string;
+};
+
+export type BrandComplianceSeverity = "error" | "warning" | "info";
+
+export type BrandComplianceIssue = {
+  severity: BrandComplianceSeverity;
+  category:
+    | "tone"
+    | "banned_word"
+    | "missing_disclosure"
+    | "off_brand"
+    | "guideline_violation"
+    | "length";
+  message: string;
+  suggestion: string;
+  blocking: boolean;
+};
+
+export type BrandComplianceResult = {
+  blockingErrors: BrandComplianceIssue[];
+  warnings: BrandComplianceIssue[];
+  infos: BrandComplianceIssue[];
+  missingDisclosures: string[];
+  autoFixSuggestions: string[];
+  canProceed: boolean;
+};
+
 // ============================================================
 // Content Strategy
 // ============================================================

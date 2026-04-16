@@ -35,6 +35,28 @@ export const visualPlanPersistedSchema = z.object({
   recommendedResolutionNote: z.string().optional(),
   /** Why this visual angle / hook fits the caption and platform */
   designRationale: z.string().optional(),
+  visualConstraints: z
+    .object({
+      logoUrl: z.string().optional(),
+      brandColors: z
+        .object({
+          primary: z.string(),
+          secondary: z.string(),
+          accent: z.string(),
+        })
+        .optional(),
+      fontPreferences: z.array(z.string()).optional(),
+      visualStyle: z.string().optional(),
+    })
+    .optional(),
+  visualCompliance: z
+    .object({
+      requested: z.array(z.string()),
+      satisfied: z.array(z.string()),
+      unsatisfied: z.array(z.string()),
+      notes: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type VisualPlanPersisted = z.infer<typeof visualPlanPersistedSchema>;

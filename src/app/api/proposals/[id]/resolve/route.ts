@@ -5,6 +5,7 @@ import { resolveProposal, getProposalById } from "@/lib/optimization/store";
 
 const resolveSchema = z.object({
   action: z.enum(["approved", "rejected"]),
+  operationId: z.string().optional(),
 });
 
 export async function POST(
@@ -34,7 +35,8 @@ export async function POST(
       tenantId,
       id,
       parsed.data.action,
-      session.user.id
+      session.user.id,
+      parsed.data.operationId
     );
 
     if (!resolved) {

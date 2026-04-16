@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { runVisualDesignerAgent } from "@/lib/agents/content/visual-designer";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { visualPlanRequestSchema } from "@/lib/content/types";
+import { getLatestManifesto } from "@/lib/brand/validation";
 
 export async function POST(
   request: Request,
@@ -34,6 +35,7 @@ export async function POST(
       draft,
       objective: parsed.data.objective,
       styleHint: parsed.data.styleHint,
+      manifesto: await getLatestManifesto(tenantId),
     });
 
     const updated = await updateDraft(tenantId, id, {
