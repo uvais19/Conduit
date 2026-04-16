@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/card";
 import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
+import { AutoAdvanceBanner } from "@/components/auto-advance-banner";
+import { Progress } from "@/components/ui/progress";
 import { listToText, textToList } from "@/lib/brand/manifesto";
 import type { FullStrategySuggestResponse, SuggestionItem } from "@/lib/strategy/suggest-types";
 import { createDefaultStrategy } from "@/lib/strategy/defaults";
@@ -63,7 +65,7 @@ const FIELD_HINTS = {
     "The single takeaway or call-to-action that unifies all posts during this week.",
 } as const;
 
-const STRATEGY_ADVANCE_MS = 2000;
+const STRATEGY_ADVANCE_MS = 5000;
 
 const PILLAR_FIELD_KEYS = new Set(["name", "description", "percentage"]);
 const SCHEDULE_FIELD_KEYS = new Set([
@@ -306,6 +308,7 @@ export function StrategyBuilder() {
 
   const [suggestingStrategy, setSuggestingStrategy] = useState(false);
   const [fullSuggestion, setFullSuggestion] = useState<FullStrategySuggestResponse | null>(null);
+  const [showAdvanceBanner, setShowAdvanceBanner] = useState(false);
 
   const handleSuggestFullStrategy = useCallback(async () => {
     setSuggestingStrategy(true);
@@ -435,7 +438,7 @@ export function StrategyBuilder() {
                 setStrategy(data.strategy as ContentStrategy);
                 setVersion(data.version as number);
                 setMessage(
-                  `Strategy generated successfully as version ${data.version}. Opening drafts in a moment…`
+                  `Strategy generated successfully as version ${data.version}.`
                 );
                 if (strategyAdvanceTimerRef.current) {
                   window.clearTimeout(strategyAdvanceTimerRef.current);
@@ -445,6 +448,7 @@ export function StrategyBuilder() {
                   router.refresh();
                   router.push("/content/drafts");
                 }, STRATEGY_ADVANCE_MS);
+                setShowAdvanceBanner(true);
               } else if (currentEvent === "error") {
                 throw new Error(data.error as string);
               }
@@ -529,6 +533,14 @@ export function StrategyBuilder() {
             <Sparkles className="mr-2 size-4" />
             {generating ? (generationStep || "Generating...") : "Generate strategy"}
           </Button>
+          {generating && (
+            <div className="w-full space-y-1.5 md:w-auto md:min-w-[16rem]">
+              <Progress value={generationStep ? 50 : 15} className="h-1.5" />
+              <p className="text-xs text-muted-foreground">
+                {generationStep || "Preparing generation pipeline…"}
+              </p>
+            </div>
+          )}
           <Button
             variant="outline"
             className="border-violet-300 text-violet-800 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200 dark:hover:bg-violet-950/40"
@@ -546,6 +558,20 @@ export function StrategyBuilder() {
       </header>
 
       {message && <div className="rounded-lg border border-green-600/30 bg-green-600/5 p-3 text-sm text-green-700">{message}</div>}
+      {showAdvanceBanner && (
+        <AutoAdvanceBanner
+          destination="/content/drafts"
+          label="Content Drafts"
+          delayMs={STRATEGY_ADVANCE_MS}
+          onCancel={() => {
+            setShowAdvanceBanner(false);
+            if (strategyAdvanceTimerRef.current) {
+              window.clearTimeout(strategyAdvanceTimerRef.current);
+              strategyAdvanceTimerRef.current = null;
+            }
+          }}
+        />
+      )}
       {error && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
 
       {fullSuggestion && suggestionLayout && (

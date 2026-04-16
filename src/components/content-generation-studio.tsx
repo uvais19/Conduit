@@ -21,6 +21,7 @@ import { DraftVisualEditor } from "@/components/draft-visual-editor";
 import { FieldCharCounter } from "@/components/field-char-counter";
 import { ContentExplainerPanel } from "@/components/content-explainer-panel";
 import { ExportDraftsButton } from "@/components/export-drafts-button";
+import { Progress } from "@/components/ui/progress";
 import { PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type { Platform } from "@/lib/types";
 import { ExplainedScoreTooltip } from "@/components/explained-score-tooltip";
@@ -539,6 +540,31 @@ export function ContentGenerationStudio() {
                     : "Generating..."
                 : "Generate Drafts"}
             </button>
+            {loading && (
+              <div className="mt-3 space-y-2">
+                <Progress
+                  value={
+                    generatingVariant === "visual"
+                      ? 85
+                      : generatingVariant === "C"
+                        ? 66
+                        : generatingVariant === "B"
+                          ? 44
+                          : generatingVariant === "A"
+                            ? 22
+                            : 10
+                  }
+                  className="h-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {generatingVariant === "visual"
+                    ? "Designing visuals and carousel layouts…"
+                    : generatingVariant
+                      ? `Writing variant ${generatingVariant} copy…`
+                      : "Preparing generation pipeline…"}
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

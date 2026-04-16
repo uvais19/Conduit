@@ -36,13 +36,15 @@ export function ExplainedScoreTooltip({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="inline-flex cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-[inherit]"
-          tabIndex={0}
-        >
-          {children}
-        </span>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-[inherit]"
+            tabIndex={0}
+          />
+        }
+      >
+        {children}
       </TooltipTrigger>
       <TooltipContent side={side} className="max-w-sm text-left leading-relaxed">
         {text}

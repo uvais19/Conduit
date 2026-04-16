@@ -488,7 +488,10 @@ export default function AnalyticsPage() {
             {loading ? (
               <p className="text-sm text-muted-foreground">Loading chart...</p>
             ) : chartData.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No analytics data yet. Collect analytics to populate charts.</p>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-sm font-medium">No analytics data yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Click &quot;Collect Analytics&quot; above to fetch metrics from your connected platforms.</p>
+              </div>
             ) : (
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
@@ -522,7 +525,10 @@ export default function AnalyticsPage() {
             {loading ? (
               <p className="text-sm text-muted-foreground">Loading posts...</p>
             ) : (overview?.topPosts.length ?? 0) === 0 ? (
-              <p className="text-sm text-muted-foreground">No top posts yet.</p>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-sm font-medium">No top posts yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Publish content and collect analytics to see your highest-performing posts here.</p>
+              </div>
             ) : (
               <div className="space-y-2">
                 {overview?.topPosts.map((post) => (
@@ -628,7 +634,10 @@ export default function AnalyticsPage() {
             {insightsLoading ? (
               <p className="text-sm text-muted-foreground">Loading follower growth...</p>
             ) : followerGrowth.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No follower growth points yet.</p>
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <p className="text-sm font-medium">No follower growth data yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Connect your platforms and collect analytics regularly to track follower trends over time.</p>
+              </div>
             ) : (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -664,7 +673,10 @@ export default function AnalyticsPage() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No forecast data yet.</p>
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <p className="text-sm font-medium">No forecast data yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Collect analytics over multiple weeks to enable engagement forecasting.</p>
+              </div>
             )}
             <div className="space-y-1">
               {anomalies.slice(0, 4).map((anomaly) => (
@@ -687,7 +699,10 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             {hashtags.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No hashtag analytics yet.</p>
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <p className="text-sm font-medium">No hashtag analytics yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Publish posts with hashtags and collect analytics to see which tags drive the most engagement.</p>
+              </div>
             ) : (
               <div className="space-y-2">
                 {hashtags.slice(0, 8).map((tag) => (
@@ -708,7 +723,10 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {bestWindows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No posting windows learned yet.</p>
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <p className="text-sm font-medium">No posting windows learned yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">As you publish and collect analytics, Conduit learns which days and times perform best for your audience.</p>
+              </div>
             ) : (
               bestWindows.slice(0, 8).map((window) => (
                 <div key={`${window.weekday}-${window.hour}`} className="flex items-center justify-between rounded-md border px-2 py-1 text-sm">

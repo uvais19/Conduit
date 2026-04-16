@@ -8,6 +8,7 @@ import { DraftMediaGallery } from "@/components/draft-media-gallery";
 import { InstagramCarouselPreview } from "@/components/instagram-carousel-preview";
 import { FieldCharCounter } from "@/components/field-char-counter";
 import { ContentExplainerPanel } from "@/components/content-explainer-panel";
+import { Progress } from "@/components/ui/progress";
 import type { ContentDraftRecord } from "@/lib/content/types";
 
 type Props = {
@@ -280,8 +281,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
               onClick={buildVisualPlan}
               className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
-              {busy === "plan" ? "Designing..." : "Generate Visual Plan"}
+              {busy === "plan" ? "Designing…" : "Generate Visual Plan"}
             </button>
+            {busy === "plan" && (
+              <div className="mt-2 space-y-1.5">
+                <Progress value={45} className="h-1.5" />
+                <p className="text-xs text-muted-foreground">Analyzing caption and brand context…</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -322,8 +329,14 @@ export function DraftVisualEditor({ draft, onDraftChange }: Props) {
               onClick={generateImage}
               className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
-              {busy === "generate" ? "Generating..." : "Generate Image"}
+              {busy === "generate" ? "Generating…" : "Generate Image"}
             </button>
+            {busy === "generate" && (
+              <div className="mt-2 w-48 space-y-1.5">
+                <Progress value={60} className="h-1.5" />
+                <p className="text-xs text-muted-foreground">Rendering image with AI…</p>
+              </div>
+            )}
             <div className="flex flex-col gap-2">
               <FieldLabelWithHint
                 htmlFor={`${draft.id}-upload-image`}

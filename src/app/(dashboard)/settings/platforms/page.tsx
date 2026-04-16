@@ -9,6 +9,7 @@ import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { AutoAdvanceBanner } from "@/components/auto-advance-banner";
 
 type ConnectionInfo = {
   id: string;
@@ -54,7 +55,7 @@ const PLATFORM_GUIDES: Record<Platform, { tokenLabel: string; hint: string }> = 
   },
 };
 
-const PLATFORM_ADVANCE_MS = 1500;
+const PLATFORM_ADVANCE_MS = 5000;
 
 const CONNECT_FIELD_HINTS = {
   platform:
@@ -74,6 +75,7 @@ export default function PlatformsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [analysing, setAnalysing] = useState(false);
   const [analysisMessage, setAnalysisMessage] = useState("");
+  const [showAdvanceBanner, setShowAdvanceBanner] = useState(false);
 
   // Connect form state
   const [connectPlatform, setConnectPlatform] = useState<Platform | "">("");
@@ -181,6 +183,7 @@ export default function PlatformsPage() {
           router.refresh();
           router.push("/dashboard");
         }, PLATFORM_ADVANCE_MS);
+        setShowAdvanceBanner(true);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to connect");
@@ -232,6 +235,21 @@ export default function PlatformsPage() {
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           {error}
         </div>
+      )}
+
+      {showAdvanceBanner && (
+        <AutoAdvanceBanner
+          destination="/dashboard"
+          label="Dashboard"
+          delayMs={PLATFORM_ADVANCE_MS}
+          onCancel={() => {
+            setShowAdvanceBanner(false);
+            if (platformAdvanceTimerRef.current) {
+              window.clearTimeout(platformAdvanceTimerRef.current);
+              platformAdvanceTimerRef.current = null;
+            }
+          }}
+        />
       )}
 
       {/* Analysis status */}

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
+import { AutoAdvanceBanner } from "@/components/auto-advance-banner";
 import type { BrandManifesto } from "@/lib/types";
 
 type UploadedDocument = {
@@ -78,7 +79,7 @@ const initialForm = {
   documents: [] as UploadedDocument[],
 };
 
-const ADVANCE_MS = 1800;
+const ADVANCE_MS = 5000;
 
 export function OnboardingWizard() {
   const router = useRouter();
@@ -501,81 +502,88 @@ export function OnboardingWizard() {
       </form>
 
       {result && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="size-5 text-primary" />
-              Manifesto generated successfully
-            </CardTitle>
-            <CardDescription>
-              Version {result.version} saved. Next: generate your content strategy — we&apos;ll take you
-              there automatically, or continue now.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border p-4">
-                <h3 className="font-semibold">Identity</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  <strong>{result.manifesto.businessName}</strong> • {result.manifesto.industry}
-                </p>
-                <p className="mt-2 text-sm">{result.manifesto.missionStatement}</p>
-              </div>
-              <div className="rounded-lg border p-4">
-                <h3 className="font-semibold">Voice attributes</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {result.manifesto.voiceAttributes.map((item) => (
-                    <Badge key={item} variant="secondary">
-                      {item}
-                    </Badge>
-                  ))}
+        <>
+          <AutoAdvanceBanner
+            destination="/strategy"
+            label="Content Strategy"
+            delayMs={ADVANCE_MS}
+            onCancel={cancelAdvanceTimer}
+          />
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="size-5 text-primary" />
+                Manifesto generated successfully
+              </CardTitle>
+              <CardDescription>
+                Version {result.version} saved. Next: generate your content strategy.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-semibold">Identity</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    <strong>{result.manifesto.businessName}</strong> • {result.manifesto.industry}
+                  </p>
+                  <p className="mt-2 text-sm">{result.manifesto.missionStatement}</p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-semibold">Voice attributes</h3>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {result.manifesto.voiceAttributes.map((item) => (
+                      <Badge key={item} variant="secondary">
+                        {item}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <h3 className="font-semibold">Key messages</h3>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                  {result.manifesto.keyMessages.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <h3 className="font-semibold">Key messages</h3>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                    {result.manifesto.keyMessages.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="font-semibold">Discovery notes</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Scraper source: {result.scraper.source}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {result.documents.summary}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold">Discovery notes</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Scraper source: {result.scraper.source}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {result.documents.summary}
-                </p>
-              </div>
-            </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/strategy"
-                className={buttonVariants()}
-                onClick={() => {
-                  cancelAdvanceTimer();
-                  router.refresh();
-                }}
-              >
-                Continue to content strategy
-              </Link>
-              <Link href="/brand" className={buttonVariants({ variant: "outline" })}>
-                Review manifesto
-              </Link>
-              <Link
-                href="/brand/voice"
-                className={buttonVariants({ variant: "outline" })}
-              >
-                Tune brand voice
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/strategy"
+                  className={buttonVariants()}
+                  onClick={() => {
+                    cancelAdvanceTimer();
+                    router.refresh();
+                  }}
+                >
+                  Continue to content strategy
+                </Link>
+                <Link href="/brand" className={buttonVariants({ variant: "outline" })}>
+                  Review manifesto
+                </Link>
+                <Link
+                  href="/brand/voice"
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  Tune brand voice
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );
