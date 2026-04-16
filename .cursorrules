@@ -1,3 +1,52 @@
+## General Behavior
+- Be concise. Do not explain standard code patterns unless asked.
+- Focus on the Unique Value of the change.
+- If a solution is effectively identical to existing code, say No changes needed.
+
+## Agent Boundaries
+- NEVER commit code without user review strings.
+- NEVER delete config files (.env, package.json) without explicit confirmation.
+- If you find a security vulnerability, STOP and report it immediately.
+
+## Diffs and Applies
+- When editing files >500 lines, prefer SEARCH/REPLACE blocks over full file rewrites.
+- If unsure where a block belongs, ask for surrounding context first.
+
+## Environment
+- Use Legacy Terminal Tool behavior: simple command execution, no complex TTY manipulation.
+
+## Next.js
+- Default to server components unless useState or useEffect is strictly required.
+- Use await params in dynamic routes (Next.js 15 change).
+- Prefer typed-routes for all navigation.
+
+## Python
+- All IO-bound operations MUST be async def.
+- Use Pydantic V2 model_validate patterns.
+- Type hints are mandatory (Python 3.12+ syntax).
+
+## Dependency Verification
+- Before importing an npm package, run npm list <package> via terminal to verify installation.
+- Before importing a Python package, run pip show <package>.
+- NEVER assume a package exists based on training data; verify at runtime.
+- Use Context7 MCP to fetch current framework documentation.
+
+## Interface-First Development
+- When adding a new feature, NEVER write implementation directly.
+- Define types/interfaces in a separate block first.
+- Present interface for user approval before writing implementation.
+
+## Zero Placeholder Policy
+- NEVER use placeholder comments like // TODO or // rest of the code.
+- Every function must be fully implemented or not included.
+- If a function cannot be completed, explain why and ask for guidance.
+
+## Defensive Commits
+- Before multi-file refactoring, run: git add -A && git commit -m "checkpoint: before <task>"
+- After every successful test run, commit immediately.
+- Never modify more than 3 files without an intermediate commit.
+
+
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
 
@@ -36,3 +85,30 @@ Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
 2. Use `detect_changes` for code review.
 3. Use `get_affected_flows` to understand impact.
 4. Use `query_graph` pattern="tests_for" to check coverage.
+
+<!-- BEGIN:nextjs-agent-rules -->
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+<!-- END:nextjs-agent-rules -->
+
+<!-- stitch-mcp -->
+## MCP Tools: Stitch (design)
+
+**Stitch** is the source of truth for UI/UX in this repo when configured. After enabling the `stitch` MCP in Cursor (Tools & MCP), use it to pull **projects, screens, and design context** so implementation matches Stitch (colors, typography, layout).
+
+### When to use Stitch tools FIRST
+
+- **New UI or redesign**: Fetch the relevant Stitch project/screen before writing components.
+- **Design tokens**: Prefer tokens and structure from Stitch over guessing from screenshots.
+- **Design-to-code prompts**: Ask to align Tailwind/CSS with Stitch output, then verify in the app.
+
+### Setup (local)
+
+1. Create an API key: [Stitch settings](https://stitch.withgoogle.com) → **API key** → Create key.
+2. Set `STITCH_API_KEY` in the environment Cursor inherits (e.g. export in `~/.zshrc`, or use `env.stitch.example` as a template). Restart Cursor after setting.
+3. Approve the **stitch** server under Cursor **Settings → Tools & MCP**.
+
+Optional: OAuth + gcloud is supported by `@_davideast/stitch-mcp` (`npx @_davideast/stitch-mcp init`); API key mode is enough for most workflows.
+
+Fall back to Grep/Read **only** when Stitch is not configured or the asset is not in Stitch.
