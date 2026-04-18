@@ -172,8 +172,6 @@ export default function SettingsPage() {
                 <option value="instagram">Instagram</option>
                 <option value="facebook">Facebook</option>
                 <option value="linkedin">LinkedIn</option>
-                <option value="x">X (Twitter)</option>
-                <option value="gbp">Google Business Profile</option>
               </select>
             </div>
             <div className="space-y-2">

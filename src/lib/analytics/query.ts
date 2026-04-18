@@ -5,8 +5,6 @@ const VALID_PLATFORMS = new Set<Platform>([
   "instagram",
   "facebook",
   "linkedin",
-  "x",
-  "gbp",
 ]);
 
 export function parseAnalyticsQueryFromUrl(url: URL): AnalyticsQuery {

@@ -75,7 +75,7 @@ const STEPS = [
     href: "/settings/platforms",
     step: 4,
     title: "Connect platforms",
-    description: "Link Instagram, Facebook, LinkedIn, X, and GBP",
+    description: "Link Instagram, Facebook, and LinkedIn",
     icon: Zap,
   },
 ];

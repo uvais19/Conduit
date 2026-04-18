@@ -38,8 +38,6 @@ export const DEFAULT_DISCLOSURES_BY_PLATFORM: Record<string, string[]> = {
   instagram: ["#ad"],
   facebook: ["#ad"],
   linkedin: ["paid partnership", "#ad"],
-  x: ["#ad"],
-  gbp: ["sponsored"],
 };
 
 type EvaluateComplianceParams = {

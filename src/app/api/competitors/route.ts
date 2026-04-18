@@ -10,7 +10,7 @@ import type { Platform } from "@/lib/types";
 
 const addCompetitorSchema = z.object({
   name: z.string().min(1),
-  platform: z.enum(["instagram", "facebook", "linkedin", "x", "gbp"]),
+  platform: z.enum(["instagram", "facebook", "linkedin"]),
   profileUrl: z.string().url(),
 });
 

@@ -36,11 +36,9 @@ export async function POST(request: NextRequest) {
     const prompt = `Adapt the following ${sourceLabel} post for ${targetLabel}.
 
 Adjust the format, tone, length, and conventions to match ${targetLabel}'s best practices:
-- ${targetPlatform === "x" ? "Keep under 280 characters. Be concise and punchy." : ""}
 - ${targetPlatform === "linkedin" ? "Professional tone. Can be longer (1300+ chars). Use line breaks for readability." : ""}
 - ${targetPlatform === "instagram" ? "Visual-first caption. Front-load the hook. Hashtags at the end (up to 30)." : ""}
 - ${targetPlatform === "facebook" ? "Conversational tone. Questions drive engagement. Medium length." : ""}
-- ${targetPlatform === "gbp" ? "Short, local-focused. Include a clear CTA. Under 1500 chars." : ""}
 
 Keep the core message and intent. Adapt hashtags and CTA for the target platform.
 

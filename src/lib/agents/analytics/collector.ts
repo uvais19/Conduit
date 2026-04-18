@@ -19,8 +19,6 @@ import { recordMetrics } from "@/lib/analytics/store";
 import type { PostMetrics } from "@/lib/analytics/types";
 import { fetchMetaRealMetrics } from "@/lib/platforms/meta-metrics";
 import { fetchLinkedInMetrics } from "@/lib/platforms/linkedin-api";
-import { fetchXTweetMetrics } from "@/lib/platforms/x-api";
-import { fetchGbpPostMetrics } from "@/lib/platforms/gbp-api";
 
 // ---------------------------------------------------------------------------
 // Simulated metrics generation
@@ -65,24 +63,6 @@ const PLATFORM_RANGES: Record<
     shareRate: [0.003, 0.015],
     saveRate: [0.002, 0.008],
     clickRate: [0.01, 0.03],
-  },
-  x: {
-    impressions: [400, 10000],
-    reachRatio: [0.4, 0.7],
-    likeRate: [0.01, 0.04],
-    commentRate: [0.002, 0.01],
-    shareRate: [0.005, 0.03],
-    saveRate: [0.001, 0.005],
-    clickRate: [0.005, 0.015],
-  },
-  gbp: {
-    impressions: [100, 2000],
-    reachRatio: [0.8, 0.95],
-    likeRate: [0.01, 0.03],
-    commentRate: [0.002, 0.008],
-    shareRate: [0.001, 0.005],
-    saveRate: [0.001, 0.003],
-    clickRate: [0.02, 0.05],
   },
 };
 
@@ -178,38 +158,6 @@ async function fetchRealMetrics(
     };
   }
 
-  if (draft.platform === "x") {
-    const m = await fetchXTweetMetrics({
-      accessToken: connection.accessToken,
-      tweetId: postId,
-    });
-    const impressions = Math.max(1, m.impressions);
-    return {
-      ...m,
-      engagementRate:
-        Math.round(
-          ((m.likes + m.comments + m.shares + m.saves + m.clicks) / impressions) * 10000
-        ) / 10000,
-      dataSource: "live",
-    };
-  }
-
-  if (draft.platform === "gbp" && connection.platformPageId?.trim()) {
-    const m = await fetchGbpPostMetrics({
-      accessToken: connection.accessToken,
-      locationName: connection.platformPageId,
-      localPostName: postId,
-    });
-    const impressions = Math.max(1, m.impressions);
-    return {
-      ...m,
-      engagementRate:
-        Math.round(
-          ((m.likes + m.comments + m.shares + m.saves + m.clicks) / impressions) * 10000
-        ) / 10000,
-      dataSource: "live",
-    };
-  }
   return null;
 }
 

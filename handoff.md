@@ -5,7 +5,7 @@
 ### Completed Phases
 - Phase 1: Foundation completed (project scaffolding, auth, DB setup patterns, permissions, core layout/pages, storage/encryption utilities).
 - Phase 4: Content Generation completed.
-  - Implemented platform writer agents for LinkedIn, Instagram, Facebook, X, GBP.
+  - Implemented platform writer agents for LinkedIn, Instagram, and Facebook.
   - Implemented A/B/C variant generation and hashtag suggestion logic.
   - Added generation and drafts APIs.
   - Built generation studio and draft editor UI.

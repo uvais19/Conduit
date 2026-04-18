@@ -796,16 +796,7 @@ export default function ApprovalPage() {
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                           CTA
                         </p>
-                        <FieldCharCounter
-                          current={selectedDraft.cta.length}
-                          max={
-                            selectedDraft.platform === "x"
-                              ? 200
-                              : selectedDraft.platform === "gbp"
-                                ? 150
-                                : 280
-                          }
-                        />
+                        <FieldCharCounter current={selectedDraft.cta.length} max={280} />
                       </div>
                       <p className="text-sm">{selectedDraft.cta}</p>
                     </div>

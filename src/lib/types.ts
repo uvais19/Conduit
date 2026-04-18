@@ -111,8 +111,6 @@ export const platformType = z.enum([
   "instagram",
   "facebook",
   "linkedin",
-  "x",
-  "gbp",
 ]);
 export type Platform = z.infer<typeof platformType>;
 

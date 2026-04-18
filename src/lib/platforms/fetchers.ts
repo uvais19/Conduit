@@ -17,8 +17,6 @@ import {
   resolveInstagramUserId,
 } from "@/lib/platforms/meta-graph";
 import { fetchLinkedInMetrics } from "@/lib/platforms/linkedin-api";
-import { fetchXTweetMetrics } from "@/lib/platforms/x-api";
-import { fetchGbpPostMetrics } from "@/lib/platforms/gbp-api";
 import { PLATFORM_CAPABILITIES } from "@/lib/platforms/capabilities";
 
 // ---------------------------------------------------------------------------
@@ -196,109 +194,6 @@ async function fetchFromLinkedIn(
   }
 }
 
-async function fetchFromX(
-  connection: PlatformConnection,
-  limit: number
-): Promise<FetchedPost[] | null> {
-  if (!PLATFORM_CAPABILITIES.x.supportsImport) return null;
-  if (!connection.accessToken?.trim() || !connection.platformUserId?.trim()) return null;
-  try {
-    const base = process.env.X_API_BASE_URL ?? "https://api.twitter.com/2";
-    const response = await fetch(
-      `${base}/users/${connection.platformUserId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at`,
-      {
-        headers: { Authorization: `Bearer ${connection.accessToken}` },
-        cache: "no-store",
-      }
-    );
-    if (!response.ok) return null;
-    const payload = (await response.json()) as {
-      data?: { id?: string; text?: string; created_at?: string }[];
-    };
-    const tweets = payload.data ?? [];
-    if (tweets.length === 0) return null;
-    const out: FetchedPost[] = [];
-    for (const tweet of tweets) {
-      if (!tweet.id) continue;
-      const metrics = await fetchXTweetMetrics({
-        accessToken: connection.accessToken,
-        tweetId: tweet.id,
-      });
-      const impressions = Math.max(1, metrics.impressions);
-      const totalEng =
-        metrics.likes +
-        metrics.comments +
-        metrics.shares +
-        metrics.saves +
-        metrics.clicks;
-      out.push({
-        platformPostId: tweet.id,
-        platform: "x",
-        content: tweet.text ?? "",
-        mediaType: "text-only",
-        postedAt: tweet.created_at ?? new Date().toISOString(),
-        ...metrics,
-        engagementRate: Math.round((totalEng / impressions) * 10000) / 10000,
-      });
-    }
-    return out.length > 0 ? out : null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchFromGBP(
-  connection: PlatformConnection,
-  limit: number
-): Promise<FetchedPost[] | null> {
-  if (!PLATFORM_CAPABILITIES.gbp.supportsImport) return null;
-  if (!connection.accessToken?.trim() || !connection.platformPageId?.trim()) return null;
-  try {
-    const base = process.env.GBP_POSTS_BASE_URL ?? "https://mybusiness.googleapis.com/v4";
-    const response = await fetch(
-      `${base}/${connection.platformPageId}/localPosts?pageSize=${Math.min(limit, 100)}`,
-      {
-        headers: { Authorization: `Bearer ${connection.accessToken}` },
-        cache: "no-store",
-      }
-    );
-    if (!response.ok) return null;
-    const payload = (await response.json()) as {
-      localPosts?: { name?: string; summary?: string; createTime?: string }[];
-    };
-    const posts = payload.localPosts ?? [];
-    if (posts.length === 0) return null;
-    const out: FetchedPost[] = [];
-    for (const post of posts) {
-      if (!post.name) continue;
-      const metrics = await fetchGbpPostMetrics({
-        accessToken: connection.accessToken,
-        locationName: connection.platformPageId,
-        localPostName: post.name,
-      });
-      const impressions = Math.max(1, metrics.impressions);
-      const totalEng =
-        metrics.likes +
-        metrics.comments +
-        metrics.shares +
-        metrics.saves +
-        metrics.clicks;
-      out.push({
-        platformPostId: post.name,
-        platform: "gbp",
-        content: post.summary ?? "",
-        mediaType: "text-only",
-        postedAt: post.createTime ?? new Date().toISOString(),
-        ...metrics,
-        engagementRate: Math.round((totalEng / impressions) * 10000) / 10000,
-      });
-    }
-    return out.length > 0 ? out : null;
-  } catch {
-    return null;
-  }
-}
-
 const platformFetchers: Record<
   Platform,
   (conn: PlatformConnection, limit: number) => Promise<FetchedPost[] | null>
@@ -306,8 +201,6 @@ const platformFetchers: Record<
   instagram: fetchFromInstagram,
   facebook: fetchFromFacebook,
   linkedin: fetchFromLinkedIn,
-  x: fetchFromX,
-  gbp: fetchFromGBP,
 };
 
 // ---------------------------------------------------------------------------
@@ -352,24 +245,6 @@ const PLATFORM_RANGES: Record<
     shareRate: [0.003, 0.015],
     saveRate: [0.002, 0.008],
     clickRate: [0.01, 0.03],
-  },
-  x: {
-    impressions: [400, 10000],
-    reachRatio: [0.4, 0.7],
-    likeRate: [0.01, 0.04],
-    commentRate: [0.002, 0.01],
-    shareRate: [0.005, 0.03],
-    saveRate: [0.001, 0.005],
-    clickRate: [0.005, 0.015],
-  },
-  gbp: {
-    impressions: [100, 2000],
-    reachRatio: [0.8, 0.95],
-    likeRate: [0.01, 0.03],
-    commentRate: [0.002, 0.008],
-    shareRate: [0.001, 0.005],
-    saveRate: [0.001, 0.003],
-    clickRate: [0.02, 0.05],
   },
 };
 
@@ -417,34 +292,6 @@ const CONTENT_TEMPLATES: Record<Platform, { types: string[]; captions: string[] 
       "We believe in transparency. Here's our Q3 update and what's ahead for Q4.",
       "Great leaders invest in their teams. Here are 4 ways we're supporting professional development.",
       "Partnership announcement: We're teaming up with a leading firm to deliver even better solutions.",
-    ],
-  },
-  x: {
-    types: ["text-only", "image", "thread"],
-    captions: [
-      "Just shipped a major update! Here's what's new 🧵",
-      "Hot take: The future of our industry isn't about more tools, it's about better workflows.",
-      "TIL: A simple process change can save teams 10+ hours per week. Here's how we did it.",
-      "Big news dropping tomorrow. Stay tuned! 👀",
-      "Replying to our community: Thank you for the feedback! We've already started working on it.",
-      "5 things I wish I knew when starting out in this industry. A thread 🧵",
-      "Our latest blog post breaks down the data behind successful strategies. Link below.",
-      "Shoutout to our amazing community for hitting 50K! You all make this possible.",
-      "Quick tip: Don't overlook this simple setting that can dramatically improve your results.",
-      "Monday motivation: Ship fast, learn faster. What are you building this week?",
-    ],
-  },
-  gbp: {
-    types: ["text-only", "image"],
-    captions: [
-      "We're open for business! Visit us this weekend for exclusive in-store promotions.",
-      "New hours update: We're now open until 8pm on weekdays to better serve you.",
-      "Special offer: 20% off all services this month. Book your appointment today!",
-      "Thank you for your wonderful reviews! We're committed to providing the best experience.",
-      "Seasonal update: Check out our new menu items available starting this week.",
-      "Community event: Join us this Saturday for our annual open house. Everyone is welcome!",
-      "We've just renovated our space! Come see the new look and enjoy a special welcome offer.",
-      "Holiday hours: We'll be closed Dec 25-26 and open regular hours otherwise.",
     ],
   },
 };

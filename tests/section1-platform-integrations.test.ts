@@ -30,8 +30,8 @@ describe("section1 platform integrations", () => {
     const state = signOAuthState({
       tenantId: "tenant_1",
       userId: "user_1",
-      platform: "x",
-      provider: "x",
+      platform: "linkedin",
+      provider: "linkedin",
     });
     const tampered = `${state}tampered`;
     expect(verifyOAuthState(tampered)).toBeNull();

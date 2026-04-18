@@ -28,16 +28,6 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapability> = {
     supportsMetrics: true,
     supportedPublishFormats: ["text-only", "single-image", "multi-image", "video"],
   },
-  x: {
-    supportsImport: true,
-    supportsMetrics: true,
-    supportedPublishFormats: ["text-only", "single-image", "multi-image", "video"],
-  },
-  gbp: {
-    supportsImport: true,
-    supportsMetrics: true,
-    supportedPublishFormats: ["text-only", "single-image", "multi-image", "video"],
-  },
 };
 
 export function supportsPublishFormat(

@@ -62,16 +62,6 @@ function buildPlatformAnalysisContext(platform: Platform): string {
       "- A good engagement rate on LinkedIn is 2-5% (above 5% is excellent)",
     ].join("\n"),
 
-    x: [
-      "X (Twitter)-specific analysis:",
-      "- Quote tweets are the STRONGEST engagement signal (someone added their take)",
-      "- Evaluate thread completion rates -- do people read to the end?",
-      "- Check hashtag usage: more than 2 looks spammy on X",
-      "- Are tweets concise enough? Wall-of-text tweets underperform",
-      "- Reply-to-self pattern for threads -- is it being used?",
-      "- A good engagement rate on X is 0.5-1% (above 1% is excellent)",
-    ].join("\n"),
-
     facebook: [
       "Facebook-specific analysis:",
       "- Shares are the MOST valuable metric -- shared content reaches 3-5x more people",
@@ -80,16 +70,6 @@ function buildPlatformAnalysisContext(platform: Platform): string {
       "- Video performance vs static image comparison",
       "- Community-building content vs promotional -- which performs better?",
       "- A good engagement rate on Facebook is 0.5-1% (above 1% is excellent)",
-    ].join("\n"),
-
-    gbp: [
-      "Google Business Profile-specific analysis:",
-      "- Action clicks (calls, directions, website) are the PRIMARY success metric",
-      "- Is content locally relevant? Mentions of location/neighborhood matter for local SEO",
-      "- Post recency: content posted within 7 days improves local search ranking",
-      "- Are event/offer post types being utilized?",
-      "- Photos should be of actual business/products, not stock",
-      "- Track search impressions for local visibility",
     ].join("\n"),
   };
 

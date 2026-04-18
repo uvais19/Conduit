@@ -28,7 +28,6 @@ export const landingContent: LandingContent = {
       "One approval path and calendar for the networks your team already runs — brand context travels with every post.",
     channels: [
       { id: "linkedin", name: "LinkedIn" },
-      { id: "x", name: "X" },
       { id: "instagram", name: "Instagram" },
       { id: "facebook", name: "Facebook" },
     ],

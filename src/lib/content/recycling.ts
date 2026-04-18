@@ -74,13 +74,6 @@ function generateRecycleSuggestions(platform: string): string[] {
         "Add a personal anecdote",
         "Turn into a poll question",
       ];
-    case "x":
-      return [
-        ...base,
-        "Break into a thread with deeper insights",
-        "Quote-tweet with a new perspective",
-        "Create a shorter, punchier version",
-      ];
     case "facebook":
       return [
         ...base,

@@ -75,9 +75,7 @@ const initialPayload: GenerationPayload = {
 const PLATFORM_MEDIA_SUPPORT: Record<string, { formats: string[]; maxDuration?: string; notes: string }> = {
   instagram: { formats: ["Image", "Carousel", "Reel", "Story"], maxDuration: "90s Reels, 60s Stories", notes: "Reels get 67% more reach than static posts" },
   linkedin: { formats: ["Image", "Carousel (PDF)", "Video", "Article"], maxDuration: "10 min", notes: "Native video gets 5x more engagement" },
-  x: { formats: ["Image", "GIF", "Video"], maxDuration: "2:20", notes: "Videos auto-play in timeline" },
   facebook: { formats: ["Image", "Carousel", "Video", "Reel", "Story"], maxDuration: "240 min", notes: "Short-form video under 60s performs best" },
-  gbp: { formats: ["Image", "Video"], maxDuration: "30s", notes: "Photos with businesses get 35% more clicks" },
 };
 
 type CampaignOption = { id: string; name: string };

@@ -45,10 +45,6 @@ function pickAspectFromKnowledge(
       return mapKnowledgeAspectToGemini(
         PLATFORM_KNOWLEDGE[platform].mediaSpecs.dimensions[0]?.aspectRatio ?? "16:9"
       );
-    case "x":
-      return "16:9";
-    case "gbp":
-      return "4:3";
     default:
       return "1:1";
   }
@@ -56,7 +52,6 @@ function pickAspectFromKnowledge(
 
 function defaultImageSize(platform: Platform): "512" | "1K" | "2K" | "4K" {
   if (platform === "instagram") return "2K";
-  if (platform === "x") return "1K";
   return "1K";
 }
 

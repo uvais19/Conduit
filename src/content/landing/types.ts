@@ -50,7 +50,7 @@ export interface LandingTestimonial {
   role: string;
 }
 
-export type TrustChannelId = "linkedin" | "x" | "instagram" | "facebook";
+export type TrustChannelId = "linkedin" | "instagram" | "facebook";
 
 export interface TrustChannel {
   id: TrustChannelId;

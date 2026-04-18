@@ -23,7 +23,7 @@ Good pillars are distinct, audience-aligned, and cover the full buyer journey (a
 - Preferred times: Optimal posting windows (based on audience timezone and platform engagement patterns)
 - Content mix: The format breakdown (e.g., 40% carousel, 30% image, 30% reel for Instagram)
 
-Best practices vary by platform — LinkedIn favours weekday mornings, Instagram peaks evenings/weekends, X rewards consistency throughout the day.`,
+Best practices vary by platform — LinkedIn favours weekday mornings, Instagram peaks evenings/weekends, Facebook benefits from a steady weekday rhythm.`,
 
   weeklyThemes: `Weekly Themes create a 4-week rotating cadence that keeps content cohesive. Each week has:
 - Theme: The overarching focus for the week across all platforms

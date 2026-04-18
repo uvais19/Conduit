@@ -61,52 +61,12 @@ Use this checklist to validate Section 1 platform integrations end-to-end after 
 - [ ] `POST /api/platforms/refresh-tokens` refreshes near-expiry token
 - [ ] `POST /api/webhooks/linkedin` verifies signature and ingests event
 
-## X (Twitter)
-
-### Required env
-
-- [ ] `X_CLIENT_ID`
-- [ ] `X_CLIENT_SECRET`
-- [ ] Optional `X_API_BASE_URL`
-- [ ] Optional `X_WEBHOOK_SECRET`
-
-### Runtime checks
-
-- [ ] OAuth connect: `/api/platforms/oauth/x/start`
-- [ ] Callback configured: `/api/platforms/oauth/x/callback`
-- [ ] Connection stores `platformUserId`
-- [ ] Publish returns real tweet id in `platformPostId`
-- [ ] Import path (`/api/platforms/analyse`) pulls tweets when access allows
-- [ ] Metrics collection attempts live tweet metrics
-- [ ] `POST /api/platforms/refresh-tokens` refreshes near-expiry token
-- [ ] `POST /api/webhooks/x` verifies signature and ingests event
-
-## Google Business Profile (GBP)
-
-### Required env
-
-- [ ] `GOOGLE_CLIENT_ID`
-- [ ] `GOOGLE_CLIENT_SECRET`
-- [ ] Optional `GBP_API_BASE_URL`
-- [ ] Optional `GBP_POSTS_BASE_URL`
-
-### Runtime checks
-
-- [ ] OAuth connect: `/api/platforms/oauth/gbp/start`
-- [ ] Callback configured: `/api/platforms/oauth/gbp/callback`
-- [ ] Connection stores account + location (`platformUserId`, `platformPageId`)
-- [ ] Publish returns real GBP local post resource name
-- [ ] Import path attempts real GBP posts
-- [ ] Metrics collection attempts live GBP metrics
-- [ ] `POST /api/platforms/refresh-tokens` refreshes near-expiry token
-- [ ] `POST /api/webhooks/gbp` ingests event payloads
-
 ## Cross-Section 1 Acceptance
 
 - [ ] **1.1 Publish:** connected platforms do not return synthetic IDs
-- [ ] **1.2 OAuth lifecycle:** all five connect via OAuth and refresh flow runs
-- [ ] **1.3 Metrics:** live metrics attempted for all five with valid scopes
-- [ ] **1.4 Import:** real imports attempted for all five, fallback only when needed
+- [ ] **1.2 OAuth lifecycle:** Instagram, Facebook, and LinkedIn connect via OAuth and refresh flow runs
+- [ ] **1.3 Metrics:** live metrics attempted for connected platforms with valid scopes
+- [ ] **1.4 Import:** real imports attempted for connected platforms, fallback only when needed
 - [ ] **1.5 Webhooks:** receiver routes exist and process normalized events
 - [ ] **1.6 Connection health:** settings shows expiry + refresh diagnostics
 - [ ] **1.7 Live vs simulated:** analytics surfaces display source labeling consistently

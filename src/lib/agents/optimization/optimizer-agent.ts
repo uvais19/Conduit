@@ -122,7 +122,7 @@ export async function runOptimizerAgent(
       ...analysisContext,
       "",
       "Platform-specific optimization knowledge:",
-      getMultiPlatformPromptContext(["instagram", "facebook", "linkedin", "x", "gbp"]),
+      getMultiPlatformPromptContext(["instagram", "facebook", "linkedin"]),
       "",
       "Proposal types allowed: pillar_change, schedule_change, tone_change, format_change, platform_format_shift",
       "",

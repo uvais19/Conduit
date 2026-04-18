@@ -21,8 +21,6 @@ import {
   resolveInstagramUserId,
 } from "@/lib/platforms/meta-graph";
 import { publishLinkedInPost } from "@/lib/platforms/linkedin-api";
-import { publishXPost } from "@/lib/platforms/x-api";
-import { publishGbpPost } from "@/lib/platforms/gbp-api";
 import {
   inferDraftPublishFormat,
   supportsPublishFormat,
@@ -281,90 +279,6 @@ async function publishToLinkedIn(
   }
 }
 
-async function publishToX(
-  draft: ContentDraftRecord,
-  connection: PlatformConnection
-): Promise<PublishResult> {
-  const now = new Date().toISOString();
-  const format = inferDraftPublishFormat({
-    mediaUrls: draft.mediaUrls,
-    mediaType: draft.mediaType,
-  });
-
-  if (!supportsPublishFormat("x", format)) {
-    return {
-      success: false,
-      platformPostId: "",
-      publishedAt: now,
-      error: `X does not currently support "${format}" publishing in this adapter`,
-    };
-  }
-  const mediaValidationError = validateMediaUrls(draft, format);
-  if (mediaValidationError) {
-    return { success: false, platformPostId: "", publishedAt: now, error: mediaValidationError };
-  }
-
-  if (!connection.accessToken) {
-    return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
-  }
-
-  try {
-    const published = await publishXPost({ accessToken: connection.accessToken, draft });
-    return { success: true, platformPostId: published.id, publishedAt: now };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "X publish failed";
-    return { success: false, platformPostId: "", publishedAt: now, error: msg };
-  }
-}
-
-async function publishToGBP(
-  draft: ContentDraftRecord,
-  connection: PlatformConnection
-): Promise<PublishResult> {
-  const now = new Date().toISOString();
-  const format = inferDraftPublishFormat({
-    mediaUrls: draft.mediaUrls,
-    mediaType: draft.mediaType,
-  });
-
-  if (!supportsPublishFormat("gbp", format)) {
-    return {
-      success: false,
-      platformPostId: "",
-      publishedAt: now,
-      error: `Google Business Profile does not currently support "${format}" publishing in this adapter`,
-    };
-  }
-  const mediaValidationError = validateMediaUrls(draft, format);
-  if (mediaValidationError) {
-    return { success: false, platformPostId: "", publishedAt: now, error: mediaValidationError };
-  }
-
-  if (!connection.accessToken) {
-    return { success: false, platformPostId: "", publishedAt: now, error: "Missing access token" };
-  }
-
-  if (!connection.platformPageId?.trim()) {
-    return {
-      success: false,
-      platformPostId: "",
-      publishedAt: now,
-      error: "Google Business Profile location id is required",
-    };
-  }
-  try {
-    const published = await publishGbpPost({
-      accessToken: connection.accessToken,
-      locationName: connection.platformPageId,
-      draft,
-    });
-    return { success: true, platformPostId: published.id, publishedAt: now };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "GBP publish failed";
-    return { success: false, platformPostId: "", publishedAt: now, error: msg };
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Main dispatch
 // ---------------------------------------------------------------------------
@@ -376,8 +290,6 @@ const PLATFORM_PUBLISHERS: Record<
   instagram: publishToInstagram,
   facebook: publishToFacebook,
   linkedin: publishToLinkedIn,
-  x: publishToX,
-  gbp: publishToGBP,
 };
 
 export async function publishDraft(

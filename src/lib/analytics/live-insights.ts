@@ -4,11 +4,9 @@ import {
   getInstagramAccountInsights,
   resolveInstagramUserId,
 } from "@/lib/platforms/meta-graph";
-import { fetchXAudienceSnapshot } from "@/lib/platforms/x-api";
-
 type FollowerSnapshot = {
   date: string;
-  platform: "instagram" | "facebook" | "linkedin" | "x" | "gbp";
+  platform: "instagram" | "facebook" | "linkedin";
   followers: number;
   source: "live" | "fallback";
 };
@@ -109,19 +107,6 @@ export async function collectFollowerSnapshot(
         date: now,
         platform: "facebook",
         followers: page.followersCount,
-        source: "live",
-      });
-    }
-  }
-
-  const x = getPlatformConnection(tenantId, "x");
-  if (x) {
-    const audience = await fetchXAudienceSnapshot(x.accessToken).catch(() => null);
-    if (audience) {
-      snapshots.push({
-        date: now,
-        platform: "x",
-        followers: audience.followersCount,
         source: "live",
       });
     }

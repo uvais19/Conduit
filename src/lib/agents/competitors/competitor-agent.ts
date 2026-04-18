@@ -50,7 +50,7 @@ export async function discoverCompetitors(
       "",
       "Return up to 5 competitors. Each must have:",
       '- name: business name',
-      '- platform: one of "instagram", "facebook", "linkedin", "x", "gbp"',
+      '- platform: one of "instagram", "facebook", "linkedin"',
       '- profileUrl: a plausible social media profile URL',
       "",
       "Return JSON array only. Return [] if you cannot identify competitors.",
@@ -59,13 +59,7 @@ export async function discoverCompetitors(
     fallback,
   });
 
-  const VALID_PLATFORMS: Platform[] = [
-    "instagram",
-    "facebook",
-    "linkedin",
-    "x",
-    "gbp",
-  ];
+  const VALID_PLATFORMS: Platform[] = ["instagram", "facebook", "linkedin"];
 
   const valid = (Array.isArray(discovered) ? discovered : []).filter(
     (c) =>

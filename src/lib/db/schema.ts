@@ -25,8 +25,6 @@ export const platformEnum = pgEnum("platform", [
   "instagram",
   "facebook",
   "linkedin",
-  "x",
-  "gbp",
 ]);
 
 export const mediaTypeEnum = pgEnum("media_type", [

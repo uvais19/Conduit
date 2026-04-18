@@ -50,8 +50,6 @@ const PLATFORM_COLORS: Record<string, string> = {
   instagram: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300",
   facebook: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   linkedin: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
-  x: "bg-neutral-100 text-neutral-800 dark:bg-neutral-800/50 dark:text-neutral-300",
-  gbp: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
 };
 
 // ── helpers ──────────────────────────────────────────────────

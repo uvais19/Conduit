@@ -29,19 +29,6 @@ const PLATFORM_TONE_PROFILE: Record<Platform, PlatformToneProfile> = {
     ctaPattern: "professional-action",
     goalFallback: "Drive professional awareness and inbound leads",
   },
-  x: {
-    preferredVoiceKeywords: [
-      "bold", "sharp", "provocative", "direct", "concise",
-      "opinionated", "witty", "punchy", "edgy",
-    ],
-    toneWeights: { provocative: 1.5, playful: 1.2, formal: 0.5, technical: 0.9, emotional: 0.8 },
-    goalAffinityKeywords: [
-      "awareness", "viral", "engagement", "reach", "conversation",
-      "trend", "debate", "attention",
-    ],
-    ctaPattern: "ultra-short",
-    goalFallback: "Grow reach and spark conversations",
-  },
   instagram: {
     preferredVoiceKeywords: [
       "inspiring", "visual", "emotional", "relatable", "authentic",
@@ -67,19 +54,6 @@ const PLATFORM_TONE_PROFILE: Record<Platform, PlatformToneProfile> = {
     ],
     ctaPattern: "community-invite",
     goalFallback: "Foster community engagement and shares",
-  },
-  gbp: {
-    preferredVoiceKeywords: [
-      "clear", "local", "trustworthy", "direct", "professional",
-      "helpful", "action-oriented", "reliable", "concise",
-    ],
-    toneWeights: { formal: 1.4, technical: 0.8, emotional: 0.8, playful: 0.5, provocative: 0.3 },
-    goalAffinityKeywords: [
-      "local", "visit", "call", "appointment", "awareness",
-      "leads", "foot traffic", "discovery", "review",
-    ],
-    ctaPattern: "local-action",
-    goalFallback: "Drive local discovery and foot traffic",
   },
 };
 

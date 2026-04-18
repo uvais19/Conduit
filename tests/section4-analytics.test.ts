@@ -6,12 +6,12 @@ import { buildCsv } from "@/lib/exports/reporting";
 describe("Section 4 analytics utilities", () => {
   it("parses analytics query parameters from URL", () => {
     const url = new URL(
-      "https://conduit.local/api/analytics?from=2026-01-01&to=2026-01-31&platforms=instagram,x,invalid"
+      "https://conduit.local/api/analytics?from=2026-01-01&to=2026-01-31&platforms=instagram,facebook,invalid"
     );
     const query = parseAnalyticsQueryFromUrl(url);
     expect(query.from).toBe("2026-01-01");
     expect(query.to).toBe("2026-01-31");
-    expect(query.platforms).toEqual(["instagram", "x"]);
+    expect(query.platforms).toEqual(["instagram", "facebook"]);
   });
 
   it("builds UTM links with required parameters", () => {

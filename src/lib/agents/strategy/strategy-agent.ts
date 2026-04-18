@@ -50,7 +50,7 @@ export async function runStrategyAgent(
         : []),
       "",
       "Platform-specific guidance (use these when setting schedule, content mix, and weekly theme execution):",
-      getMultiPlatformPromptContext(platforms ?? ["instagram", "facebook", "linkedin", "x", "gbp"]),
+      getMultiPlatformPromptContext(platforms ?? ["instagram", "facebook", "linkedin"]),
       "",
       "CRITICAL RULES:",
       "- Each platform's contentMix MUST ONLY include format types that platform supports (see formats above)",

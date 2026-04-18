@@ -83,7 +83,7 @@ export async function suggestHashtagsAI({
       "",
       platform === "instagram" ? "Mix: 40% high-volume (500K+), 40% niche (10K-100K), 20% branded/specific." :
       platform === "linkedin" ? "Use professional, industry-specific hashtags." :
-      platform === "x" ? "1-2 only. Make them trending or highly relevant." :
+      platform === "facebook" ? "Use 2-5 relevant hashtags; favour community and topic tags." :
       "Use relevant, specific hashtags.",
       "",
       'Return JSON: { "hashtags": ["#tag1", "#tag2", ...] }',

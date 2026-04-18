@@ -57,6 +57,13 @@
       "when": 1776100000000,
       "tag": "0007_campaigns_updated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776200000000,
+      "tag": "0008_remove_x_gbp_platform",
+      "breakpoints": true
     }
   ]
 }

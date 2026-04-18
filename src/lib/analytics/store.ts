@@ -475,7 +475,7 @@ export async function getFollowerGrowth(
   const trends = await getTrendData(tenantId, 90, query);
   const platforms = query?.platforms?.length
     ? query.platforms
-    : (["instagram", "linkedin", "x"] as Platform[]);
+    : (["instagram", "facebook", "linkedin"] as Platform[]);
 
   const platformSeries = new Map<Platform, number>();
   const points: FollowerGrowthPoint[] = [];

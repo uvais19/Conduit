@@ -79,8 +79,7 @@ export function ContentRefiner({
 
   const hashtagTagCount = draft.hashtags.length;
   const hashtagTextLen = draft.hashtags.join(" ").length;
-  const ctaMax =
-    draft.platform === "x" ? 200 : draft.platform === "gbp" ? 150 : 280;
+  const ctaMax = 280;
 
   return (
     <div className="space-y-3 rounded-md border p-3">

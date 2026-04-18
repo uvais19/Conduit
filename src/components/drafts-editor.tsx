@@ -53,16 +53,12 @@ const DRAFT_EDIT_HINTS = {
 
 function renderPreview(draft: ContentDraftRecord): string {
   switch (draft.platform) {
-    case "x":
-      return `${draft.caption}\n\n${draft.hashtags.slice(0, 3).join(" ")}`;
     case "instagram":
       return `${draft.caption}\n\n${draft.hashtags.join(" ")}`;
     case "linkedin":
       return `${draft.caption}\n\n${draft.hashtags.slice(0, 5).join(" ")}`;
     case "facebook":
       return `${draft.caption}\n\n${draft.hashtags.slice(0, 5).join(" ")}`;
-    case "gbp":
-      return draft.caption;
   }
 }
 
@@ -750,16 +746,7 @@ export function DraftsEditor() {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-2">
                     <FieldLabelWithHint htmlFor="draft-edit-cta" label="CTA" hint={DRAFT_EDIT_HINTS.cta} />
-                    <FieldCharCounter
-                      current={selectedDraft.cta.length}
-                      max={
-                        selectedDraft.platform === "x"
-                          ? 200
-                          : selectedDraft.platform === "gbp"
-                            ? 150
-                            : 280
-                      }
-                    />
+                    <FieldCharCounter current={selectedDraft.cta.length} max={280} />
                   </div>
                   <Input
                     id="draft-edit-cta"

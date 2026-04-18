@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getBestPostingWindows, getHashtagAnalytics } from "@/lib/analytics/store";
 
 const requestSchema = z.object({
-  platform: z.enum(["instagram", "facebook", "linkedin", "x", "gbp"]),
+  platform: z.enum(["instagram", "facebook", "linkedin"]),
   caption: z.string().min(1),
   hashtags: z.array(z.string()).default([]),
   scheduledAt: z.string().optional(),

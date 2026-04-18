@@ -5,7 +5,7 @@ type OAuthStatePayload = {
   tenantId: string;
   userId: string;
   platform: Platform;
-  provider: "meta" | "linkedin" | "x" | "gbp";
+  provider: "meta" | "linkedin";
 };
 
 function secret(): string {

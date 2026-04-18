@@ -45,14 +45,6 @@ const PLATFORM_GUIDES: Record<Platform, { tokenLabel: string; hint: string }> = 
     tokenLabel: "LinkedIn Access Token",
     hint: "Create an app at linkedin.com/developers. Use the 3-legged OAuth flow to get an access token with w_member_social scope.",
   },
-  x: {
-    tokenLabel: "X (Twitter) Bearer Token",
-    hint: "Create a project at developer.twitter.com. Copy the Bearer Token from your app's Keys & Tokens tab.",
-  },
-  gbp: {
-    tokenLabel: "Google Business Profile OAuth Token",
-    hint: "Use Google Cloud Console to create OAuth credentials. Authorize the My Business API scope.",
-  },
 };
 
 const PLATFORM_ADVANCE_MS = 5000;
@@ -319,7 +311,7 @@ export default function PlatformsPage() {
                         <Badge variant="secondary" className="text-xs">
                           Meta Graph
                         </Badge>
-                      ) : conn.platform === "linkedin" || conn.platform === "x" || conn.platform === "gbp" ? (
+                      ) : conn.platform === "linkedin" ? (
                         <Badge variant="secondary" className="text-xs">
                           OAuth
                         </Badge>
@@ -398,18 +390,6 @@ export default function PlatformsPage() {
               className="inline-flex h-9 items-center rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
             >
               Connect LinkedIn
-            </a>
-            <a
-              href="/api/platforms/oauth/x/start"
-              className="inline-flex h-9 items-center rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
-            >
-              Connect X
-            </a>
-            <a
-              href="/api/platforms/oauth/gbp/start"
-              className="inline-flex h-9 items-center rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
-            >
-              Connect Google Business Profile
             </a>
           </div>
         </CardContent>

@@ -18,8 +18,6 @@ const OPTIMAL_HOURS: Record<Platform, number[]> = {
   instagram: [9, 12, 17],   // Morning, lunch, evening
   facebook:  [9, 13, 16],
   linkedin:  [8, 10, 17],   // Business hours
-  x:         [8, 12, 17],
-  gbp:       [9, 14],       // Business hours
 };
 
 export function suggestPostingTime(platform: Platform, afterDate?: Date): Date {

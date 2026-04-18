@@ -2,7 +2,7 @@ export class PlatformApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly platform: "linkedin" | "x" | "gbp",
+    readonly platform: "linkedin",
     readonly body?: unknown,
     readonly code: "rate_limited" | "auth" | "forbidden" | "bad_request" | "upstream" = "upstream"
   ) {
@@ -45,7 +45,7 @@ function delay(ms: number): Promise<void> {
 }
 
 export async function platformRequest<T>(params: {
-  platform: "linkedin" | "x" | "gbp";
+  platform: "linkedin";
   url: string;
   method?: "GET" | "POST";
   token: string;

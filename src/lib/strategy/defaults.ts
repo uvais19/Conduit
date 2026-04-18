@@ -78,27 +78,6 @@ export function createDefaultStrategy(
           { type: "video", percentage: 30 },
         ],
       },
-      {
-        platform: "x",
-        postsPerWeek: 5,
-        preferredDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-        preferredTimes: ["08:00", "12:00", "17:00"],
-        contentMix: [
-          { type: "text-only", percentage: 45 },
-          { type: "thread", percentage: 35 },
-          { type: "poll", percentage: 20 },
-        ],
-      },
-      {
-        platform: "gbp",
-        postsPerWeek: 2,
-        preferredDays: ["Tuesday", "Friday"],
-        preferredTimes: ["11:00"],
-        contentMix: [
-          { type: "image", percentage: 50 },
-          { type: "text-only", percentage: 50 },
-        ],
-      },
     ],
     weeklyThemes: [
       {
@@ -130,8 +109,6 @@ export function createDefaultStrategy(
       { metric: "engagement_rate", target: 5, platform: "instagram" },
       { metric: "website_clicks", target: 120, platform: "linkedin" },
       { metric: "reach", target: 2500, platform: "facebook" },
-      { metric: "followers", target: 75, platform: "x" },
-      { metric: "actions", target: 25, platform: "gbp" },
     ],
   });
 }
