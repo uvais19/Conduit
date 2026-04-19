@@ -31,6 +31,7 @@ import {
 const STRATEGY_SYSTEM_PREAMBLE = `You are Conduit's senior social media strategist for SMB marketing leads.
 Return only JSON for the requested shape (no markdown, no commentary).
 Ground every pillar in the brand digest: tie to audience pains, goals, key messages, voice, or offers.
+Each pillar must express a clear strategic objective (why it exists in the mix) and a realistic best-fit primary platform.
 Avoid vague pillar names (e.g. a lone "Tips") unless clearly anchored to the industry and brand.`;
 
 function strategyGeminiModel(): string {
@@ -70,16 +71,27 @@ export async function runStrategyAgent(
     (await generateJsonStructured<StrategyPillarsStep>({
       systemPrompt: STRATEGY_SYSTEM_PREAMBLE,
       userPrompt: [
-      "## Goal",
-      "Define exactly five distinct content pillars for the next month.",
-      "",
-      "## Naming",
-      "Do not reuse generic template labels such as: Education, Trust & Proof, Conversion, Culture & People, Community & Engagement. Invent five new pillar names grounded in this brand only.",
-      "",
-      "## Self-check (before returning JSON)",
-        "- Five pillars; names unique; each has description, exampleTopics, percentage.",
+        "## Goal",
+        "Define exactly five distinct content pillars for the next month.",
+        "",
+        "## Naming",
+        "Do not reuse generic template labels such as: Education, Trust & Proof, Conversion, Culture & People, Community & Engagement.",
+        "Invent five new pillar names using this brand’s specific vocabulary and proof points—read ## Voice & guardrails and ## Offer & differentiation in the digest (e.g. instead of a generic “Education,” use a distinctive phrase a customer would recognise as yours).",
+        "",
+        "## Platform rules (pillar format fit)",
+        "Each pillar must pick exactly one bestFitPlatform: instagram, facebook, or linkedin—the channel where that pillar’s story angles and formats naturally work best for this audience (not where you post most often).",
+        "Use norms below; a pillar skewed to long-form thought leadership usually fits LinkedIn better than Instagram Reels unless the digest clearly says otherwise.",
+        platformCtx,
+        "",
+        "## Example topics (quality bar)",
+        "Avoid fluff, vague listicles, and generic social-media filler. Each exampleTopics entry must be actionable, specific enough to brief a creator, technically or emotionally concrete for the audience described under ## Audience in the digest, and aligned to that pillar’s primaryObjective.",
+        "",
+        "## Self-check (before returning JSON)",
+        "- Five pillars; names unique; each has name, description, primaryObjective, bestFitPlatform, exampleTopics, percentage.",
+        "- Each pillar must include a primaryObjective: one short phrase naming its job in the funnel (e.g. Lead generation, Brand awareness, Authority building, Community retention, Conversion support)—use wording grounded in the digest, not generic jargon alone.",
+        "- bestFitPlatform must be exactly one of: instagram, facebook, linkedin and must match format/depth implied by the pillar.",
         "- Percentages are integers or sensible decimals summing to 100.",
-        "- Each pillar visibly reflects the digest (cite audience, goal, message, or voice).",
+        "- Each pillar visibly reflects the digest (audience pains, goals, key messages, voice, or offers).",
         "",
         "## Brand digest (primary)",
         digest,

@@ -22,8 +22,11 @@ function sseResponse(chunks: string[]): Response {
 }
 
 describe("consumeStrategyGenerateStream", () => {
-  const fivePillarsJson =
-    '{"strategy":{"pillars":[{"name":"A","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"B","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"C","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"D","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"E","description":"d","percentage":20,"exampleTopics":["x"]}]},"version":3}';
+  const p = (name: string) =>
+    `{"name":"${name}","description":"d","primaryObjective":"Awareness","bestFitPlatform":"instagram","percentage":20,"exampleTopics":["x"]}`;
+  const fivePillarsJson = `{"strategy":{"pillars":[${p("A")},${p("B")},${p("C")},${p("D")},${p(
+    "E"
+  )}]},"version":3}`;
 
   it("handles event and data split across chunks (no space after data:, matching the API route)", async () => {
     const onDone = vi.fn();

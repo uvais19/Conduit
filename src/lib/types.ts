@@ -128,6 +128,19 @@ export const contentType = z.enum([
 export const contentPillarSchema = z.object({
   name: z.string(),
   description: z.string(),
+  /** Strategic intent for this pillar (e.g. lead gen, brand awareness, authority). */
+  primaryObjective: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() ? v.trim() : "Brand alignment"),
+    z.string().min(1)
+  ),
+  /** Primary channel where this pillar’s content formats fit best. */
+  bestFitPlatform: z.preprocess((v) => {
+    if (typeof v === "string") {
+      const lower = v.toLowerCase();
+      if (lower === "instagram" || lower === "facebook" || lower === "linkedin") return lower;
+    }
+    return "instagram";
+  }, platformType),
   percentage: z.number().min(0).max(100),
   exampleTopics: z.array(z.string()),
 });

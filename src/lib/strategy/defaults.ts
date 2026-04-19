@@ -16,6 +16,8 @@ export function createDefaultStrategy(
       {
         name: "Education",
         description: `Teach your audience practical insights related to ${industry}.`,
+        primaryObjective: "Brand awareness & education",
+        bestFitPlatform: "linkedin",
         percentage: 20,
         exampleTopics: [
           `Best practices in ${industry}`,
@@ -26,6 +28,8 @@ export function createDefaultStrategy(
       {
         name: "Trust & Proof",
         description: "Build credibility using proof points, stories, and behind-the-scenes content.",
+        primaryObjective: "Authority building & trust",
+        bestFitPlatform: "instagram",
         percentage: 20,
         exampleTopics: [
           "Customer wins",
@@ -36,6 +40,8 @@ export function createDefaultStrategy(
       {
         name: "Conversion",
         description: "Turn attention into action with offer-led and CTA-driven content.",
+        primaryObjective: "Lead generation & conversion",
+        bestFitPlatform: "facebook",
         percentage: 20,
         exampleTopics: [
           "Offer highlights",
@@ -46,6 +52,8 @@ export function createDefaultStrategy(
       {
         name: "Culture & People",
         description: "Humanise the brand with team stories, values in action, and day-in-the-life content.",
+        primaryObjective: "Brand awareness & community",
+        bestFitPlatform: "instagram",
         percentage: 20,
         exampleTopics: [
           "Meet the team",
@@ -56,6 +64,8 @@ export function createDefaultStrategy(
       {
         name: "Community & Engagement",
         description: "Spark conversation with polls, questions, user spotlights, and timely reactions to trends.",
+        primaryObjective: "Engagement & retention",
+        bestFitPlatform: "facebook",
         percentage: 20,
         exampleTopics: [
           "Ask the audience",

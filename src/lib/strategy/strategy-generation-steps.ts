@@ -37,11 +37,55 @@ function resolveRawPillarTitle(raw: Record<string, unknown>, index: number, desc
   return titleFromDescription(description, index);
 }
 
+const DEFAULT_PLATFORMS: Platform[] = ["instagram", "linkedin", "facebook"];
+
+function normalizeBestFitPlatformValue(v: unknown, index: number): Platform {
+  if (typeof v === "string") {
+    const lower = v.toLowerCase();
+    if (lower === "instagram" || lower === "facebook" || lower === "linkedin") {
+      return lower;
+    }
+  }
+  return DEFAULT_PLATFORMS[index % DEFAULT_PLATFORMS.length]!;
+}
+
+function normalizePrimaryObjectiveValue(raw: Record<string, unknown>): string {
+  const keys = [
+    "primaryObjective",
+    "primary_objective",
+    "strategicIntent",
+    "strategic_intent",
+    "objective",
+    "intent",
+    "goal",
+  ] as const;
+  for (const key of keys) {
+    const val = raw[key];
+    if (typeof val === "string" && val.trim()) return val.trim();
+  }
+  return "";
+}
+
 function normalizeSingleRawPillar(raw: unknown, index: number): unknown {
   if (!raw || typeof raw !== "object") return raw;
   const o = { ...(raw as Record<string, unknown>) };
   const desc = typeof o.description === "string" ? o.description : "";
   o.name = resolveRawPillarTitle(o, index, desc);
+
+  const fromAliases = normalizePrimaryObjectiveValue(o);
+  const existingPo = typeof o.primaryObjective === "string" ? o.primaryObjective.trim() : "";
+  o.primaryObjective = existingPo || fromAliases || "Brand alignment";
+
+  const platKeys = ["bestFitPlatform", "best_fit_platform", "platform", "primaryPlatform", "channel"] as const;
+  let plat: unknown;
+  for (const key of platKeys) {
+    if (o[key] !== undefined && o[key] !== null) {
+      plat = o[key];
+      break;
+    }
+  }
+  o.bestFitPlatform = normalizeBestFitPlatformValue(plat, index);
+
   return o;
 }
 
@@ -73,6 +117,12 @@ export function finalizeStrategyPillarNames(strategy: ContentStrategy): ContentS
     seen.add(candidate.toLowerCase());
     return { ...p, name: candidate };
   });
+
+  pillars = pillars.map((p, i) => ({
+    ...p,
+    primaryObjective: (p.primaryObjective ?? "").trim() || "Brand alignment",
+    bestFitPlatform: normalizeBestFitPlatformValue(p.bestFitPlatform, i),
+  }));
 
   const names = pillars.map((p) => p.name);
   const nameSet = new Set(names);

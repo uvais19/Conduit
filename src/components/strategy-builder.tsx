@@ -17,12 +17,13 @@ import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { listToText, textToList } from "@/lib/brand/manifesto";
+import { PLATFORMS, PLATFORM_LABELS } from "@/lib/constants";
 import { createDefaultStrategy } from "@/lib/strategy/defaults";
 import {
   consumeStrategyGenerateStream,
   fetchLatestStrategyFromApi,
 } from "@/lib/strategy/consume-strategy-generate-stream";
-import type { ContentStrategy } from "@/lib/types";
+import type { ContentStrategy, Platform } from "@/lib/types";
 
 type PlatformScheduleRow = ContentStrategy["schedule"][number];
 type ContentMixEntry = PlatformScheduleRow["contentMix"][number];
@@ -49,6 +50,10 @@ const FIELD_HINTS = {
     "A 1-2 sentence explanation of what this pillar covers and why it resonates with your target audience.",
   pillarPercentage:
     "The share of your total content output dedicated to this pillar. All pillar percentages should ideally add up to 100%.",
+  pillarPrimaryObjective:
+    "Why this pillar exists in the mix (e.g. lead generation, brand awareness, authority). Keeps content aligned to funnel goals.",
+  pillarBestFitPlatform:
+    "The channel where this pillar’s angles and formats naturally work best for your audience—not necessarily where you post most.",
   platform:
     "The social media channel this schedule applies to. Each platform has different audience behaviour and content norms.",
   postsPerWeek:
@@ -323,8 +328,11 @@ export function StrategyBuilder() {
 
         <CardContent className="space-y-4">
           {strategy.pillars.map((pillar, index) => (
-            <div key={`${pillar.name}-${index}`} className="grid gap-3 rounded-lg border p-4 md:grid-cols-[1.2fr_2fr_120px]">
-              <div className="space-y-2">
+            <div
+              key={`${pillar.name}-${index}`}
+              className="grid gap-4 rounded-lg border p-4 md:grid-cols-12 md:items-start"
+            >
+              <div className="space-y-2 md:col-span-3">
                 <FieldLabelWithHint label="Pillar name" hint={FIELD_HINTS.pillarName} />
                 <Input
                   value={pillar.name}
@@ -338,22 +346,52 @@ export function StrategyBuilder() {
                   }
                 />
               </div>
-              <div className="space-y-2">
-                <FieldLabelWithHint label="Description" hint={FIELD_HINTS.pillarDescription} />
-                <textarea
-                  className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                  value={pillar.description}
+              <div className="space-y-2 md:col-span-3">
+                <FieldLabelWithHint
+                  label="Primary objective"
+                  hint={FIELD_HINTS.pillarPrimaryObjective}
+                />
+                <Input
+                  value={pillar.primaryObjective}
                   onChange={(event) =>
                     setStrategy((current) => ({
                       ...current,
                       pillars: current.pillars.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, description: event.target.value } : item
+                        itemIndex === index
+                          ? { ...item, primaryObjective: event.target.value }
+                          : item
                       ),
                     }))
                   }
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-3">
+                <FieldLabelWithHint
+                  label="Best-fit platform"
+                  hint={FIELD_HINTS.pillarBestFitPlatform}
+                />
+                <select
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                  value={pillar.bestFitPlatform}
+                  onChange={(event) =>
+                    setStrategy((current) => ({
+                      ...current,
+                      pillars: current.pillars.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? { ...item, bestFitPlatform: event.target.value as Platform }
+                          : item
+                      ),
+                    }))
+                  }
+                >
+                  {PLATFORMS.map((p) => (
+                    <option key={p} value={p}>
+                      {PLATFORM_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2 md:col-span-3">
                 <FieldLabelWithHint label="Percentage" hint={FIELD_HINTS.pillarPercentage} />
                 <Input
                   type="number"
@@ -367,6 +405,21 @@ export function StrategyBuilder() {
                         itemIndex === index
                           ? { ...item, percentage: Number(event.target.value) || 0 }
                           : item
+                      ),
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2 md:col-span-12">
+                <FieldLabelWithHint label="Description" hint={FIELD_HINTS.pillarDescription} />
+                <textarea
+                  className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                  value={pillar.description}
+                  onChange={(event) =>
+                    setStrategy((current) => ({
+                      ...current,
+                      pillars: current.pillars.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, description: event.target.value } : item
                       ),
                     }))
                   }
