@@ -16,7 +16,7 @@ export function createDefaultStrategy(
       {
         name: "Education",
         description: `Teach your audience practical insights related to ${industry}.`,
-        percentage: 35,
+        percentage: 20,
         exampleTopics: [
           `Best practices in ${industry}`,
           "Common mistakes to avoid",
@@ -26,7 +26,7 @@ export function createDefaultStrategy(
       {
         name: "Trust & Proof",
         description: "Build credibility using proof points, stories, and behind-the-scenes content.",
-        percentage: 35,
+        percentage: 20,
         exampleTopics: [
           "Customer wins",
           "Case studies",
@@ -36,11 +36,31 @@ export function createDefaultStrategy(
       {
         name: "Conversion",
         description: "Turn attention into action with offer-led and CTA-driven content.",
-        percentage: 30,
+        percentage: 20,
         exampleTopics: [
           "Offer highlights",
           "FAQs before buying",
           "Calls to action",
+        ],
+      },
+      {
+        name: "Culture & People",
+        description: "Humanise the brand with team stories, values in action, and day-in-the-life content.",
+        percentage: 20,
+        exampleTopics: [
+          "Meet the team",
+          "How we work",
+          "Values in practice",
+        ],
+      },
+      {
+        name: "Community & Engagement",
+        description: "Spark conversation with polls, questions, user spotlights, and timely reactions to trends.",
+        percentage: 20,
+        exampleTopics: [
+          "Ask the audience",
+          "Trending topic takes",
+          "Customer spotlights",
         ],
       },
     ],
@@ -100,9 +120,9 @@ export function createDefaultStrategy(
       },
       {
         weekNumber: 4,
-        theme: "Community Momentum",
-        pillar: "Education",
-        keyMessage: "Stay top of mind with useful, consistent content.",
+        theme: "People & Participation",
+        pillar: "Community & Engagement",
+        keyMessage: goals[3] || goals[2] || goals[0],
       },
     ],
     monthlyGoals: [

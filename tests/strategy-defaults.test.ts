@@ -11,7 +11,8 @@ describe("strategy defaults", () => {
       socialMediaGoals: ["Grow awareness"],
     });
 
-    expect(strategy.pillars.length).toBeGreaterThanOrEqual(3);
+    expect(strategy.pillars).toHaveLength(5);
+    expect(strategy.pillars.reduce((sum, p) => sum + p.percentage, 0)).toBe(100);
     expect(strategy.schedule.length).toBeGreaterThan(0);
     expect(strategy.monthlyGoals.length).toBeGreaterThan(0);
   });

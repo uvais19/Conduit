@@ -384,7 +384,7 @@ export function StrategyBuilder() {
           <div>
             <CardTitle>Content pillars</CardTitle>
             <CardDescription>
-              The 3-5 core topic categories all your content revolves around. Good pillars are distinct, audience-aligned, and cover the full buyer journey.
+              Five core topic categories your content revolves around. Good pillars are distinct, audience-aligned, and cover the full buyer journey.
             </CardDescription>
           </div>
         </CardHeader>
