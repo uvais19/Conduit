@@ -1,80 +1,93 @@
-import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
-import { createEmptyBrandManifesto } from "@/lib/brand/manifesto";
 import type { BrandManifesto } from "@/lib/types";
 import { runDocumentAnalystAgent } from "./document-analyst-agent";
 import { runIdentitySynthesizerAgent } from "./identity-synthesizer-agent";
 import { runScraperAgent } from "./scraper-agent";
 import type {
   DiscoveryInput,
+  DiscoveryProgressHandler,
   DiscoveryResult,
   DocumentAnalysisResult,
   ScraperResult,
 } from "./types";
 
-const DiscoveryState = Annotation.Root({
-  input: Annotation<DiscoveryInput>,
-  scraper: Annotation<ScraperResult | null>,
-  documents: Annotation<DocumentAnalysisResult | null>,
-  manifesto: Annotation<BrandManifesto | null>,
+const defaultScraper = (): ScraperResult => ({
+  summary: "No website summary available.",
+  keyPoints: [],
+  source: "manual",
 });
 
-const discoveryGraph = new StateGraph(DiscoveryState)
-  .addNode("scrape_website", async (state) => ({
-    scraper: await runScraperAgent(state.input),
-  }))
-  .addNode("analyze_documents", async (state) => ({
-    documents: await runDocumentAnalystAgent(state.input),
-  }))
-  .addNode("synthesize_identity", async (state) => ({
-    manifesto: await runIdentitySynthesizerAgent({
-      input: state.input,
-      scraper:
-        state.scraper ?? {
-          summary: "No website summary available.",
-          keyPoints: [],
-          source: "manual",
-        },
-      documents:
-        state.documents ?? {
-          summary: "No document analysis available.",
-          insights: [],
-          documentCount: 0,
-        },
-    }),
-  }))
-  .addEdge(START, "scrape_website")
-  .addEdge(START, "analyze_documents")
-  .addEdge("scrape_website", "synthesize_identity")
-  .addEdge("analyze_documents", "synthesize_identity")
-  .addEdge("synthesize_identity", END)
-  .compile();
+const defaultDocuments = (): DocumentAnalysisResult => ({
+  summary: "No document analysis available.",
+  insights: [],
+  documentCount: 0,
+});
+
+function siteCompleteMessage(source: ScraperResult["source"]): string {
+  if (source === "website") {
+    return "Website reviewed (live crawl).";
+  }
+  if (source === "unavailable") {
+    return "Website could not be read — using your manual details.";
+  }
+  return "No website URL — using your manual business details.";
+}
+
+function documentsCompleteMessage(documentCount: number): string {
+  if (documentCount > 0) {
+    return `Reviewed ${documentCount} uploaded file${documentCount === 1 ? "" : "s"}.`;
+  }
+  return "No uploads — relying on your site and form answers.";
+}
 
 export async function runDiscoveryPipeline(
-  input: DiscoveryInput
+  input: DiscoveryInput,
+  onProgress?: DiscoveryProgressHandler
 ): Promise<DiscoveryResult> {
-  const result = await discoveryGraph.invoke({
+  onProgress?.({
+    phase: "gathering",
+    message: "Reading your site and reviewing uploads…",
+  });
+
+  const scraperPromise = runScraperAgent(input).then((scraper) => {
+    onProgress?.({
+      phase: "site_complete",
+      message: siteCompleteMessage(scraper.source),
+      source: scraper.source,
+    });
+    return scraper;
+  });
+
+  const documentsPromise = runDocumentAnalystAgent(input).then((documents) => {
+    onProgress?.({
+      phase: "documents_complete",
+      message: documentsCompleteMessage(documents.documentCount),
+      documentCount: documents.documentCount,
+    });
+    return documents;
+  });
+
+  const [scraperRaw, documentsRaw] = await Promise.all([
+    scraperPromise,
+    documentsPromise,
+  ]);
+
+  const scraper = scraperRaw ?? defaultScraper();
+  const documents = documentsRaw ?? defaultDocuments();
+
+  onProgress?.({
+    phase: "synthesizing",
+    message: "Writing your brand manifesto…",
+  });
+
+  const manifesto: BrandManifesto = await runIdentitySynthesizerAgent({
     input,
-    scraper: null,
-    documents: null,
-    manifesto: null,
+    scraper,
+    documents,
   });
 
   return {
-    scraper:
-      result.scraper ?? {
-        summary: "No website summary available.",
-        keyPoints: [],
-        source: "manual",
-      },
-    documents:
-      result.documents ?? {
-        summary: "No document analysis available.",
-        insights: [],
-        documentCount: 0,
-      },
-    manifesto: result.manifesto ?? createEmptyBrandManifesto({
-      businessName: input.businessName,
-      industry: input.industry,
-    }),
+    scraper,
+    documents,
+    manifesto,
   };
 }

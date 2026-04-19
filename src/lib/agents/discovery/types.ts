@@ -48,3 +48,18 @@ export type DiscoveryResult = {
   scraper: ScraperResult;
   documents: DocumentAnalysisResult;
 };
+
+export type DiscoveryProgressPhase =
+  | "gathering"
+  | "site_complete"
+  | "documents_complete"
+  | "synthesizing";
+
+export type DiscoveryProgressEvent = {
+  phase: DiscoveryProgressPhase;
+  message: string;
+  source?: ScraperResult["source"];
+  documentCount?: number;
+};
+
+export type DiscoveryProgressHandler = (event: DiscoveryProgressEvent) => void;

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Sparkles, Upload, Wand2 } from "lucide-react";
+import { Check, ChevronDown, Loader2, Sparkles, Upload, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -15,6 +15,11 @@ import {
 } from "@/components/ui/card";
 import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
+import {
+  buildGroundingSummary,
+  type DocumentAnalysisResult,
+  type ScraperResult,
+} from "@/lib/agents/discovery";
 import { cn } from "@/lib/utils";
 import type { BrandManifesto } from "@/lib/types";
 
@@ -32,16 +37,8 @@ type UploadedDocument = {
 type DiscoveryResponse = {
   manifesto: BrandManifesto;
   version: number;
-  scraper: {
-    source: string;
-    summary: string;
-    keyPoints: string[];
-  };
-  documents: {
-    summary: string;
-    insights: string[];
-    documentCount: number;
-  };
+  scraper: ScraperResult;
+  documents: DocumentAnalysisResult;
 };
 
 type PrefillSuggestions = {
@@ -122,6 +119,12 @@ export function OnboardingWizard() {
   const [form, setForm] = useState(initialForm);
   const [uploadNotes, setUploadNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState("");
+  const [branchProgress, setBranchProgress] = useState({
+    site: false,
+    docs: false,
+  });
+  const [synthesisActive, setSynthesisActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [prefilling, setPrefilling] = useState(false);
   const [error, setError] = useState("");
@@ -340,9 +343,12 @@ export function OnboardingWizard() {
     }
   }
 
-  async function submitDiscover() {
+  async function runDiscoveryStream() {
     setSubmitting(true);
     setError("");
+    setGenerationMessage("Connecting…");
+    setBranchProgress({ site: false, docs: false });
+    setSynthesisActive(false);
 
     const payload = {
       ...form,
@@ -358,13 +364,79 @@ export function OnboardingWizard() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
-      if (!response.ok) {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!response.ok && !contentType.includes("text/event-stream")) {
+        const data = (await response.json()) as { error?: string };
         throw new Error(data.error || "Unable to generate your brand manifesto");
       }
 
-      setResult(data as DiscoveryResponse);
-      router.refresh();
+      if (!response.body) {
+        throw new Error("Unable to generate your brand manifesto");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ") && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(6)) as Record<string, unknown>;
+              if (currentEvent === "progress") {
+                const step = data.step as string;
+                const message =
+                  typeof data.message === "string" ? data.message : "";
+                if (message) {
+                  setGenerationMessage(message);
+                }
+                if (step === "gathering") {
+                  setBranchProgress({ site: false, docs: false });
+                  setSynthesisActive(false);
+                } else if (step === "site_complete") {
+                  setBranchProgress((current) => ({ ...current, site: true }));
+                  setSynthesisActive(false);
+                } else if (step === "documents_complete") {
+                  setBranchProgress((current) => ({ ...current, docs: true }));
+                  setSynthesisActive(false);
+                } else if (step === "synthesizing") {
+                  setBranchProgress({ site: true, docs: true });
+                  setSynthesisActive(true);
+                }
+              } else if (currentEvent === "done") {
+                setResult(data as unknown as DiscoveryResponse);
+                router.refresh();
+              } else if (currentEvent === "error") {
+                throw new Error(
+                  typeof data.error === "string"
+                    ? data.error
+                    : "Unable to generate your brand manifesto"
+                );
+              }
+            } catch (parseError) {
+              if (
+                parseError instanceof Error &&
+                parseError.message !== "Unexpected end of JSON input"
+              ) {
+                throw parseError;
+              }
+            }
+            currentEvent = "";
+          }
+        }
+      }
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -373,6 +445,9 @@ export function OnboardingWizard() {
       );
     } finally {
       setSubmitting(false);
+      setGenerationMessage("");
+      setBranchProgress({ site: false, docs: false });
+      setSynthesisActive(false);
     }
   }
 
@@ -397,6 +472,91 @@ export function OnboardingWizard() {
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           {error}
         </div>
+      )}
+
+      {submitting && (
+        <Card className="border-primary/25 bg-muted/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+              Generating your Brand Manifesto
+            </CardTitle>
+            <CardDescription className="text-foreground/90">
+              {generationMessage}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-start gap-2">
+              {branchProgress.site ? (
+                <Check
+                  className="mt-0.5 size-4 shrink-0 text-primary"
+                  aria-hidden
+                />
+              ) : (
+                <span
+                  className="mt-1 size-3 shrink-0 rounded-full border border-muted-foreground/40"
+                  aria-hidden
+                />
+              )}
+              <span
+                className={cn(
+                  branchProgress.site ? "text-muted-foreground" : "text-foreground"
+                )}
+              >
+                {branchProgress.site
+                  ? "Website input reviewed"
+                  : "Website input (in progress)"}
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              {branchProgress.docs ? (
+                <Check
+                  className="mt-0.5 size-4 shrink-0 text-primary"
+                  aria-hidden
+                />
+              ) : (
+                <span
+                  className="mt-1 size-3 shrink-0 rounded-full border border-muted-foreground/40"
+                  aria-hidden
+                />
+              )}
+              <span
+                className={cn(
+                  branchProgress.docs ? "text-muted-foreground" : "text-foreground"
+                )}
+              >
+                {branchProgress.docs
+                  ? "Uploads and notes reviewed"
+                  : "Uploads and notes (in progress)"}
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              {synthesisActive ? (
+                <Loader2
+                  className="mt-0.5 size-4 shrink-0 animate-spin text-primary"
+                  aria-hidden
+                />
+              ) : branchProgress.site && branchProgress.docs ? (
+                <span
+                  className="mt-1 size-3 shrink-0 rounded-full border border-primary/50"
+                  aria-hidden
+                />
+              ) : (
+                <span
+                  className="mt-1 size-3 shrink-0 rounded-full border border-muted-foreground/40"
+                  aria-hidden
+                />
+              )}
+              <span
+                className={cn(
+                  synthesisActive ? "text-foreground" : "text-muted-foreground"
+                )}
+              >
+                Writing manifesto
+              </span>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {!result && (
@@ -770,7 +930,7 @@ export function OnboardingWizard() {
                 <Button
                   type="button"
                   disabled={submitting}
-                  onClick={() => void submitDiscover()}
+                  onClick={() => void runDiscoveryStream()}
                 >
                   <Wand2 className="mr-2 size-4" />
                   {submitting ? "Generating…" : "Generate Brand Manifesto"}
@@ -808,6 +968,16 @@ export function OnboardingWizard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            <p className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-sm text-foreground/90">
+              {buildGroundingSummary(
+                {
+                  ...form,
+                  websiteUrl: normalizeWebsiteUrl(form.websiteUrl),
+                },
+                result.scraper,
+                result.documents
+              )}
+            </p>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border p-4">
                 <h3 className="font-semibold">Identity</h3>
@@ -846,6 +1016,36 @@ export function OnboardingWizard() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   {result.documents.summary}
                 </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t pt-5">
+              <p className="text-sm text-muted-foreground">
+                Want a different angle? Regenerate uses the same answers and uploads
+                from this wizard and saves a new version. Or edit your responses first.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={submitting}
+                  onClick={() => void runDiscoveryStream()}
+                  className="gap-2"
+                >
+                  <Wand2 className="size-4 shrink-0" />
+                  {submitting ? "Regenerating…" : "Regenerate from same inputs"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={submitting}
+                  onClick={() => {
+                    setError("");
+                    setResult(null);
+                  }}
+                >
+                  Edit responses
+                </Button>
               </div>
             </div>
 
