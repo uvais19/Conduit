@@ -17,17 +17,26 @@ function extractMeta(html: string, name: string): string | undefined {
   return html.match(pattern)?.[1]?.trim();
 }
 
+/** Jina reader and similar plain-text formats often prefix the first line with "Title:" */
+function stripLeadingTitleLabel(s: string): string {
+  return s.replace(/^title\s*[:：]\s*/i, "").trim();
+}
+
 function titleFromReadableText(text: string, fallback: string): string {
   const heading = text.match(/^#\s+(.+)$/m);
   if (heading?.[1]) {
-    return heading[1].trim().slice(0, 120);
+    const t = stripLeadingTitleLabel(heading[1].trim()).slice(0, 120);
+    return t || fallback;
   }
   const boldLine = text.match(/^\*\*(.+?)\*\*\s*$/m);
   if (boldLine?.[1]) {
-    return boldLine[1].trim().slice(0, 120);
+    const t = stripLeadingTitleLabel(boldLine[1].trim()).slice(0, 120);
+    return t || fallback;
   }
   const firstLine = text.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
-  const cleaned = firstLine.replace(/^#+\s*/, "").slice(0, 120);
+  const cleaned = stripLeadingTitleLabel(
+    firstLine.replace(/^#+\s*/, "")
+  ).slice(0, 120);
   return cleaned || fallback;
 }
 

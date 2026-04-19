@@ -15,7 +15,10 @@ function pickSuggestedBusinessName(
   scraper: ScraperResult,
   typedName: string
 ): string {
-  const raw = scraper.title?.trim();
+  const raw = scraper.title
+    ?.trim()
+    .replace(/^title\s*[:：]\s*/i, "")
+    .trim();
   if (!raw) return "";
   const typed = typedName.trim();
   if (typed && raw.toLowerCase() === typed.toLowerCase()) return "";
