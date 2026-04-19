@@ -1,14 +1,30 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateJson } from "@/lib/ai/clients";
+import type { ScraperResult } from "@/lib/agents/discovery/types";
 import { runScraperAgent } from "@/lib/agents/discovery/scraper-agent";
 import { requireAuth } from "@/lib/auth/permissions";
 
 const prefillRequestSchema = z.object({
-  websiteUrl: z.string().trim().optional().default(""),
-  businessName: z.string().min(1, "Business name is required"),
+  websiteUrl: z.string().trim().min(1, "Enter your website URL"),
+  businessName: z.string().trim().optional().default(""),
   industry: z.string().trim().optional().default(""),
 });
+
+function pickSuggestedBusinessName(
+  scraper: ScraperResult,
+  typedName: string
+): string {
+  const raw = scraper.title?.trim();
+  if (!raw) return "";
+  const typed = typedName.trim();
+  if (typed && raw.toLowerCase() === typed.toLowerCase()) return "";
+  let t = raw.replace(/\s*[|\u2013\u2014]\s*.+$/, "").trim();
+  t = t.replace(/\s+-\s+.+$/, "").trim();
+  if (t.length < 2 || t.length > 100) return "";
+  if (/^(home|welcome|official site)$/i.test(t)) return "";
+  return t;
+}
 
 type PrefillSuggestions = {
   industry: string;
@@ -67,7 +83,7 @@ export async function POST(request: Request) {
       systemPrompt:
         "You are a brand strategist helping a business owner set up their social media strategy. Based on the website content provided, suggest practical, specific values for each field. Be concise and realistic — write as if filling in the form yourself. All values must be plain text with no markdown, no bullet symbols, and no dashes.",
       userPrompt: [
-        `Business: ${businessName}`,
+        `Business: ${businessName || "(name not provided — infer from the site)"}`,
         industry ? `Industry hint: ${industry}` : "",
         "",
         "Website content:",
@@ -89,7 +105,12 @@ export async function POST(request: Request) {
       fallback: emptyFallback,
     });
 
-    return NextResponse.json({ suggestions });
+    const suggestedBusinessName = pickSuggestedBusinessName(
+      scraper,
+      businessName
+    );
+
+    return NextResponse.json({ suggestions, suggestedBusinessName });
   } catch (error) {
     console.error("Prefill failed:", error);
     return NextResponse.json(

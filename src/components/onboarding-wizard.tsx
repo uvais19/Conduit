@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Upload, Wand2 } from "lucide-react";
+import { ChevronDown, Sparkles, Upload, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -15,8 +15,10 @@ import {
 } from "@/components/ui/card";
 import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
-import { AutoAdvanceBanner } from "@/components/auto-advance-banner";
+import { cn } from "@/lib/utils";
 import type { BrandManifesto } from "@/lib/types";
+
+const ONBOARDING_STORAGE_KEY = "conduit-onboarding-draft-v1";
 
 type UploadedDocument = {
   id?: string;
@@ -79,7 +81,41 @@ const initialForm = {
   documents: [] as UploadedDocument[],
 };
 
-const ADVANCE_MS = 5000;
+type OnboardingDraft = {
+  form: typeof initialForm;
+  uploadNotes: string;
+  showDetails: boolean;
+};
+
+function normalizeWebsiteUrl(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "";
+  if (/^https?:\/\//i.test(t)) return t;
+  return `https://${t}`;
+}
+
+function isValidHttpUrl(raw: string): boolean {
+  const normalized = normalizeWebsiteUrl(raw);
+  if (!normalized) return false;
+  try {
+    const u = new URL(normalized);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function hostFromUrl(raw: string): string | null {
+  try {
+    return new URL(normalizeWebsiteUrl(raw)).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+function faviconUrl(hostname: string): string {
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=64`;
+}
 
 export function OnboardingWizard() {
   const router = useRouter();
@@ -90,31 +126,72 @@ export function OnboardingWizard() {
   const [prefilling, setPrefilling] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<DiscoveryResponse | null>(null);
-  const [aiSuggestedFields, setAiSuggestedFields] = useState<Set<string>>(new Set());
+  const [aiSuggestedFields, setAiSuggestedFields] = useState<Set<string>>(
+    new Set()
+  );
+  const [showDetails, setShowDetails] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [suggestedBusinessName, setSuggestedBusinessName] = useState<
+    string | null
+  >(null);
+  const [hydrated, setHydrated] = useState(false);
 
-  const canPrefill = form.websiteUrl.trim().length > 0 && form.businessName.trim().length > 0;
-  const advanceTimerRef = useRef<number | null>(null);
+  const reviewSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!result) return;
-    advanceTimerRef.current = window.setTimeout(() => {
-      advanceTimerRef.current = null;
-      router.refresh();
-      router.push("/strategy");
-    }, ADVANCE_MS);
-    return () => {
-      if (advanceTimerRef.current) {
-        window.clearTimeout(advanceTimerRef.current);
-        advanceTimerRef.current = null;
+    try {
+      const raw = localStorage.getItem(ONBOARDING_STORAGE_KEY);
+      if (!raw) {
+        setHydrated(true);
+        return;
       }
-    };
-  }, [result, router]);
-
-  function cancelAdvanceTimer() {
-    if (advanceTimerRef.current) {
-      window.clearTimeout(advanceTimerRef.current);
-      advanceTimerRef.current = null;
+      const draft = JSON.parse(raw) as OnboardingDraft;
+      if (draft.form && typeof draft.form === "object") {
+        setForm({ ...initialForm, ...draft.form });
+      }
+      if (typeof draft.uploadNotes === "string") {
+        setUploadNotes(draft.uploadNotes);
+      }
+      if (draft.showDetails) {
+        setShowDetails(true);
+      }
+    } catch {
+      /* ignore */
     }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || result) return;
+    const draft: OnboardingDraft = {
+      form,
+      uploadNotes,
+      showDetails,
+    };
+    try {
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      /* ignore */
+    }
+  }, [hydrated, form, uploadNotes, showDetails, result]);
+
+  useEffect(() => {
+    if (result) {
+      try {
+        localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [result]);
+
+  function scrollReviewIntoView() {
+    requestAnimationFrame(() => {
+      reviewSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   }
 
   function updateField(name: string, value: string) {
@@ -128,16 +205,44 @@ export function OnboardingWizard() {
     }
   }
 
-  async function handlePrefill() {
-    setPrefilling(true);
+  function clearDraftAndReset() {
+    try {
+      localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    setForm(initialForm);
+    setUploadNotes("");
+    setShowDetails(false);
+    setAdvancedOpen(false);
+    setSuggestedBusinessName(null);
+    setAiSuggestedFields(new Set());
     setError("");
+    setResult(null);
+  }
+
+  async function handleAnalyzeWebsite() {
+    setError("");
+    const normalized = normalizeWebsiteUrl(form.websiteUrl);
+    if (!normalized) {
+      setError("Enter your website URL.");
+      return;
+    }
+    if (!isValidHttpUrl(form.websiteUrl)) {
+      setError("Enter a valid website URL (for example https://example.com).");
+      return;
+    }
+
+    setForm((c) => ({ ...c, websiteUrl: normalized }));
+    setPrefilling(true);
+    setSuggestedBusinessName(null);
 
     try {
       const response = await fetch("/api/onboarding/prefill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          websiteUrl: form.websiteUrl,
+          websiteUrl: normalized,
           businessName: form.businessName,
           industry: form.industry,
         }),
@@ -145,14 +250,14 @@ export function OnboardingWizard() {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Unable to generate suggestions");
+        throw new Error(data.error || "Unable to analyze your website");
       }
 
       const suggestions = data.suggestions as PrefillSuggestions;
       const filledFields = new Set<string>();
 
       setForm((current) => {
-        const next = { ...current };
+        const next = { ...current, websiteUrl: normalized };
         for (const key of PREFILL_FIELDS) {
           const value = suggestions[key];
           if (value?.trim()) {
@@ -164,15 +269,28 @@ export function OnboardingWizard() {
       });
 
       setAiSuggestedFields(filledFields);
+      const suggested = (data.suggestedBusinessName as string | undefined)?.trim();
+      if (suggested) {
+        setSuggestedBusinessName(suggested);
+      }
+      setShowDetails(true);
+      scrollReviewIntoView();
     } catch (prefillError) {
       setError(
         prefillError instanceof Error
           ? prefillError.message
-          : "Unable to generate suggestions"
+          : "Unable to analyze your website"
       );
     } finally {
       setPrefilling(false);
     }
+  }
+
+  function handleManualEntry() {
+    setError("");
+    setSuggestedBusinessName(null);
+    setShowDetails(true);
+    scrollReviewIntoView();
   }
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -222,10 +340,14 @@ export function OnboardingWizard() {
     }
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitDiscover() {
     setSubmitting(true);
     setError("");
+
+    const payload = {
+      ...form,
+      websiteUrl: normalizeWebsiteUrl(form.websiteUrl),
+    };
 
     try {
       const response = await fetch("/api/onboarding/discover", {
@@ -233,7 +355,7 @@ export function OnboardingWizard() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -242,29 +364,33 @@ export function OnboardingWizard() {
       }
 
       setResult(data as DiscoveryResponse);
+      router.refresh();
     } catch (submitError) {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : "Unable to run the discovery pipeline"
+          : "Unable to generate your brand manifesto"
       );
     } finally {
       setSubmitting(false);
     }
   }
 
+  const hostname = hostFromUrl(form.websiteUrl);
+  const canAnalyze =
+    isValidHttpUrl(form.websiteUrl) && !prefilling && !result;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Onboard Your Business</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Set up your brand</h1>
           <p className="text-muted-foreground">
-            Run the Discovery Pipeline to generate your first AI-built Brand Manifesto.
+            Tell us who you are and where you live online. We read your site to
+            draft your brand profile — you review and generate your Brand
+            Manifesto when you are ready.
           </p>
         </div>
-        <Badge variant="secondary" className="w-fit">
-          Phase 2 • Discovery Pipeline
-        </Badge>
       </div>
 
       {error && (
@@ -273,317 +399,478 @@ export function OnboardingWizard() {
         </div>
       )}
 
-      <form className="space-y-6" onSubmit={handleSubmit}>
-        {/* Card 1: minimum inputs + AI trigger — all co-located */}
-        <Card>
-          <CardHeader>
-            <CardTitle>1. Getting Started</CardTitle>
-            <CardDescription>
-              Enter your business name and website — then let AI suggest the rest, or fill in the cards below yourself.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <FieldLabelWithHint htmlFor="businessName" label="Business name" hint="The official name of your business as it should appear in content and your brand identity." />
-                <Input
-                  id="businessName"
-                  value={form.businessName}
-                  onChange={(event) => updateField("businessName", event.target.value)}
-                  placeholder="Acme Marketing"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabelWithHint htmlFor="websiteUrl" label="Website URL" hint="Your public website homepage. Conduit's Scraper Agent will crawl it to extract brand language, messaging, products, and tone of voice automatically." />
-                <Input
-                  id="websiteUrl"
-                  value={form.websiteUrl}
-                  onChange={(event) => updateField("websiteUrl", event.target.value)}
-                  placeholder="https://example.com"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border border-dashed p-4">
-              <Sparkles className="size-5 shrink-0 text-primary" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Let AI fill in the details</p>
-                <p className="text-xs text-muted-foreground">
-                  Conduit will scrape your website and suggest your industry, audience, offerings, tone, and content rules.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!canPrefill || prefilling}
-                onClick={handlePrefill}
-                className="shrink-0 gap-1.5"
-              >
-                <Sparkles className="size-3.5 text-primary" />
-                {prefilling ? "Analyzing..." : "Suggest with AI"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Card 2: factual business data — what AI infers from the website */}
-        <Card>
-          <CardHeader>
-            <CardTitle>2. Your Business</CardTitle>
-            <CardDescription>
-              Describe what you do, who you serve, and what sets you apart.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <FieldLabelWithHint
-                htmlFor="industry"
-                label="Industry"
-                hint="The sector your business operates in — be specific (e.g. B2B SaaS, Independent Retail, Healthcare Consulting). This shapes tone and content strategy."
-                aiSuggested={aiSuggestedFields.has("industry")}
-              />
-              <Input
-                id="industry"
-                value={form.industry}
-                onChange={(event) => updateField("industry", event.target.value)}
-                placeholder="B2B SaaS"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <FieldLabelWithHint htmlFor="differentiators" label="Differentiators / USPs" hint="What makes you different from competitors? Think about your unique methodology, turnaround time, pricing model, expertise, or the specific problem only you solve." aiSuggested={aiSuggestedFields.has("differentiators")} />
-              <textarea
-                id="differentiators"
-                className="min-h-[5.5rem] w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.differentiators}
-                onChange={(event) => updateField("differentiators", event.target.value)}
-                placeholder="What makes you different?"
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <FieldLabelWithHint htmlFor="offerings" label="Products or services" hint="List what you sell or deliver — one item per line. Include key features or pricing tiers if relevant. This helps the AI write accurate, specific content about your offers." aiSuggested={aiSuggestedFields.has("offerings")} />
-              <textarea
-                id="offerings"
-                className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.offerings}
-                onChange={(event) => updateField("offerings", event.target.value)}
-                placeholder="List your main offers, one per line."
-                required
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <FieldLabelWithHint htmlFor="targetAudience" label="Target audience" hint="Describe your ideal customers — their job titles, demographics, goals, and pain points. The more specific, the better the content will resonate." aiSuggested={aiSuggestedFields.has("targetAudience")} />
-              <textarea
-                id="targetAudience"
-                className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.targetAudience}
-                onChange={(event) => updateField("targetAudience", event.target.value)}
-                placeholder="Who do you serve? Include demographics, role, and needs."
-                required
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Card 3: opinionated strategy fields — AI suggests, user refines */}
-        <Card>
-          <CardHeader>
-            <CardTitle>3. Content Strategy</CardTitle>
-            <CardDescription>
-              Define your goals, brand voice, and the rules that will guide every post Conduit writes.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
-              <FieldLabelWithHint htmlFor="goals" label="Social media goals" hint="What you want social media to achieve for your business — e.g. brand awareness, lead generation, driving website traffic, thought leadership, or local foot traffic." aiSuggested={aiSuggestedFields.has("goals")} />
-              <textarea
-                id="goals"
-                className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.goals}
-                onChange={(event) => updateField("goals", event.target.value)}
-                placeholder="Brand awareness, lead generation, thought leadership, local foot traffic..."
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <FieldLabelWithHint htmlFor="brandTone" label="Brand tone / adjectives" hint="3–6 words that describe how your brand should sound. Examples: confident, approachable, witty, premium, no-nonsense, warm. This directly shapes the writing style of every post." aiSuggested={aiSuggestedFields.has("brandTone")} />
-              <textarea
-                id="brandTone"
-                className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.brandTone}
-                onChange={(event) => updateField("brandTone", event.target.value)}
-                placeholder="Helpful, confident, witty, premium..."
-              />
-            </div>
-            <div className="space-y-2">
-              <FieldLabelWithHint htmlFor="notes" label="Extra notes" hint="Anything else worth knowing — competitor names to be aware of, market positioning, customer pain points, pricing philosophy, or seasonal context. Treat this as a brain dump." />
-              <textarea
-                id="notes"
-                className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.notes}
-                onChange={(event) => updateField("notes", event.target.value)}
-                placeholder="Any other context, customer pains, market positioning..."
-              />
-            </div>
-            <div className="space-y-2">
-              <FieldLabelWithHint htmlFor="contentDos" label="Content do's" hint="Approaches, formats, or topics you want the AI to actively use — e.g. 'use customer success stories', 'always cite a stat', 'ask a question at the end', 'include a clear CTA'." aiSuggested={aiSuggestedFields.has("contentDos")} />
-              <textarea
-                id="contentDos"
-                className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.contentDos}
-                onChange={(event) => updateField("contentDos", event.target.value)}
-                placeholder="Use customer stories, cite data, stay practical..."
-              />
-            </div>
-            <div className="space-y-2">
-              <FieldLabelWithHint htmlFor="contentDonts" label="Content don'ts" hint="Hard rules for the AI to follow — topics to avoid, phrases that feel off-brand, or styles that don't fit. E.g. 'no jargon', 'don't mention competitors by name', 'never use clickbait'." aiSuggested={aiSuggestedFields.has("contentDonts")} />
-              <textarea
-                id="contentDonts"
-                className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={form.contentDonts}
-                onChange={(event) => updateField("contentDonts", event.target.value)}
-                placeholder="Avoid jargon, don&apos;t be too salesy, no clickbait..."
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>4. Supporting Documents</CardTitle>
-            <CardDescription>
-              Upload brand guidelines, decks, PDFs, or visual references to strengthen the analysis.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <FieldLabelWithHint htmlFor="uploadNotes" label="Notes for uploaded files" hint="Tell the Document Analyst what these files are and how to use them — e.g. 'this is our brand guidelines deck', 'this PDF has our target customer research', 'these are old ad scripts for tone reference'." />
-              <textarea
-                id="uploadNotes"
-                className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={uploadNotes}
-                onChange={(event) => setUploadNotes(event.target.value)}
-                placeholder="Add context about the files you&apos;re uploading..."
-              />
-            </div>
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <Input type="file" multiple onChange={handleUpload} />
-              <Button type="button" variant="outline" disabled={uploading}>
-                <Upload className="mr-2 size-4" />
-                {uploading ? "Uploading..." : "Upload to discovery"}
-              </Button>
-            </div>
-
-            {form.documents.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {form.documents.map((document, index) => (
-                  <Badge key={`${document.fileName}-${index}`} variant="outline">
-                    {document.fileName} • {document.fileType}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button type="submit" disabled={submitting}>
-            <Wand2 className="mr-2 size-4" />
-            {submitting ? "Running agents..." : "Generate Brand Manifesto"}
-          </Button>
-          <Link
-            href="/brand"
-            className={buttonVariants({ variant: "outline" })}
-          >
-            Open current manifesto
-          </Link>
-        </div>
-      </form>
-
-      {result && (
-        <>
-          <AutoAdvanceBanner
-            destination="/strategy"
-            label="Content Strategy"
-            delayMs={ADVANCE_MS}
-            onCancel={cancelAdvanceTimer}
-          />
+      {!result && (
+        <form
+          className="space-y-6"
+          onSubmit={(event) => event.preventDefault()}
+        >
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="size-5 text-primary" />
-                Manifesto generated successfully
-              </CardTitle>
+              <CardTitle>Your company</CardTitle>
               <CardDescription>
-                Version {result.version} saved. Next: generate your content strategy.
+                Add your public website so we can infer your audience, offers,
+                and tone. No site yet? You can still enter everything by hand.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border p-4">
-                  <h3 className="font-semibold">Identity</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    <strong>{result.manifesto.businessName}</strong> • {result.manifesto.industry}
-                  </p>
-                  <p className="mt-2 text-sm">{result.manifesto.missionStatement}</p>
+                <div className="space-y-2">
+                  <FieldLabelWithHint
+                    htmlFor="businessName"
+                    label="Business name"
+                    hint="The name that should appear in your content and brand profile. You can change it after we read your site."
+                  />
+                  <Input
+                    id="businessName"
+                    value={form.businessName}
+                    onChange={(event) =>
+                      updateField("businessName", event.target.value)
+                    }
+                    placeholder="Acme Marketing"
+                    autoComplete="organization"
+                    required={showDetails}
+                  />
                 </div>
-                <div className="rounded-lg border p-4">
-                  <h3 className="font-semibold">Voice attributes</h3>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {result.manifesto.voiceAttributes.map((item) => (
-                      <Badge key={item} variant="secondary">
-                        {item}
-                      </Badge>
-                    ))}
-                  </div>
+                <div className="space-y-2">
+                  <FieldLabelWithHint
+                    htmlFor="websiteUrl"
+                    label="Website URL"
+                    hint="Your homepage. We fetch public content to pre-fill the fields below."
+                  />
+                  <Input
+                    id="websiteUrl"
+                    value={form.websiteUrl}
+                    onChange={(event) =>
+                      updateField("websiteUrl", event.target.value)
+                    }
+                    onBlur={() => {
+                      const n = normalizeWebsiteUrl(form.websiteUrl);
+                      if (n !== form.websiteUrl) {
+                        updateField("websiteUrl", n);
+                      }
+                    }}
+                    placeholder="example.com or https://example.com"
+                    inputMode="url"
+                    autoComplete="url"
+                  />
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <h3 className="font-semibold">Key messages</h3>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                    {result.manifesto.keyMessages.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="font-semibold">Discovery notes</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Scraper source: {result.scraper.source}
+              {hostname && (
+                <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                  {/* Favicon is third-party and dynamic; next/image would need remotePatterns for each host */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={faviconUrl(hostname)}
+                    alt=""
+                    width={24}
+                    height={24}
+                    className="size-6 shrink-0 rounded-sm bg-background"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                  <p className="text-muted-foreground">
+                    We will read{" "}
+                    <span className="font-medium text-foreground">{hostname}</span>{" "}
+                    to draft your profile.
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {result.documents.summary}
-                  </p>
                 </div>
-              </div>
+              )}
 
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/strategy"
-                  className={buttonVariants()}
-                  onClick={() => {
-                    cancelAdvanceTimer();
-                    router.refresh();
-                  }}
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Button
+                  type="button"
+                  disabled={!canAnalyze}
+                  onClick={() => void handleAnalyzeWebsite()}
+                  className="gap-2"
                 >
-                  Continue to content strategy
-                </Link>
-                <Link href="/brand" className={buttonVariants({ variant: "outline" })}>
-                  Review manifesto
-                </Link>
-                <Link
-                  href="/brand/voice"
-                  className={buttonVariants({ variant: "outline" })}
+                  <Sparkles className="size-4 shrink-0" />
+                  {prefilling ? "Reading your site…" : "Analyze my website"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  onClick={handleManualEntry}
                 >
-                  Tune brand voice
-                </Link>
+                  No website — fill in details manually
+                </Button>
               </div>
             </CardContent>
           </Card>
-        </>
+
+          {showDetails && (
+            <div ref={reviewSectionRef} className="space-y-6">
+              {suggestedBusinessName &&
+                suggestedBusinessName.toLowerCase() !==
+                  form.businessName.trim().toLowerCase() && (
+                  <div className="flex flex-col gap-3 rounded-lg border border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm">
+                      <span className="font-medium">Suggested name from your site: </span>
+                      <span className="text-foreground">{suggestedBusinessName}</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          updateField("businessName", suggestedBusinessName);
+                          setSuggestedBusinessName(null);
+                        }}
+                      >
+                        Use this name
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSuggestedBusinessName(null)}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Review your business</CardTitle>
+                  <CardDescription>
+                    Check what we inferred (fields marked as AI suggestions) and
+                    edit anything that is off before you generate your manifesto.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <FieldLabelWithHint
+                      htmlFor="industry"
+                      label="Industry"
+                      hint="The sector you operate in — be specific so tone and strategy match."
+                      aiSuggested={aiSuggestedFields.has("industry")}
+                    />
+                    <Input
+                      id="industry"
+                      value={form.industry}
+                      onChange={(event) =>
+                        updateField("industry", event.target.value)
+                      }
+                      placeholder="B2B SaaS"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <FieldLabelWithHint
+                      htmlFor="offerings"
+                      label="Products or services"
+                      hint="What you sell or deliver — one per line."
+                      aiSuggested={aiSuggestedFields.has("offerings")}
+                    />
+                    <textarea
+                      id="offerings"
+                      className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                      value={form.offerings}
+                      onChange={(event) =>
+                        updateField("offerings", event.target.value)
+                      }
+                      placeholder="List your main offers, one per line."
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <FieldLabelWithHint
+                      htmlFor="targetAudience"
+                      label="Target audience"
+                      hint="Ideal customers — roles, goals, and pain points."
+                      aiSuggested={aiSuggestedFields.has("targetAudience")}
+                    />
+                    <textarea
+                      id="targetAudience"
+                      className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                      value={form.targetAudience}
+                      onChange={(event) =>
+                        updateField("targetAudience", event.target.value)
+                      }
+                      placeholder="Who do you serve?"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <FieldLabelWithHint
+                      htmlFor="goals"
+                      label="Social media goals"
+                      hint="What social should achieve — awareness, leads, traffic, etc."
+                      aiSuggested={aiSuggestedFields.has("goals")}
+                    />
+                    <textarea
+                      id="goals"
+                      className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                      value={form.goals}
+                      onChange={(event) =>
+                        updateField("goals", event.target.value)
+                      }
+                      placeholder="Brand awareness, lead generation…"
+                      required
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+                  <div>
+                    <CardTitle>More options</CardTitle>
+                    <CardDescription>
+                      Differentiators, voice, guardrails, and optional file uploads.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1"
+                    onClick={() => setAdvancedOpen((o) => !o)}
+                    aria-expanded={advancedOpen}
+                  >
+                    {advancedOpen ? "Hide" : "Show"}
+                    <ChevronDown
+                      className={cn(
+                        "size-4 transition-transform",
+                        advancedOpen && "rotate-180"
+                      )}
+                    />
+                  </Button>
+                </CardHeader>
+                {advancedOpen && (
+                  <CardContent className="grid gap-4 border-t pt-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <FieldLabelWithHint
+                        htmlFor="differentiators"
+                        label="Differentiators / USPs"
+                        hint="What makes you stand out."
+                        aiSuggested={aiSuggestedFields.has("differentiators")}
+                      />
+                      <textarea
+                        id="differentiators"
+                        className="min-h-[5.5rem] w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                        value={form.differentiators}
+                        onChange={(event) =>
+                          updateField("differentiators", event.target.value)
+                        }
+                        placeholder="What makes you different?"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <FieldLabelWithHint
+                        htmlFor="brandTone"
+                        label="Brand tone / adjectives"
+                        hint="How your brand should sound."
+                        aiSuggested={aiSuggestedFields.has("brandTone")}
+                      />
+                      <textarea
+                        id="brandTone"
+                        className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                        value={form.brandTone}
+                        onChange={(event) =>
+                          updateField("brandTone", event.target.value)
+                        }
+                        placeholder="Helpful, confident, witty…"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <FieldLabelWithHint
+                        htmlFor="notes"
+                        label="Extra notes"
+                        hint="Positioning, competitors, pains — anything useful."
+                      />
+                      <textarea
+                        id="notes"
+                        className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                        value={form.notes}
+                        onChange={(event) =>
+                          updateField("notes", event.target.value)
+                        }
+                        placeholder="Any other context…"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <FieldLabelWithHint
+                        htmlFor="contentDos"
+                        label="Content do's"
+                        hint="What the AI should lean into."
+                        aiSuggested={aiSuggestedFields.has("contentDos")}
+                      />
+                      <textarea
+                        id="contentDos"
+                        className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                        value={form.contentDos}
+                        onChange={(event) =>
+                          updateField("contentDos", event.target.value)
+                        }
+                        placeholder="Customer stories, cite data…"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <FieldLabelWithHint
+                        htmlFor="contentDonts"
+                        label="Content don'ts"
+                        hint="Hard rules — topics or styles to avoid."
+                        aiSuggested={aiSuggestedFields.has("contentDonts")}
+                      />
+                      <textarea
+                        id="contentDonts"
+                        className="min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                        value={form.contentDonts}
+                        onChange={(event) =>
+                          updateField("contentDonts", event.target.value)
+                        }
+                        placeholder="Avoid jargon, no clickbait…"
+                      />
+                    </div>
+
+                    <div className="space-y-4 md:col-span-2">
+                      <FieldLabelWithHint
+                        htmlFor="uploadNotes"
+                        label="Notes for uploaded files"
+                        hint="What each file is for (guidelines, research, tone samples)."
+                      />
+                      <textarea
+                        id="uploadNotes"
+                        className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                        value={uploadNotes}
+                        onChange={(event) => setUploadNotes(event.target.value)}
+                        placeholder="Context for uploads…"
+                      />
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                        <Input type="file" multiple onChange={handleUpload} />
+                        <Button type="button" variant="outline" disabled={uploading}>
+                          <Upload className="mr-2 size-4" />
+                          {uploading ? "Uploading…" : "Upload files"}
+                        </Button>
+                      </div>
+                      {form.documents.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {form.documents.map((document, index) => (
+                            <Badge
+                              key={`${document.fileName}-${index}`}
+                              variant="outline"
+                            >
+                              {document.fileName} • {document.fileType}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <Button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void submitDiscover()}
+                >
+                  <Wand2 className="mr-2 size-4" />
+                  {submitting ? "Generating…" : "Generate Brand Manifesto"}
+                </Button>
+                <Link
+                  href="/brand"
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  Open current manifesto
+                </Link>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  onClick={clearDraftAndReset}
+                >
+                  Clear draft and start over
+                </Button>
+              </div>
+            </div>
+          )}
+        </form>
+      )}
+
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="size-5 text-primary" />
+              Brand Manifesto ready
+            </CardTitle>
+            <CardDescription>
+              Version {result.version} saved. Continue when you are ready — nothing
+              will navigate automatically.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border p-4">
+                <h3 className="font-semibold">Identity</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  <strong>{result.manifesto.businessName}</strong> •{" "}
+                  {result.manifesto.industry}
+                </p>
+                <p className="mt-2 text-sm">{result.manifesto.missionStatement}</p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <h3 className="font-semibold">Voice attributes</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {result.manifesto.voiceAttributes.map((item) => (
+                    <Badge key={item} variant="secondary">
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <h3 className="font-semibold">Key messages</h3>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                  {result.manifesto.keyMessages.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold">From your inputs</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Site source: {result.scraper.source}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {result.documents.summary}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/strategy"
+                className={buttonVariants()}
+                onClick={() => {
+                  router.refresh();
+                }}
+              >
+                Continue to content strategy
+              </Link>
+              <Link href="/brand" className={buttonVariants({ variant: "outline" })}>
+                Review manifesto
+              </Link>
+              <Link
+                href="/brand/voice"
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Tune brand voice
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

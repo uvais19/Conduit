@@ -17,6 +17,20 @@ function extractMeta(html: string, name: string): string | undefined {
   return html.match(pattern)?.[1]?.trim();
 }
 
+function titleFromReadableText(text: string, fallback: string): string {
+  const heading = text.match(/^#\s+(.+)$/m);
+  if (heading?.[1]) {
+    return heading[1].trim().slice(0, 120);
+  }
+  const boldLine = text.match(/^\*\*(.+?)\*\*\s*$/m);
+  if (boldLine?.[1]) {
+    return boldLine[1].trim().slice(0, 120);
+  }
+  const firstLine = text.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+  const cleaned = firstLine.replace(/^#+\s*/, "").slice(0, 120);
+  return cleaned || fallback;
+}
+
 async function tryJinaReader(url: string): Promise<string | null> {
   const apiKey = process.env.JINA_API_KEY;
   const response = await fetch(`https://r.jina.ai/${url}`, {
@@ -55,10 +69,11 @@ export async function runScraperAgent(
     const jinaText = await tryJinaReader(websiteUrl).catch(() => null);
     if (jinaText) {
       const summary = jinaText.slice(0, 4000);
+      const fallbackTitle = input.businessName.trim() || "Website";
       return {
         websiteUrl,
-        title: input.businessName,
-        description: `Website content discovered for ${input.businessName}.`,
+        title: titleFromReadableText(jinaText, fallbackTitle),
+        description: `Website content discovered for ${input.businessName || "your site"}.`,
         summary,
         keyPoints: summary
           .split(/\.|\n/)
