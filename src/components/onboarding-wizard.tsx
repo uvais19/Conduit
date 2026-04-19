@@ -1044,15 +1044,15 @@ export function OnboardingWizard() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Link
-                href="/strategy?from=onboarding"
+              <Button
+                type="button"
                 className={buttonVariants()}
                 onClick={() => {
-                  router.refresh();
+                  void router.push("/strategy/generating");
                 }}
               >
                 Continue to content strategy
-              </Link>
+              </Button>
               <Link href="/brand" className={buttonVariants({ variant: "outline" })}>
                 Review manifesto
               </Link>

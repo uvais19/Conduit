@@ -1,3 +1,5 @@
+import { parseJsonFromModelResponse } from "@/lib/ai/parse-model-json";
+
 export type GenerateTextOptions = {
   systemPrompt?: string;
   userPrompt: string;
@@ -236,21 +238,6 @@ export async function generateTextStream(
   });
 }
 
-function extractJsonBlock(text: string): string {
-  const fenced = text.match(/```json\s*([\s\S]*?)```/i);
-  if (fenced?.[1]) {
-    return fenced[1].trim();
-  }
-
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) {
-    return text.slice(start, end + 1);
-  }
-
-  return text;
-}
-
 export async function generateJson<T>(
   options: GenerateTextOptions & { fallback: T }
 ): Promise<T> {
@@ -259,12 +246,12 @@ export async function generateJson<T>(
     return options.fallback;
   }
 
-  try {
-    return JSON.parse(extractJsonBlock(text)) as T;
-  } catch (error) {
-    console.error("Failed to parse model JSON output:", error);
+  const parsed = parseJsonFromModelResponse<T>(text);
+  if (parsed === null) {
+    console.error("Failed to parse model JSON output");
     return options.fallback;
   }
+  return parsed;
 }
 
 /**
@@ -276,14 +263,8 @@ export async function generateJsonStructured<T>(
 ): Promise<T> {
   const { fallback, responseSchema, ...textOpts } = options;
 
-  const tryParse = (raw: string | null): T | null => {
-    if (!raw) return null;
-    try {
-      return JSON.parse(extractJsonBlock(raw)) as T;
-    } catch {
-      return null;
-    }
-  };
+  const tryParse = (raw: string | null): T | null =>
+    parseJsonFromModelResponse<T>(raw);
 
   let text: string | null = null;
 

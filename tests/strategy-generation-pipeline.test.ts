@@ -3,6 +3,8 @@ import { createDefaultStrategy } from "@/lib/strategy/defaults";
 import { buildManifestoStrategyDigest } from "@/lib/strategy/manifesto-digest";
 import { buildPostAnalysisDigest } from "@/lib/strategy/post-analysis-digest";
 import {
+  coerceStrategyPillarsStep,
+  coerceStrategyThemesStep,
   mergeStrategySteps,
   validateStrategyBusinessRules,
 } from "@/lib/strategy/strategy-generation-steps";
@@ -120,5 +122,17 @@ describe("strategy generation pipeline helpers", () => {
     const d = buildPostAnalysisDigest([a]);
     expect(d).toContain("Posting:");
     expect(d).toContain("Post more video");
+  });
+
+  it("coerceStrategyPillarsStep wraps a root-level pillar array", () => {
+    const base = createDefaultStrategy();
+    const wrapped = coerceStrategyPillarsStep(base.pillars as unknown);
+    expect(wrapped.pillars).toHaveLength(5);
+  });
+
+  it("coerceStrategyThemesStep wraps a root-level weeklyThemes array", () => {
+    const base = createDefaultStrategy();
+    const wrapped = coerceStrategyThemesStep(base.weeklyThemes as unknown);
+    expect(wrapped.weeklyThemes).toHaveLength(4);
   });
 });

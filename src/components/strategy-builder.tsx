@@ -18,6 +18,10 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { listToText, textToList } from "@/lib/brand/manifesto";
 import { createDefaultStrategy } from "@/lib/strategy/defaults";
+import {
+  consumeStrategyGenerateStream,
+  fetchLatestStrategyFromApi,
+} from "@/lib/strategy/consume-strategy-generate-stream";
 import type { ContentStrategy } from "@/lib/types";
 
 type PlatformScheduleRow = ContentStrategy["schedule"][number];
@@ -66,71 +70,6 @@ const FIELD_HINTS = {
     "Concrete execution for this week per platform (e.g. which formats, posting windows, hooks)—optional but helps the team stay aligned.",
 } as const;
 
-/** Dedupes React Strict Mode double mount + overlapping effects for first-time strategy generation. */
-let initialStrategyGenerationPromise: Promise<void> | null = null;
-
-type StrategyGenerateDonePayload = {
-  strategy: ContentStrategy;
-  version: number;
-};
-
-async function consumeStrategyGenerateStream(
-  response: Response,
-  callbacks: {
-    onProgress: (message: string) => void;
-    onDone: (payload: StrategyGenerateDonePayload) => void;
-  }
-): Promise<void> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!response.ok && !contentType.includes("text/event-stream")) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || "Unable to generate strategy");
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error("Unable to generate strategy");
-  }
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    let currentEvent = "";
-    for (const line of lines) {
-      if (line.startsWith("event: ")) {
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith("data: ") && currentEvent) {
-        try {
-          const data = JSON.parse(line.slice(6)) as Record<string, unknown>;
-          if (currentEvent === "progress") {
-            callbacks.onProgress((data.message as string) || "");
-          } else if (currentEvent === "done") {
-            callbacks.onDone({
-              strategy: data.strategy as ContentStrategy,
-              version: data.version as number,
-            });
-          } else if (currentEvent === "error") {
-            throw new Error((data.error as string) || "Strategy generation failed");
-          }
-        } catch (parseError) {
-          if (parseError instanceof Error && parseError.message !== "Unexpected end of JSON input") {
-            throw parseError;
-          }
-        }
-        currentEvent = "";
-      }
-    }
-  }
-}
-
 export function StrategyBuilder() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -145,12 +84,6 @@ export function StrategyBuilder() {
   const [error, setError] = useState("");
   const [generationStep, setGenerationStep] = useState("");
 
-  useEffect(() => {
-    if (searchParams.get("from") !== "onboarding") return;
-    setOnboardingWelcome(true);
-    router.replace("/strategy", { scroll: false });
-  }, [searchParams, router]);
-
   const runStrategyGeneration = useCallback(
     async (successMessage: string) => {
       setGenerating(true);
@@ -160,7 +93,7 @@ export function StrategyBuilder() {
 
       try {
         const response = await fetch("/api/strategy/generate", { method: "POST" });
-        await consumeStrategyGenerateStream(response, {
+        const { doneReceived } = await consumeStrategyGenerateStream(response, {
           onProgress: (step) => setGenerationStep(step),
           onDone: ({ strategy: nextStrategy, version: nextVersion }) => {
             setStrategy(nextStrategy);
@@ -169,6 +102,14 @@ export function StrategyBuilder() {
             void router.refresh();
           },
         });
+        if (!doneReceived) {
+          const latest = await fetchLatestStrategyFromApi();
+          if (latest) {
+            setStrategy(latest.strategy);
+            setVersion(latest.version);
+            setMessage(successMessage);
+          }
+        }
       } catch (generateError) {
         setError(
           generateError instanceof Error ? generateError.message : "Unable to generate strategy"
@@ -185,8 +126,18 @@ export function StrategyBuilder() {
   useEffect(() => {
     let cancelled = false;
 
+    if (searchParams.get("welcome") === "1") {
+      setOnboardingWelcome(true);
+      router.replace("/strategy", { scroll: false });
+    }
+
     async function initStrategy() {
       try {
+        if (searchParams.get("from") === "onboarding") {
+          router.replace("/strategy/generating");
+          return;
+        }
+
         const response = await fetch("/api/strategy", { cache: "no-store" });
         const data = await response.json();
 
@@ -196,53 +147,21 @@ export function StrategyBuilder() {
 
         if (cancelled) return;
 
-        if (data.strategy) {
-          setStrategy(data.strategy as ContentStrategy);
-          setVersion(data.version);
+        if (!data.strategy) {
+          router.replace("/strategy/generating");
           return;
         }
 
-        setGenerating(true);
-        setMessage("");
-        setError("");
-        setGenerationStep("");
-
-        const runInitial = async () => {
-          if (initialStrategyGenerationPromise) {
-            await initialStrategyGenerationPromise;
-            return;
-          }
-          initialStrategyGenerationPromise = (async () => {
-            try {
-              const genResponse = await fetch("/api/strategy/generate", { method: "POST" });
-              await consumeStrategyGenerateStream(genResponse, {
-                onProgress: (step) => setGenerationStep(step),
-                onDone: ({ strategy: nextStrategy, version: nextVersion }) => {
-                  setStrategy(nextStrategy);
-                  setVersion(nextVersion);
-                  setMessage(
-                    "Your strategy is ready — review below, then save. You can regenerate anytime to create a new version from your manifesto and latest analyses."
-                  );
-                  void router.refresh();
-                },
-              });
-            } finally {
-              initialStrategyGenerationPromise = null;
-            }
-          })();
-
-          await initialStrategyGenerationPromise;
-        };
-
-        await runInitial();
+        setStrategy(data.strategy as ContentStrategy);
+        setVersion(data.version);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Unable to load strategy");
         }
       } finally {
-        setLoading(false);
-        setGenerating(false);
-        setGenerationStep("");
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -251,7 +170,7 @@ export function StrategyBuilder() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, searchParams]);
 
   async function handleRegenerate() {
     try {

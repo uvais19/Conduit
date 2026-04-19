@@ -1,7 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Save, Trash2 } from "lucide-react";
+import { Save, Sparkles, Trash2 } from "lucide-react";
 import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,6 +80,7 @@ const MANIFESTO_HINTS = {
 } as const;
 
 export function BrandManifestoEditor() {
+  const router = useRouter();
   const [manifesto, setManifesto] = useState<BrandManifesto>(createEmptyBrandManifesto());
   const [version, setVersion] = useState<number | null>(null);
   const [versionCount, setVersionCount] = useState(0);
@@ -218,6 +220,19 @@ export function BrandManifestoEditor() {
             <Save className="mr-2 size-4" />
             {saving ? "Saving..." : "Save manifesto"}
           </Button>
+          {version ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={saving || isDeleting}
+              onClick={() => {
+                void router.push("/strategy/generating");
+              }}
+            >
+              <Sparkles className="mr-2 size-4" />
+              Create content strategy
+            </Button>
+          ) : null}
         </div>
       </div>
 

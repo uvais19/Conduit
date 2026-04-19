@@ -5,6 +5,8 @@ import { buildManifestoStrategyDigest } from "@/lib/strategy/manifesto-digest";
 import { buildPostAnalysisDigest } from "@/lib/strategy/post-analysis-digest";
 import {
   buildStrategyRepairUserPrompt,
+  coerceStrategyPillarsStep,
+  coerceStrategyThemesStep,
   geminiSchemaForPillarsStep,
   geminiSchemaForScheduleGoalsStep,
   geminiSchemaForThemesStep,
@@ -63,30 +65,35 @@ export async function runStrategyAgent(
       : "";
 
   const step1Fallback: StrategyPillarsStep = { pillars: fallback.pillars };
-  const rawPillars = await generateJsonStructured<StrategyPillarsStep>({
-    systemPrompt: STRATEGY_SYSTEM_PREAMBLE,
-    userPrompt: [
+  const rawPillars = coerceStrategyPillarsStep(
+    (await generateJsonStructured<StrategyPillarsStep>({
+      systemPrompt: STRATEGY_SYSTEM_PREAMBLE,
+      userPrompt: [
       "## Goal",
       "Define exactly five distinct content pillars for the next month.",
       "",
+      "## Naming",
+      "Do not reuse generic template labels such as: Education, Trust & Proof, Conversion, Culture & People, Community & Engagement. Invent five new pillar names grounded in this brand only.",
+      "",
       "## Self-check (before returning JSON)",
-      "- Five pillars; names unique; each has description, exampleTopics, percentage.",
-      "- Percentages are integers or sensible decimals summing to 100.",
-      "- Each pillar visibly reflects the digest (cite audience, goal, message, or voice).",
-      "",
-      "## Brand digest (primary)",
-      digest,
-      "",
-      "## Full manifesto JSON (reference; field-level accuracy)",
-      manifestoAppendix(manifesto),
-      ...(analysisDigest ? ["", "## Performance signals", analysisDigest] : []),
-      ...(competitorBlock ? ["", competitorBlock] : []),
-    ].join("\n\n"),
-    temperature: 0.35,
-    geminiModel: model,
-    fallback: step1Fallback,
-    responseSchema: geminiSchemaForPillarsStep(),
-  });
+        "- Five pillars; names unique; each has description, exampleTopics, percentage.",
+        "- Percentages are integers or sensible decimals summing to 100.",
+        "- Each pillar visibly reflects the digest (cite audience, goal, message, or voice).",
+        "",
+        "## Brand digest (primary)",
+        digest,
+        "",
+        "## Full manifesto JSON (reference; field-level accuracy)",
+        manifestoAppendix(manifesto),
+        ...(analysisDigest ? ["", "## Performance signals", analysisDigest] : []),
+        ...(competitorBlock ? ["", competitorBlock] : []),
+      ].join("\n\n"),
+      temperature: 0.35,
+      geminiModel: model,
+      fallback: step1Fallback,
+      responseSchema: geminiSchemaForPillarsStep(),
+    })) as unknown
+  );
 
   const pillarsParsed = strategyPillarsStepSchema.safeParse(rawPillars);
   const pillarsData = pillarsParsed.success ? pillarsParsed.data : step1Fallback;
@@ -128,31 +135,33 @@ export async function runStrategyAgent(
   const pillarNames = pillarsData.pillars.map((p) => p.name.trim()).join(", ");
   const step3Fallback: StrategyThemesStep = { weeklyThemes: fallback.weeklyThemes };
 
-  const rawThemes = await generateJsonStructured<StrategyThemesStep>({
-    systemPrompt: STRATEGY_SYSTEM_PREAMBLE,
-    userPrompt: [
-      "## Goal",
-      "Produce exactly four weeklyThemes (weeks 1–4). Each row: weekNumber, theme, pillar, keyMessage, executionNotes.",
-      "",
-      "## Pillar names (pillar field must be exactly one of these strings)",
-      pillarNames,
-      "",
-      "## Self-check",
-      "- weekNumber 1..4 in order; pillar must match a name above exactly.",
-      "- executionNotes: 1–3 sentences with platform-specific execution (formats + cadence hints for IG / LinkedIn / Facebook).",
-      "- keyMessage ties to manifesto goals or digest where possible.",
-      "",
-      "## Brand digest",
-      digest,
-      "",
-      "## Platform rules (for executionNotes)",
-      platformCtx,
-    ].join("\n\n"),
-    temperature: 0.35,
-    geminiModel: model,
-    fallback: step3Fallback,
-    responseSchema: geminiSchemaForThemesStep(),
-  });
+  const rawThemes = coerceStrategyThemesStep(
+    (await generateJsonStructured<StrategyThemesStep>({
+      systemPrompt: STRATEGY_SYSTEM_PREAMBLE,
+      userPrompt: [
+        "## Goal",
+        "Produce exactly four weeklyThemes (weeks 1–4). Each row: weekNumber, theme, pillar, keyMessage, executionNotes.",
+        "",
+        "## Pillar names (pillar field must be exactly one of these strings)",
+        pillarNames,
+        "",
+        "## Self-check",
+        "- weekNumber 1..4 in order; pillar must match a name above exactly.",
+        "- executionNotes: 1–3 sentences with platform-specific execution (formats + cadence hints for IG / LinkedIn / Facebook).",
+        "- keyMessage ties to manifesto goals or digest where possible.",
+        "",
+        "## Brand digest",
+        digest,
+        "",
+        "## Platform rules (for executionNotes)",
+        platformCtx,
+      ].join("\n\n"),
+      temperature: 0.35,
+      geminiModel: model,
+      fallback: step3Fallback,
+      responseSchema: geminiSchemaForThemesStep(),
+    })) as unknown
+  );
 
   const themesParsed = strategyThemesStepSchema.safeParse(rawThemes);
   const themesData = themesParsed.success ? themesParsed.data : step3Fallback;

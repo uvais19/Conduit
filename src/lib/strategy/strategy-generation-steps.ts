@@ -27,6 +27,21 @@ export type StrategyPillarsStep = z.infer<typeof strategyPillarsStepSchema>;
 export type StrategyScheduleGoalsStep = z.infer<typeof strategyScheduleGoalsStepSchema>;
 export type StrategyThemesStep = z.infer<typeof strategyThemesStepSchema>;
 
+/** Gemini JSON sometimes uses the step array as the root object; Zod expects `{ pillars }` / `{ weeklyThemes }`. */
+export function coerceStrategyPillarsStep(raw: unknown): StrategyPillarsStep {
+  if (Array.isArray(raw)) {
+    return { pillars: raw as StrategyPillarsStep["pillars"] };
+  }
+  return raw as StrategyPillarsStep;
+}
+
+export function coerceStrategyThemesStep(raw: unknown): StrategyThemesStep {
+  if (Array.isArray(raw)) {
+    return { weeklyThemes: raw as StrategyThemesStep["weeklyThemes"] };
+  }
+  return raw as StrategyThemesStep;
+}
+
 export function mergeStrategySteps(
   pillarsPart: StrategyPillarsStep,
   schedulePart: StrategyScheduleGoalsStep,
