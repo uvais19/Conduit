@@ -1,5 +1,8 @@
 import type { BrandManifesto } from "@/lib/types";
-import { runDocumentAnalystAgent } from "./document-analyst-agent";
+import {
+  emptyDocumentAnalysisResult,
+  runDocumentAnalystAgent,
+} from "./document-analyst-agent";
 import { runIdentitySynthesizerAgent } from "./identity-synthesizer-agent";
 import { runScraperAgent } from "./scraper-agent";
 import type {
@@ -57,14 +60,26 @@ export async function runDiscoveryPipeline(
     return scraper;
   });
 
-  const documentsPromise = runDocumentAnalystAgent(input).then((documents) => {
-    onProgress?.({
-      phase: "documents_complete",
-      message: documentsCompleteMessage(documents.documentCount),
-      documentCount: documents.documentCount,
-    });
-    return documents;
-  });
+  const skipDocumentAnalyst =
+    input.documents.length === 0 && !input.notes?.trim();
+
+  const documentsPromise = skipDocumentAnalyst
+    ? Promise.resolve(emptyDocumentAnalysisResult()).then((documents) => {
+        onProgress?.({
+          phase: "documents_complete",
+          message: documentsCompleteMessage(documents.documentCount),
+          documentCount: documents.documentCount,
+        });
+        return documents;
+      })
+    : runDocumentAnalystAgent(input).then((documents) => {
+        onProgress?.({
+          phase: "documents_complete",
+          message: documentsCompleteMessage(documents.documentCount),
+          documentCount: documents.documentCount,
+        });
+        return documents;
+      });
 
   const [scraperRaw, documentsRaw] = await Promise.all([
     scraperPromise,

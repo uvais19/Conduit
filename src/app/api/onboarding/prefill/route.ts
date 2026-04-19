@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { z } from "zod";
 import { generateJson } from "@/lib/ai/clients";
 import type { ScraperResult } from "@/lib/agents/discovery/types";
 import { runScraperAgent } from "@/lib/agents/discovery/scraper-agent";
 import { requireAuth } from "@/lib/auth/permissions";
+import { normalizeOnboardingWebsiteUrl } from "@/lib/onboarding/url";
 
 const prefillRequestSchema = z.object({
   websiteUrl: z.string().trim().min(1, "Enter your website URL"),
   businessName: z.string().trim().optional().default(""),
   industry: z.string().trim().optional().default(""),
 });
+
+/** Short TTL for iterative onboarding; tune without changing cache key namespace. */
+const PREFILL_CACHE_REVALIDATE_SECONDS = 120;
 
 function pickSuggestedBusinessName(
   scraper: ScraperResult,
@@ -51,24 +56,14 @@ const emptyFallback: PrefillSuggestions = {
   contentDonts: "",
 };
 
-export async function POST(request: Request) {
-  try {
-    await requireAuth();
-
-    const body = await request.json();
-    const parsed = prefillRequestSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? "Invalid input" },
-        { status: 400 }
-      );
-    }
-
-    const { websiteUrl, businessName, industry } = parsed.data;
-
+const getCachedPrefillPayload = unstable_cache(
+  async (
+    normalizedWebsiteUrl: string,
+    businessName: string,
+    industry: string
+  ) => {
     const scraper = await runScraperAgent({
-      websiteUrl,
+      websiteUrl: normalizedWebsiteUrl,
       businessName,
       industry: industry || "Unknown",
       targetAudience: "",
@@ -113,7 +108,42 @@ export async function POST(request: Request) {
       businessName
     );
 
-    return NextResponse.json({ suggestions, suggestedBusinessName });
+    return { suggestions, suggestedBusinessName };
+  },
+  ["onboarding-prefill-v1"],
+  { revalidate: PREFILL_CACHE_REVALIDATE_SECONDS }
+);
+
+export async function POST(request: Request) {
+  try {
+    await requireAuth();
+
+    const body = await request.json();
+    const parsed = prefillRequestSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+
+    const { websiteUrl, businessName, industry } = parsed.data;
+    const normalizedWebsiteUrl = normalizeOnboardingWebsiteUrl(websiteUrl);
+    if (!normalizedWebsiteUrl) {
+      return NextResponse.json(
+        { error: "Enter your website URL" },
+        { status: 400 }
+      );
+    }
+
+    const payload = await getCachedPrefillPayload(
+      normalizedWebsiteUrl,
+      businessName.trim(),
+      industry.trim()
+    );
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Prefill failed:", error);
     return NextResponse.json(

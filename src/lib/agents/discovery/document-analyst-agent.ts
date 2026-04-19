@@ -1,6 +1,15 @@
 import { generateText } from "@/lib/ai/clients";
 import type { DiscoveryInput, DocumentAnalysisResult } from "./types";
 
+/** Same payload as the analyst’s no-input early return; used by the discovery graph to skip work. */
+export function emptyDocumentAnalysisResult(): DocumentAnalysisResult {
+  return {
+    summary: "No supporting documents were uploaded yet.",
+    insights: ["Discovery will rely on website content and manual answers."],
+    documentCount: 0,
+  };
+}
+
 export async function runDocumentAnalystAgent(
   input: DiscoveryInput
 ): Promise<DocumentAnalysisResult> {
@@ -15,11 +24,7 @@ export async function runDocumentAnalystAgent(
   ].filter(Boolean);
 
   if (fallbackInsights.length === 0) {
-    return {
-      summary: "No supporting documents were uploaded yet.",
-      insights: ["Discovery will rely on website content and manual answers."],
-      documentCount: 0,
-    };
+    return emptyDocumentAnalysisResult();
   }
 
   const prompt = [

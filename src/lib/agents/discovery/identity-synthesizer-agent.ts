@@ -1,3 +1,4 @@
+import type { ZodError } from "zod";
 import { generateJson } from "@/lib/ai/clients";
 import {
   createEmptyBrandManifesto,
@@ -10,6 +11,14 @@ import type {
   DocumentAnalysisResult,
   ScraperResult,
 } from "./types";
+import {
+  buildFallbackProductsServices,
+  buildMinimalHybridManifesto,
+  coerceDiscoveryManifestoMerge,
+  finalizeManifestoFromMerge,
+  manifestoSynthesisWarn,
+  mergeIdentitySynthesizerLayers,
+} from "./manifesto-synthesis-helpers";
 
 function buildFallbackManifesto(
   input: DiscoveryInput,
@@ -29,13 +38,7 @@ function buildFallbackManifesto(
     missionStatement: `Help ${input.targetAudience} succeed through ${offerings[0] || "consistent value"}.`,
     vision: `Become a trusted ${input.industry.toLowerCase()} brand known for clear, reliable communication.`,
     coreValues: ["Clarity", "Consistency", "Customer Focus"],
-    productsServices: offerings.length
-      ? offerings.map((item) => ({
-          name: item,
-          description: `${item} for ${input.targetAudience}.`,
-          targetAudience: input.targetAudience,
-        }))
-      : undefined,
+    productsServices: buildFallbackProductsServices(input, scraper, documents),
     uniqueSellingPropositions: differentiators,
     primaryAudience: {
       demographics: input.targetAudience,
@@ -52,6 +55,15 @@ function buildFallbackManifesto(
     keyMessages: differentiators.length > 0 ? differentiators : offerings,
     visualStyle: scraper.description || documents.insights[0],
   });
+}
+
+function formatZodIssuesForRepair(error: ZodError): string {
+  return error.issues
+    .map((i) => {
+      const path = i.path.map((k) => String(k)).join(".");
+      return `${path || "(root)"}: ${i.message}`;
+    })
+    .join("\n");
 }
 
 export async function runIdentitySynthesizerAgent({
@@ -87,6 +99,13 @@ toneSpectrum (integer 1–10 for each, where 1 = very low, 10 = very high):
   technical: how much industry terminology and depth
   emotional: how much feeling, empathy, and storytelling
   provocative: how much bold, challenging, or contrarian content
+
+productsServices (array of offerings — critical):
+  - Emit one object per real offering from the user's manual offerings list (same count and order as the template rows unless the evidence clearly merges or splits an offering).
+  - Each object: { "name": string, "description": string, "targetAudience"?: string }
+  - description: one or two sentences grounded in WEBSITE DISCOVERY (summary, keyPoints, title, description) and/or DOCUMENT ANALYSIS when possible. State what the offer is and the concrete outcome or mechanism — not generic filler.
+  - Do NOT use the same audience boilerplate on every line (e.g. repeating the full ICP or the same "for <audience>" clause for each product).
+  - targetAudience is OPTIONAL. Use only a short segment label when a row clearly serves a different buyer than other rows (e.g. "Enterprise IT", "solo founders"). Never paste the full primary ICP paragraph into every product row.
 
 All other fields:
   coreValues: array of 3–5 short phrases, not full sentences
@@ -126,21 +145,42 @@ Return valid JSON only. No markdown, no explanation, no code fences.`,
     fallback,
   });
 
-  return createEmptyBrandManifesto({
-    ...fallback,
-    ...generated,
-    primaryAudience: {
-      ...fallback.primaryAudience,
-      ...generated.primaryAudience,
-    },
-    toneSpectrum: {
-      ...fallback.toneSpectrum,
-      ...generated.toneSpectrum,
-    },
-    languageStyle: {
-      ...fallback.languageStyle,
-      ...generated.languageStyle,
-    },
-    brandColors: generated.brandColors || fallback.brandColors,
+  const merged = mergeIdentitySynthesizerLayers(fallback, generated);
+  const first = finalizeManifestoFromMerge(merged);
+  if (first.success) {
+    return first.data;
+  }
+
+  manifestoSynthesisWarn("repair_llm", formatZodIssuesForRepair(first.error));
+
+  const coercedBase = coerceDiscoveryManifestoMerge(merged);
+  const repaired = await generateJson<Partial<BrandManifesto>>({
+    systemPrompt: `You repair Brand Manifesto JSON for Conduit. Output MUST be a single JSON object that satisfies the same schema as the input manifest (all required fields, correct enum strings, toneSpectrum integers 1–10, arrays of strings where specified).
+
+Rules:
+- Preserve correct content from the input where it already matches the schema.
+- Fix only what the validation errors require; keep business-specific wording when valid.
+- productsServices must remain an array of { name, description, optional targetAudience } with grounded descriptions, no repeated ICP boilerplate on every row.
+Return JSON only. No markdown or code fences.`,
+    userPrompt: [
+      "VALIDATION ISSUES (fix all):",
+      formatZodIssuesForRepair(first.error),
+      "",
+      "MANIFEST TO REPAIR (JSON):",
+      JSON.stringify(coercedBase, null, 2),
+    ].join("\n"),
+    temperature: 0.1,
+    fallback: {},
   });
+
+  const mergedAfterRepair = mergeIdentitySynthesizerLayers(
+    coercedBase as BrandManifesto,
+    repaired
+  );
+  const second = finalizeManifestoFromMerge(mergedAfterRepair);
+  if (second.success) {
+    return second.data;
+  }
+
+  return buildMinimalHybridManifesto(input, scraper, documents);
 }

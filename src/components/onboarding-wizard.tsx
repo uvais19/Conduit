@@ -20,6 +20,7 @@ import {
   type DocumentAnalysisResult,
   type ScraperResult,
 } from "@/lib/agents/discovery";
+import { normalizeOnboardingWebsiteUrl } from "@/lib/onboarding/url";
 import { cn } from "@/lib/utils";
 import type { BrandManifesto } from "@/lib/types";
 
@@ -84,15 +85,8 @@ type OnboardingDraft = {
   showDetails: boolean;
 };
 
-function normalizeWebsiteUrl(raw: string): string {
-  const t = raw.trim();
-  if (!t) return "";
-  if (/^https?:\/\//i.test(t)) return t;
-  return `https://${t}`;
-}
-
 function isValidHttpUrl(raw: string): boolean {
-  const normalized = normalizeWebsiteUrl(raw);
+  const normalized = normalizeOnboardingWebsiteUrl(raw);
   if (!normalized) return false;
   try {
     const u = new URL(normalized);
@@ -104,7 +98,7 @@ function isValidHttpUrl(raw: string): boolean {
 
 function hostFromUrl(raw: string): string | null {
   try {
-    return new URL(normalizeWebsiteUrl(raw)).hostname || null;
+    return new URL(normalizeOnboardingWebsiteUrl(raw)).hostname || null;
   } catch {
     return null;
   }
@@ -226,7 +220,7 @@ export function OnboardingWizard() {
 
   async function handleAnalyzeWebsite() {
     setError("");
-    const normalized = normalizeWebsiteUrl(form.websiteUrl);
+    const normalized = normalizeOnboardingWebsiteUrl(form.websiteUrl);
     if (!normalized) {
       setError("Enter your website URL.");
       return;
@@ -352,7 +346,7 @@ export function OnboardingWizard() {
 
     const payload = {
       ...form,
-      websiteUrl: normalizeWebsiteUrl(form.websiteUrl),
+      websiteUrl: normalizeOnboardingWebsiteUrl(form.websiteUrl),
     };
 
     try {
@@ -604,7 +598,7 @@ export function OnboardingWizard() {
                       updateField("websiteUrl", event.target.value)
                     }
                     onBlur={() => {
-                      const n = normalizeWebsiteUrl(form.websiteUrl);
+                      const n = normalizeOnboardingWebsiteUrl(form.websiteUrl);
                       if (n !== form.websiteUrl) {
                         updateField("websiteUrl", n);
                       }
@@ -972,7 +966,7 @@ export function OnboardingWizard() {
               {buildGroundingSummary(
                 {
                   ...form,
-                  websiteUrl: normalizeWebsiteUrl(form.websiteUrl),
+                  websiteUrl: normalizeOnboardingWebsiteUrl(form.websiteUrl),
                 },
                 result.scraper,
                 result.documents

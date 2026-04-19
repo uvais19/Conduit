@@ -27,10 +27,21 @@ export function listToText(value: string[] | undefined): string {
   return (value ?? []).join("\n");
 }
 
-export function createEmptyBrandManifesto(
+function clampToneAxis(value: number | undefined, fallback: number): number {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return fallback;
+  }
+  return Math.min(10, Math.max(1, Math.round(value)));
+}
+
+/**
+ * Builds the manifesto record with defaults (same shape as persisted manifesto).
+ * Use {@link safeParseBrandManifestoFromPartial} for validation without throwing.
+ */
+export function buildBrandManifestoCandidate(
   partial: Partial<BrandManifesto> = {}
 ): BrandManifesto {
-  const manifesto: BrandManifesto = {
+  return {
     businessName: partial.businessName?.trim() || "Your Business",
     tagline: partial.tagline?.trim() || undefined,
     industry: partial.industry?.trim() || "General Business",
@@ -94,11 +105,11 @@ export function createEmptyBrandManifesto(
       "Trustworthy",
     ]),
     toneSpectrum: {
-      formal: partial.toneSpectrum?.formal ?? 6,
-      playful: partial.toneSpectrum?.playful ?? 4,
-      technical: partial.toneSpectrum?.technical ?? 5,
-      emotional: partial.toneSpectrum?.emotional ?? 5,
-      provocative: partial.toneSpectrum?.provocative ?? 3,
+      formal: clampToneAxis(partial.toneSpectrum?.formal, 6),
+      playful: clampToneAxis(partial.toneSpectrum?.playful, 4),
+      technical: clampToneAxis(partial.toneSpectrum?.technical, 5),
+      emotional: clampToneAxis(partial.toneSpectrum?.emotional, 5),
+      provocative: clampToneAxis(partial.toneSpectrum?.provocative, 3),
     },
     languageStyle: {
       sentenceLength: (["short", "medium", "long", "varied"] as const).includes(partial.languageStyle?.sentenceLength as never)
@@ -137,8 +148,16 @@ export function createEmptyBrandManifesto(
       "We help customers move forward with confidence",
     ]),
   };
+}
 
-  return brandManifestoSchema.parse(manifesto);
+export function createEmptyBrandManifesto(
+  partial: Partial<BrandManifesto> = {}
+): BrandManifesto {
+  return brandManifestoSchema.parse(buildBrandManifestoCandidate(partial));
+}
+
+export function safeParseBrandManifestoFromPartial(partial: Partial<BrandManifesto> = {}) {
+  return brandManifestoSchema.safeParse(buildBrandManifestoCandidate(partial));
 }
 
 export type CanonicalVoiceModel = {
