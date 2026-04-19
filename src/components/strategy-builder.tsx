@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { Sparkles, Save, Lightbulb, Check, X } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronDown, Sparkles, Save, Lightbulb, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,14 +13,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { FieldLabelWithHint } from "@/components/field-label-with-hint";
 import { Input } from "@/components/ui/input";
-import { AutoAdvanceBanner } from "@/components/auto-advance-banner";
 import { Progress } from "@/components/ui/progress";
 import { listToText, textToList } from "@/lib/brand/manifesto";
 import type { FullStrategySuggestResponse, SuggestionItem } from "@/lib/strategy/suggest-types";
 import { createDefaultStrategy } from "@/lib/strategy/defaults";
 import type { ContentStrategy } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type PlatformScheduleRow = ContentStrategy["schedule"][number];
 type ContentMixEntry = PlatformScheduleRow["contentMix"][number];
@@ -65,7 +71,70 @@ const FIELD_HINTS = {
     "The single takeaway or call-to-action that unifies all posts during this week.",
 } as const;
 
-const STRATEGY_ADVANCE_MS = 5000;
+/** Dedupes React Strict Mode double mount + overlapping effects for first-time strategy generation. */
+let initialStrategyGenerationPromise: Promise<void> | null = null;
+
+type StrategyGenerateDonePayload = {
+  strategy: ContentStrategy;
+  version: number;
+};
+
+async function consumeStrategyGenerateStream(
+  response: Response,
+  callbacks: {
+    onProgress: (message: string) => void;
+    onDone: (payload: StrategyGenerateDonePayload) => void;
+  }
+): Promise<void> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!response.ok && !contentType.includes("text/event-stream")) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "Unable to generate strategy");
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("Unable to generate strategy");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    let currentEvent = "";
+    for (const line of lines) {
+      if (line.startsWith("event: ")) {
+        currentEvent = line.slice(7).trim();
+      } else if (line.startsWith("data: ") && currentEvent) {
+        try {
+          const data = JSON.parse(line.slice(6)) as Record<string, unknown>;
+          if (currentEvent === "progress") {
+            callbacks.onProgress((data.message as string) || "");
+          } else if (currentEvent === "done") {
+            callbacks.onDone({
+              strategy: data.strategy as ContentStrategy,
+              version: data.version as number,
+            });
+          } else if (currentEvent === "error") {
+            throw new Error((data.error as string) || "Strategy generation failed");
+          }
+        } catch (parseError) {
+          if (parseError instanceof Error && parseError.message !== "Unexpected end of JSON input") {
+            throw parseError;
+          }
+        }
+        currentEvent = "";
+      }
+    }
+  }
+}
 
 const PILLAR_FIELD_KEYS = new Set(["name", "description", "percentage"]);
 const SCHEDULE_FIELD_KEYS = new Set([
@@ -296,7 +365,9 @@ function FullStrategySuggestionPanel({
 
 export function StrategyBuilder() {
   const router = useRouter();
-  const strategyAdvanceTimerRef = useRef<number | null>(null);
+  const searchParams = useSearchParams();
+  const [onboardingWelcome, setOnboardingWelcome] = useState(false);
+
   const [strategy, setStrategy] = useState<ContentStrategy>(createDefaultStrategy());
   const [version, setVersion] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -308,7 +379,13 @@ export function StrategyBuilder() {
 
   const [suggestingStrategy, setSuggestingStrategy] = useState(false);
   const [fullSuggestion, setFullSuggestion] = useState<FullStrategySuggestResponse | null>(null);
-  const [showAdvanceBanner, setShowAdvanceBanner] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("from") !== "onboarding") return;
+    setOnboardingWelcome(true);
+    router.replace("/strategy", { scroll: false });
+  }, [searchParams, router]);
 
   const handleSuggestFullStrategy = useCallback(async () => {
     setSuggestingStrategy(true);
@@ -367,8 +444,41 @@ export function StrategyBuilder() {
     });
   }, [fullSuggestion, strategy.pillars.length, strategy.schedule.length, strategy.weeklyThemes.length]);
 
+  const runStrategyGeneration = useCallback(
+    async (successMessage: string) => {
+      setGenerating(true);
+      setMessage("");
+      setError("");
+      setGenerationStep("");
+
+      try {
+        const response = await fetch("/api/strategy/generate", { method: "POST" });
+        await consumeStrategyGenerateStream(response, {
+          onProgress: (step) => setGenerationStep(step),
+          onDone: ({ strategy: nextStrategy, version: nextVersion }) => {
+            setStrategy(nextStrategy);
+            setVersion(nextVersion);
+            setMessage(successMessage);
+            void router.refresh();
+          },
+        });
+      } catch (generateError) {
+        setError(
+          generateError instanceof Error ? generateError.message : "Unable to generate strategy"
+        );
+        throw generateError;
+      } finally {
+        setGenerating(false);
+        setGenerationStep("");
+      }
+    },
+    [router]
+  );
+
   useEffect(() => {
-    async function loadStrategy() {
+    let cancelled = false;
+
+    async function initStrategy() {
       try {
         const response = await fetch("/api/strategy", { cache: "no-store" });
         const data = await response.json();
@@ -377,95 +487,72 @@ export function StrategyBuilder() {
           throw new Error(data.error || "Unable to load strategy");
         }
 
+        if (cancelled) return;
+
         if (data.strategy) {
           setStrategy(data.strategy as ContentStrategy);
           setVersion(data.version);
+          return;
         }
+
+        setGenerating(true);
+        setMessage("");
+        setError("");
+        setGenerationStep("");
+
+        const runInitial = async () => {
+          if (initialStrategyGenerationPromise) {
+            await initialStrategyGenerationPromise;
+            return;
+          }
+          initialStrategyGenerationPromise = (async () => {
+            try {
+              const genResponse = await fetch("/api/strategy/generate", { method: "POST" });
+              await consumeStrategyGenerateStream(genResponse, {
+                onProgress: (step) => setGenerationStep(step),
+                onDone: ({ strategy: nextStrategy, version: nextVersion }) => {
+                  setStrategy(nextStrategy);
+                  setVersion(nextVersion);
+                  setMessage(
+                    "Your strategy is ready — review below, then save. You can regenerate anytime to create a new version from your manifesto and latest analyses."
+                  );
+                  void router.refresh();
+                },
+              });
+            } finally {
+              initialStrategyGenerationPromise = null;
+            }
+          })();
+
+          await initialStrategyGenerationPromise;
+        };
+
+        await runInitial();
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "Unable to load strategy");
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "Unable to load strategy");
+        }
       } finally {
         setLoading(false);
+        setGenerating(false);
+        setGenerationStep("");
       }
     }
 
-    void loadStrategy();
-  }, []);
+    void initStrategy();
 
-  useEffect(() => {
     return () => {
-      if (strategyAdvanceTimerRef.current) {
-        window.clearTimeout(strategyAdvanceTimerRef.current);
-      }
+      cancelled = true;
     };
-  }, []);
+  }, [router]);
 
-  async function handleGenerate() {
-    setGenerating(true);
-    setMessage("");
-    setError("");
-    setGenerationStep("");
-
+  async function handleRegenerate() {
     try {
-      const response = await fetch("/api/strategy/generate", { method: "POST" });
-
-      if (!response.ok && !response.headers.get("content-type")?.includes("text/event-stream")) {
-        const data = await response.json();
-        throw new Error(data.error || "Unable to generate strategy");
-      }
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        let currentEvent = "";
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            currentEvent = line.slice(7).trim();
-          } else if (line.startsWith("data: ") && currentEvent) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (currentEvent === "progress") {
-                setGenerationStep(data.message as string);
-              } else if (currentEvent === "done") {
-                setStrategy(data.strategy as ContentStrategy);
-                setVersion(data.version as number);
-                setMessage(
-                  `Strategy generated successfully as version ${data.version}.`
-                );
-                if (strategyAdvanceTimerRef.current) {
-                  window.clearTimeout(strategyAdvanceTimerRef.current);
-                }
-                strategyAdvanceTimerRef.current = window.setTimeout(() => {
-                  strategyAdvanceTimerRef.current = null;
-                  router.refresh();
-                  router.push("/content/drafts");
-                }, STRATEGY_ADVANCE_MS);
-                setShowAdvanceBanner(true);
-              } else if (currentEvent === "error") {
-                throw new Error(data.error as string);
-              }
-            } catch (parseError) {
-              if (parseError instanceof Error && parseError.message !== "Unexpected end of JSON input") {
-                throw parseError;
-              }
-            }
-            currentEvent = "";
-          }
-        }
-      }
-    } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : "Unable to generate strategy");
-    } finally {
-      setGenerating(false);
-      setGenerationStep("");
+      await runStrategyGeneration(
+        "New strategy version generated — review changes, then save when you are happy."
+      );
+    } catch {
+      /* runStrategyGeneration already set error */
     }
   }
 
@@ -507,7 +594,23 @@ export function StrategyBuilder() {
   }
 
   if (loading) {
-    return <div className="text-sm text-muted-foreground">Loading your content strategy...</div>;
+    return (
+      <div className="max-w-lg space-y-3">
+        <p className="text-sm text-muted-foreground">
+          {generating
+            ? generationStep || "Building your strategy from your brand manifesto…"
+            : "Loading your content strategy…"}
+        </p>
+        {generating ? (
+          <div className="space-y-1.5">
+            <Progress value={generationStep ? 50 : 15} className="h-1.5" />
+            <p className="text-xs text-muted-foreground">
+              {generationStep || "Preparing generation pipeline…"}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   return (
@@ -525,52 +628,77 @@ export function StrategyBuilder() {
             Content Strategy
           </h1>
           <p className="text-sm text-muted-foreground">
-            Generate and refine your pillars, posting cadence, and weekly themes.
+            Your pillars, cadence, and weekly themes — edit anytime, then save.{" "}
+            <Link href="/content/drafts" className="text-primary underline-offset-4 hover:underline">
+              Go to content drafts
+            </Link>
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={handleGenerate} disabled={generating} className="shadow-md glow-primary">
-            <Sparkles className="mr-2 size-4" />
-            {generating ? (generationStep || "Generating...") : "Generate strategy"}
-          </Button>
-          {generating && (
-            <div className="w-full space-y-1.5 md:w-auto md:min-w-[16rem]">
-              <Progress value={generationStep ? 50 : 15} className="h-1.5" />
-              <p className="text-xs text-muted-foreground">
-                {generationStep || "Preparing generation pipeline…"}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={handleSave} disabled={saving || generating} className="shadow-md glow-primary">
+              <Save className="mr-2 size-4" />
+              {saving ? "Saving..." : "Save strategy"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleRegenerate()}
+              disabled={generating || saving}
+            >
+              <Sparkles className="mr-2 size-4" />
+              {generating ? generationStep || "Regenerating…" : "Regenerate strategy"}
+            </Button>
+            {generating ? (
+              <div className="w-full space-y-1.5 md:w-auto md:min-w-[16rem]">
+                <Progress value={generationStep ? 50 : 15} className="h-1.5" />
+                <p className="text-xs text-muted-foreground">
+                  {generationStep || "Preparing generation pipeline…"}
+                </p>
+              </div>
+            ) : null}
+          </div>
+          <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+            <CollapsibleTrigger
+              type="button"
+              className="flex w-full max-w-md items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-muted/50"
+            >
+              <ChevronDown
+                className={cn("size-4 shrink-0 transition-transform", advancedOpen && "rotate-180")}
+              />
+              Advanced: AI suggestions
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2 max-w-2xl space-y-2 rounded-md border border-border bg-muted/10 p-3 text-sm">
+              <p className="text-muted-foreground">
+                Get field-level suggestions across pillars, schedule, and weekly themes. Review each change, then apply and save.
               </p>
-            </div>
-          )}
-          <Button
-            variant="outline"
-            className="border-violet-300 text-violet-800 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200 dark:hover:bg-violet-950/40"
-            disabled={generating || suggestingStrategy}
-            onClick={() => void handleSuggestFullStrategy()}
-          >
-            <Lightbulb className="mr-2 size-4" />
-            {suggestingStrategy ? "Analysing strategy..." : "Suggest with AI"}
-          </Button>
-          <Button variant="outline" onClick={handleSave} disabled={saving}>
-            <Save className="mr-2 size-4" />
-            {saving ? "Saving..." : "Save strategy"}
-          </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-violet-300 text-violet-800 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200 dark:hover:bg-violet-950/40"
+                disabled={generating || suggestingStrategy}
+                onClick={() => void handleSuggestFullStrategy()}
+              >
+                <Lightbulb className="mr-2 size-4" />
+                {suggestingStrategy ? "Analysing strategy..." : "Suggest with AI"}
+              </Button>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </header>
 
-      {message && <div className="rounded-lg border border-green-600/30 bg-green-600/5 p-3 text-sm text-green-700">{message}</div>}
-      {showAdvanceBanner && (
-        <AutoAdvanceBanner
-          destination="/content/drafts"
-          label="Content Drafts"
-          delayMs={STRATEGY_ADVANCE_MS}
-          onCancel={() => {
-            setShowAdvanceBanner(false);
-            if (strategyAdvanceTimerRef.current) {
-              window.clearTimeout(strategyAdvanceTimerRef.current);
-              strategyAdvanceTimerRef.current = null;
-            }
-          }}
-        />
+      {onboardingWelcome ? (
+        <div className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm text-foreground">
+          <p>
+            Welcome — we built this first draft from your brand manifesto. Adjust anything you like, then save.
+          </p>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setOnboardingWelcome(false)}>
+            Dismiss
+          </Button>
+        </div>
+      ) : null}
+
+      {message && (
+        <div className="rounded-lg border border-green-600/30 bg-green-600/5 p-3 text-sm text-green-700">{message}</div>
       )}
       {error && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
 

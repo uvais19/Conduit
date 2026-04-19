@@ -1045,7 +1045,7 @@ export function OnboardingWizard() {
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/strategy"
+                href="/strategy?from=onboarding"
                 className={buttonVariants()}
                 onClick={() => {
                   router.refresh();
