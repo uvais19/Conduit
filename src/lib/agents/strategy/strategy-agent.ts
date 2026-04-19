@@ -1,7 +1,44 @@
-import { generateJson } from "@/lib/ai/clients";
+import { generateJsonStructured } from "@/lib/ai/clients";
 import { getMultiPlatformPromptContext } from "@/lib/agents/platform-knowledge";
 import { createDefaultStrategy } from "@/lib/strategy/defaults";
-import { contentStrategySchema, type BrandManifesto, type ContentStrategy, type Platform, type PostAnalysis } from "@/lib/types";
+import { buildManifestoStrategyDigest } from "@/lib/strategy/manifesto-digest";
+import { buildPostAnalysisDigest } from "@/lib/strategy/post-analysis-digest";
+import {
+  buildStrategyRepairUserPrompt,
+  geminiSchemaForPillarsStep,
+  geminiSchemaForScheduleGoalsStep,
+  geminiSchemaForThemesStep,
+  mergeStrategySteps,
+  strategyPillarsStepSchema,
+  strategyScheduleGoalsStepSchema,
+  strategyThemesStepSchema,
+  validateStrategyBusinessRules,
+  type StrategyPillarsStep,
+  type StrategyScheduleGoalsStep,
+  type StrategyThemesStep,
+} from "@/lib/strategy/strategy-generation-steps";
+import {
+  contentStrategySchema,
+  type BrandManifesto,
+  type ContentStrategy,
+  type Platform,
+  type PostAnalysis,
+} from "@/lib/types";
+
+const STRATEGY_SYSTEM_PREAMBLE = `You are Conduit's senior social media strategist for SMB marketing leads.
+Return only JSON for the requested shape (no markdown, no commentary).
+Ground every pillar in the brand digest: tie to audience pains, goals, key messages, voice, or offers.
+Avoid vague pillar names (e.g. a lone "Tips") unless clearly anchored to the industry and brand.`;
+
+function strategyGeminiModel(): string {
+  return process.env.GEMINI_STRATEGY_MODEL ?? process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+}
+
+function manifestoAppendix(manifesto: BrandManifesto): string {
+  const raw = JSON.stringify(manifesto, null, 2);
+  const max = 8000;
+  return raw.length > max ? `${raw.slice(0, max)}\n… (truncated)` : raw;
+}
 
 export async function runStrategyAgent(
   manifesto: BrandManifesto,
@@ -10,65 +47,153 @@ export async function runStrategyAgent(
   competitorInsights?: string | null
 ): Promise<ContentStrategy> {
   const fallback = createDefaultStrategy(manifesto);
+  const digest = buildManifestoStrategyDigest(manifesto);
+  const analysisDigest = buildPostAnalysisDigest(postAnalyses);
+  const plats = platforms ?? ["instagram", "facebook", "linkedin"];
+  const platformCtx = getMultiPlatformPromptContext(plats);
+  const model = strategyGeminiModel();
 
-  const analysisSection =
-    postAnalyses && postAnalyses.length > 0
+  const competitorBlock =
+    competitorInsights?.trim()
       ? [
-          "\n\nHistorical posting analysis (use this to ground the strategy in what's already working):",
-          JSON.stringify(postAnalyses, null, 2),
-          "Incorporate these insights: lean into what works, correct the gaps, maintain what's already aligned.",
-        ]
-      : [];
-
-  const competitorSection =
-    competitorInsights
-      ? [
-          "",
-          "## Competitor Intelligence (differentiate from these):",
+          "## Competitor intelligence",
           competitorInsights,
-          "Use these insights to: find content gaps competitors miss, avoid saturated topics, and identify unique angles.",
-        ]
-      : [];
+          "Differentiate: avoid saturated angles; lean into gaps the brand can own.",
+        ].join("\n\n")
+      : "";
 
-  const generated = await generateJson<ContentStrategy>({
-    systemPrompt:
-      "You are the Strategy Agent for Conduit, an AI social media manager. Create a practical monthly content strategy grounded in the brand manifesto. Return valid JSON only.",
+  const step1Fallback: StrategyPillarsStep = { pillars: fallback.pillars };
+  const rawPillars = await generateJsonStructured<StrategyPillarsStep>({
+    systemPrompt: STRATEGY_SYSTEM_PREAMBLE,
     userPrompt: [
-      "Use this schema shape exactly:",
-      JSON.stringify(fallback, null, 2),
-      "Brand manifesto:",
-      JSON.stringify(manifesto, null, 2),
-      ...analysisSection,
-      "Requirements:",
-      "- exactly 5 content pillars (distinct names; pillar percentage values must sum to 100)",
-      "- platform-specific posting frequency",
-      "- 4 weekly themes",
-      "- realistic monthly goals",
-      "- keep the strategy concrete and useful",
-      ...(postAnalyses && postAnalyses.length > 0
-        ? ["- incorporate insights from the historical posting analysis above"]
-        : []),
+      "## Goal",
+      "Define exactly five distinct content pillars for the next month.",
       "",
-      "Platform-specific guidance (use these when setting schedule, content mix, and weekly theme execution):",
-      getMultiPlatformPromptContext(platforms ?? ["instagram", "facebook", "linkedin"]),
+      "## Self-check (before returning JSON)",
+      "- Five pillars; names unique; each has description, exampleTopics, percentage.",
+      "- Percentages are integers or sensible decimals summing to 100.",
+      "- Each pillar visibly reflects the digest (cite audience, goal, message, or voice).",
       "",
-      "CRITICAL RULES:",
-      "- The pillars array MUST contain exactly 5 items; pillar percentages must total 100",
-      "- Each platform's contentMix MUST ONLY include format types that platform supports (see formats above)",
-      "- Posting frequency must fall within the platform's posting norms range",
-      "- Weekly themes should include platform-specific execution notes",
-      "- Image dimensions and media specs must match platform requirements",
-      ...competitorSection,
-      "Return JSON only.",
+      "## Brand digest (primary)",
+      digest,
+      "",
+      "## Full manifesto JSON (reference; field-level accuracy)",
+      manifestoAppendix(manifesto),
+      ...(analysisDigest ? ["", "## Performance signals", analysisDigest] : []),
+      ...(competitorBlock ? ["", competitorBlock] : []),
     ].join("\n\n"),
     temperature: 0.35,
-    fallback,
+    geminiModel: model,
+    fallback: step1Fallback,
+    responseSchema: geminiSchemaForPillarsStep(),
   });
 
-  try {
-    return contentStrategySchema.parse(generated);
-  } catch (error) {
-    console.error("Strategy Agent returned invalid output, using fallback:", error);
+  const pillarsParsed = strategyPillarsStepSchema.safeParse(rawPillars);
+  const pillarsData = pillarsParsed.success ? pillarsParsed.data : step1Fallback;
+
+  const step2Fallback: StrategyScheduleGoalsStep = {
+    schedule: fallback.schedule,
+    monthlyGoals: fallback.monthlyGoals,
+  };
+
+  const rawSchedule = await generateJsonStructured<StrategyScheduleGoalsStep>({
+    systemPrompt: STRATEGY_SYSTEM_PREAMBLE,
+    userPrompt: [
+      "## Goal",
+      "Produce platform schedules (cadence, days, times, content mix) and realistic monthlyGoals for the same channels.",
+      "",
+      "## Accepted pillars (do not rename)",
+      JSON.stringify(pillarsData.pillars, null, 2),
+      "",
+      "## Platform rules (must obey)",
+      platformCtx,
+      "",
+      "## Self-check",
+      "- One schedule row per platform in: instagram, facebook, linkedin (same set as default template unless manifesto implies otherwise).",
+      "- postsPerWeek within each platform's posting norms range.",
+      "- contentMix types must be allowed for that platform (see Supported formats).",
+      "- monthlyGoals: 2–4 entries with sensible numeric targets.",
+      ...(analysisDigest ? ["", "## Performance signals", analysisDigest] : []),
+      ...(competitorBlock ? ["", competitorBlock] : []),
+    ].join("\n\n"),
+    temperature: 0.28,
+    geminiModel: model,
+    fallback: step2Fallback,
+    responseSchema: geminiSchemaForScheduleGoalsStep(),
+  });
+
+  const scheduleParsed = strategyScheduleGoalsStepSchema.safeParse(rawSchedule);
+  const scheduleData = scheduleParsed.success ? scheduleParsed.data : step2Fallback;
+
+  const pillarNames = pillarsData.pillars.map((p) => p.name.trim()).join(", ");
+  const step3Fallback: StrategyThemesStep = { weeklyThemes: fallback.weeklyThemes };
+
+  const rawThemes = await generateJsonStructured<StrategyThemesStep>({
+    systemPrompt: STRATEGY_SYSTEM_PREAMBLE,
+    userPrompt: [
+      "## Goal",
+      "Produce exactly four weeklyThemes (weeks 1–4). Each row: weekNumber, theme, pillar, keyMessage, executionNotes.",
+      "",
+      "## Pillar names (pillar field must be exactly one of these strings)",
+      pillarNames,
+      "",
+      "## Self-check",
+      "- weekNumber 1..4 in order; pillar must match a name above exactly.",
+      "- executionNotes: 1–3 sentences with platform-specific execution (formats + cadence hints for IG / LinkedIn / Facebook).",
+      "- keyMessage ties to manifesto goals or digest where possible.",
+      "",
+      "## Brand digest",
+      digest,
+      "",
+      "## Platform rules (for executionNotes)",
+      platformCtx,
+    ].join("\n\n"),
+    temperature: 0.35,
+    geminiModel: model,
+    fallback: step3Fallback,
+    responseSchema: geminiSchemaForThemesStep(),
+  });
+
+  const themesParsed = strategyThemesStepSchema.safeParse(rawThemes);
+  const themesData = themesParsed.success ? themesParsed.data : step3Fallback;
+
+  const merged = mergeStrategySteps(pillarsData, scheduleData, themesData);
+  if (!merged) {
+    console.error("Strategy merge failed schema parse; using template fallback.");
     return fallback;
   }
+
+  let issues = validateStrategyBusinessRules(merged);
+  if (issues.length === 0) {
+    try {
+      return contentStrategySchema.parse(merged);
+    } catch (error) {
+      console.error("Strategy final zod parse failed:", error);
+      return fallback;
+    }
+  }
+
+  const repaired = await generateJsonStructured<ContentStrategy>({
+    systemPrompt: `${STRATEGY_SYSTEM_PREAMBLE}
+
+You are fixing an existing strategy. Apply minimal edits so all validation issues are resolved; keep strong, on-brand content.`,
+    userPrompt: buildStrategyRepairUserPrompt({ issues, strategy: merged }),
+    temperature: 0.22,
+    geminiModel: model,
+    fallback: merged,
+  });
+
+  const repairedParsed = contentStrategySchema.safeParse(repaired);
+  if (!repairedParsed.success) {
+    console.error("Strategy repair returned invalid JSON shape; using template fallback.");
+    return fallback;
+  }
+
+  issues = validateStrategyBusinessRules(repairedParsed.data);
+  if (issues.length > 0) {
+    console.error("Strategy still invalid after repair:", issues);
+    return fallback;
+  }
+
+  return repairedParsed.data;
 }

@@ -1,9 +1,16 @@
-type GenerateTextOptions = {
+export type GenerateTextOptions = {
   systemPrompt?: string;
   userPrompt: string;
   temperature?: number;
   geminiModel?: string;
   groqModel?: string;
+  /**
+   * Gemini structured output: JSON MIME type and optional responseSchema (JSON Schema object).
+   * If the API rejects the schema, callers can retry without `responseSchema`.
+   */
+  geminiJson?: {
+    responseSchema?: unknown;
+  };
 };
 
 async function callGemini({
@@ -11,6 +18,7 @@ async function callGemini({
   userPrompt,
   temperature = 0.4,
   geminiModel = process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+  geminiJson,
 }: GenerateTextOptions): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -18,6 +26,14 @@ async function callGemini({
   }
 
   const prompt = [systemPrompt, userPrompt].filter(Boolean).join("\n\n");
+
+  const generationConfig: Record<string, unknown> = {
+    temperature,
+    responseMimeType: geminiJson ? "application/json" : "text/plain",
+  };
+  if (geminiJson?.responseSchema !== undefined) {
+    generationConfig.responseSchema = geminiJson.responseSchema;
+  }
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`,
@@ -28,10 +44,7 @@ async function callGemini({
       },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature,
-          responseMimeType: "text/plain",
-        },
+        generationConfig,
       }),
     }
   );
@@ -252,4 +265,59 @@ export async function generateJson<T>(
     console.error("Failed to parse model JSON output:", error);
     return options.fallback;
   }
+}
+
+/**
+ * Prefer Gemini `application/json` (+ optional `responseSchema`), retry JSON without schema on failure,
+ * then fall back to plain `generateText` (Gemini text / Groq).
+ */
+export async function generateJsonStructured<T>(
+  options: GenerateTextOptions & { fallback: T; responseSchema?: unknown }
+): Promise<T> {
+  const { fallback, responseSchema, ...textOpts } = options;
+
+  const tryParse = (raw: string | null): T | null => {
+    if (!raw) return null;
+    try {
+      return JSON.parse(extractJsonBlock(raw)) as T;
+    } catch {
+      return null;
+    }
+  };
+
+  let text: string | null = null;
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      text = await callGemini({
+        ...textOpts,
+        geminiJson:
+          responseSchema !== undefined ? { responseSchema } : {},
+      });
+    } catch (error) {
+      console.warn("Gemini structured JSON call failed:", error);
+      text = null;
+    }
+
+    if (!text && responseSchema !== undefined) {
+      try {
+        text = await callGemini({
+          ...textOpts,
+          geminiJson: {},
+        });
+      } catch (error) {
+        console.warn("Gemini JSON (no schema) retry failed:", error);
+        text = null;
+      }
+    }
+  }
+
+  if (!text) {
+    const plain = await generateText(textOpts);
+    const parsed = tryParse(plain);
+    return parsed ?? fallback;
+  }
+
+  const parsed = tryParse(text);
+  return parsed ?? fallback;
 }

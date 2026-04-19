@@ -105,24 +105,32 @@ export function createDefaultStrategy(
         theme: "Foundations & Awareness",
         pillar: "Education",
         keyMessage: goals[0],
+        executionNotes:
+          "Lead with carousels or short reels on Instagram; LinkedIn text-first posts mid-morning; Facebook image + short caption.",
       },
       {
         weekNumber: 2,
         theme: "Proof & Trust",
         pillar: "Trust & Proof",
         keyMessage: goals[1] || goals[0],
+        executionNotes:
+          "Case-study carousels (IG/LinkedIn); testimonial quote cards; avoid hard selling—show outcomes.",
       },
       {
         weekNumber: 3,
         theme: "Offer Clarity",
         pillar: "Conversion",
         keyMessage: goals[2] || goals[0],
+        executionNotes:
+          "Single clear CTA per platform; link-in-bio or comment links per channel norms; mix one reel with static posts.",
       },
       {
         weekNumber: 4,
         theme: "People & Participation",
         pillar: "Community & Engagement",
         keyMessage: goals[3] || goals[2] || goals[0],
+        executionNotes:
+          "Polls or question posts; reply to comments in first hour; light trend-jacking only if it fits brand voice.",
       },
     ],
     monthlyGoals: [

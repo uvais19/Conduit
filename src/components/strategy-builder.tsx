@@ -62,6 +62,8 @@ const FIELD_HINTS = {
     "Which content pillar this week's theme maps to. Ensures every pillar gets regular attention.",
   weekKeyMessage:
     "The single takeaway or call-to-action that unifies all posts during this week.",
+  weekExecutionNotes:
+    "Concrete execution for this week per platform (e.g. which formats, posting windows, hooks)—optional but helps the team stay aligned.",
 } as const;
 
 /** Dedupes React Strict Mode double mount + overlapping effects for first-time strategy generation. */
@@ -644,51 +646,71 @@ export function StrategyBuilder() {
 
         <CardContent className="space-y-4">
           {strategy.weeklyThemes.map((theme, index) => (
-            <div key={`${theme.weekNumber}-${index}`} className="grid gap-3 rounded-lg border p-4 md:grid-cols-4">
-              <div className="space-y-2">
-                <FieldLabelWithHint label="Week" hint={FIELD_HINTS.weekNumber} />
-                <Input value={theme.weekNumber} disabled />
+            <div key={`${theme.weekNumber}-${index}`} className="space-y-3 rounded-lg border p-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="space-y-2">
+                  <FieldLabelWithHint label="Week" hint={FIELD_HINTS.weekNumber} />
+                  <Input value={theme.weekNumber} disabled />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabelWithHint label="Theme" hint={FIELD_HINTS.weekTheme} />
+                  <Input
+                    value={theme.theme}
+                    onChange={(event) =>
+                      setStrategy((current) => ({
+                        ...current,
+                        weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, theme: event.target.value } : item
+                        ),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabelWithHint label="Pillar" hint={FIELD_HINTS.weekPillar} />
+                  <Input
+                    value={theme.pillar}
+                    onChange={(event) =>
+                      setStrategy((current) => ({
+                        ...current,
+                        weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, pillar: event.target.value } : item
+                        ),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabelWithHint label="Key message" hint={FIELD_HINTS.weekKeyMessage} />
+                  <Input
+                    value={theme.keyMessage}
+                    onChange={(event) =>
+                      setStrategy((current) => ({
+                        ...current,
+                        weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, keyMessage: event.target.value } : item
+                        ),
+                      }))
+                    }
+                  />
+                </div>
               </div>
               <div className="space-y-2">
-                <FieldLabelWithHint label="Theme" hint={FIELD_HINTS.weekTheme} />
-                <Input
-                  value={theme.theme}
+                <FieldLabelWithHint label="Execution notes" hint={FIELD_HINTS.weekExecutionNotes} />
+                <textarea
+                  className="min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                  value={theme.executionNotes ?? ""}
                   onChange={(event) =>
                     setStrategy((current) => ({
                       ...current,
                       weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, theme: event.target.value } : item
+                        itemIndex === index
+                          ? { ...item, executionNotes: event.target.value }
+                          : item
                       ),
                     }))
                   }
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabelWithHint label="Pillar" hint={FIELD_HINTS.weekPillar} />
-                <Input
-                  value={theme.pillar}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, pillar: event.target.value } : item
-                      ),
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabelWithHint label="Key message" hint={FIELD_HINTS.weekKeyMessage} />
-                <Input
-                  value={theme.keyMessage}
-                  onChange={(event) =>
-                    setStrategy((current) => ({
-                      ...current,
-                      weeklyThemes: current.weeklyThemes.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, keyMessage: event.target.value } : item
-                      ),
-                    }))
-                  }
+                  placeholder="e.g. IG reels + carousels Tue/Thu; LinkedIn document post mid-week…"
                 />
               </div>
             </div>

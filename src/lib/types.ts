@@ -150,6 +150,8 @@ export const weeklyThemeSchema = z.object({
   theme: z.string(),
   pillar: z.string(),
   keyMessage: z.string(),
+  /** Platform-specific execution (cadence, formats, hooks) for this week. */
+  executionNotes: z.string().optional(),
 });
 
 export const contentStrategySchema = z.object({
