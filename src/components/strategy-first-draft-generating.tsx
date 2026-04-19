@@ -35,7 +35,7 @@ export function StrategyFirstDraftGenerating() {
           },
         });
         if (!doneReceived) {
-          const latest = await fetchLatestStrategyFromApi();
+          const latest = await fetchLatestStrategyFromApi({ attempts: 12, delayMs: 200 });
           if (!latest) {
             throw new Error(
               "Generation finished but the strategy could not be loaded. Try again or open Content strategy."

@@ -22,9 +22,13 @@ function sseResponse(chunks: string[]): Response {
 }
 
 describe("consumeStrategyGenerateStream", () => {
-  it("handles event and data split across chunks", async () => {
+  const fivePillarsJson =
+    '{"strategy":{"pillars":[{"name":"A","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"B","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"C","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"D","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"E","description":"d","percentage":20,"exampleTopics":["x"]}]},"version":3}';
+
+  it("handles event and data split across chunks (no space after data:, matching the API route)", async () => {
     const onDone = vi.fn();
-    const res = sseResponse(["event: done\n", 'data: {"strategy":{"pillars":[{"name":"A","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"B","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"C","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"D","description":"d","percentage":20,"exampleTopics":["x"]},{"name":"E","description":"d","percentage":20,"exampleTopics":["x"]}]},"version":3}\n\n']);
+    // Mirrors src/app/api/strategy/generate/route.ts: `data: ${JSON.stringify(data)}` — no space before `{`.
+    const res = sseResponse(["event: done\n", `data:${fivePillarsJson}\n\n`]);
     const { doneReceived } = await consumeStrategyGenerateStream(res, {
       onProgress: () => {},
       onDone,
@@ -35,5 +39,56 @@ describe("consumeStrategyGenerateStream", () => {
     expect(arg.strategy.pillars).toHaveLength(5);
     expect(arg.strategy.pillars[0].name).toBe("A");
     expect(arg.version).toBe(3);
+  });
+
+  it("parses CRLF-framed SSE and multiple messages in one chunk", async () => {
+    const onProgress = vi.fn();
+    const onDone = vi.fn();
+    const body =
+      `event: progress\r\ndata:{"message":"a"}\r\n\r\n` +
+      `event: progress\r\ndata:{"message":"b"}\r\n\r\n` +
+      `event: done\r\ndata:${fivePillarsJson}\r\n\r\n`;
+    const res = sseResponse([body]);
+    const { doneReceived } = await consumeStrategyGenerateStream(res, {
+      onProgress,
+      onDone,
+    });
+    expect(doneReceived).toBe(true);
+    expect(onProgress).toHaveBeenCalledTimes(2);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("invokes onDone when pillars array is present but empty (server contract)", async () => {
+    const onDone = vi.fn();
+    const res = sseResponse([`event: done\ndata:{"strategy":{"pillars":[]},"version":1}\n\n`]);
+    const { doneReceived } = await consumeStrategyGenerateStream(res, {
+      onProgress: () => {},
+      onDone,
+    });
+    expect(doneReceived).toBe(true);
+    expect(onDone.mock.calls[0][0].strategy.pillars).toEqual([]);
+  });
+
+  it("accepts SSE data lines with a space after data: (spec form)", async () => {
+    const onDone = vi.fn();
+    const res = sseResponse([`event: done\ndata: ` + fivePillarsJson + "\n\n"]);
+    const { doneReceived } = await consumeStrategyGenerateStream(res, {
+      onProgress: () => {},
+      onDone,
+    });
+    expect(doneReceived).toBe(true);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("splits terminator across read chunks", async () => {
+    const onDone = vi.fn();
+    const line = `event: done\ndata:${fivePillarsJson}\n`;
+    const res = sseResponse([line.slice(0, 12), line.slice(12), "\n"]);
+    const { doneReceived } = await consumeStrategyGenerateStream(res, {
+      onProgress: () => {},
+      onDone,
+    });
+    expect(doneReceived).toBe(true);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 });

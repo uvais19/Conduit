@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { contentStrategies } from "@/lib/db/schema";
+import { finalizeStrategyPillarNames } from "@/lib/strategy/strategy-generation-steps";
 import { contentStrategySchema } from "@/lib/types";
 
 const latestStrategyOrder = [desc(contentStrategies.createdAt), desc(contentStrategies.id)] as const;
@@ -19,9 +20,14 @@ export async function GET() {
       .orderBy(...latestStrategyOrder)
       .limit(1);
 
+    const raw = latestStrategy?.data ?? null;
+    const parsed = raw ? contentStrategySchema.safeParse(raw) : null;
+    const strategy =
+      parsed?.success === true ? finalizeStrategyPillarNames(parsed.data) : raw;
+
     return NextResponse.json(
       {
-        strategy: latestStrategy?.data ?? null,
+        strategy,
         version: latestStrategy?.version ?? null,
         status: latestStrategy?.status ?? null,
       },

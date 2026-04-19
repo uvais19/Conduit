@@ -7,6 +7,7 @@ import {
   buildStrategyRepairUserPrompt,
   coerceStrategyPillarsStep,
   coerceStrategyThemesStep,
+  finalizeStrategyPillarNames,
   geminiSchemaForPillarsStep,
   geminiSchemaForScheduleGoalsStep,
   geminiSchemaForThemesStep,
@@ -172,10 +173,12 @@ export async function runStrategyAgent(
     return fallback;
   }
 
-  let issues = validateStrategyBusinessRules(merged);
+  const mergedFinal = finalizeStrategyPillarNames(merged);
+
+  let issues = validateStrategyBusinessRules(mergedFinal);
   if (issues.length === 0) {
     try {
-      return contentStrategySchema.parse(merged);
+      return contentStrategySchema.parse(mergedFinal);
     } catch (error) {
       console.error("Strategy final zod parse failed:", error);
       return fallback;
@@ -186,10 +189,10 @@ export async function runStrategyAgent(
     systemPrompt: `${STRATEGY_SYSTEM_PREAMBLE}
 
 You are fixing an existing strategy. Apply minimal edits so all validation issues are resolved; keep strong, on-brand content.`,
-    userPrompt: buildStrategyRepairUserPrompt({ issues, strategy: merged }),
+    userPrompt: buildStrategyRepairUserPrompt({ issues, strategy: mergedFinal }),
     temperature: 0.22,
     geminiModel: model,
-    fallback: merged,
+    fallback: mergedFinal,
   });
 
   const repairedParsed = contentStrategySchema.safeParse(repaired);
@@ -198,11 +201,13 @@ You are fixing an existing strategy. Apply minimal edits so all validation issue
     return fallback;
   }
 
-  issues = validateStrategyBusinessRules(repairedParsed.data);
+  const repairedFinal = finalizeStrategyPillarNames(repairedParsed.data);
+
+  issues = validateStrategyBusinessRules(repairedFinal);
   if (issues.length > 0) {
     console.error("Strategy still invalid after repair:", issues);
     return fallback;
   }
 
-  return repairedParsed.data;
+  return repairedFinal;
 }

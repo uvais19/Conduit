@@ -10,6 +10,84 @@ import {
   type Platform,
 } from "@/lib/types";
 
+type ContentPillar = ContentStrategy["pillars"][number];
+
+const PILLAR_TITLE_MAX = 72;
+
+/** Gemini / JSON-schema payloads sometimes omit `name` or use alternate keys; empty `name` still passes `z.string()`. */
+const RAW_PILLAR_TITLE_KEYS = ["name", "pillarName", "title", "label", "heading"] as const;
+
+function clampPillarTitle(s: string): string {
+  const t = s.trim();
+  if (t.length <= PILLAR_TITLE_MAX) return t;
+  return `${t.slice(0, PILLAR_TITLE_MAX - 1).trimEnd()}…`;
+}
+
+function titleFromDescription(description: string, index: number): string {
+  const oneLine = description.replace(/\s+/g, " ").trim();
+  if (!oneLine) return `Content pillar ${index + 1}`;
+  return clampPillarTitle(oneLine);
+}
+
+function resolveRawPillarTitle(raw: Record<string, unknown>, index: number, description: string): string {
+  for (const key of RAW_PILLAR_TITLE_KEYS) {
+    const v = raw[key];
+    if (typeof v === "string" && v.trim()) return clampPillarTitle(v);
+  }
+  return titleFromDescription(description, index);
+}
+
+function normalizeSingleRawPillar(raw: unknown, index: number): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const o = { ...(raw as Record<string, unknown>) };
+  const desc = typeof o.description === "string" ? o.description : "";
+  o.name = resolveRawPillarTitle(o, index, desc);
+  return o;
+}
+
+function normalizePillarRecords(records: unknown[]): unknown[] {
+  return records.map((p, i) => normalizeSingleRawPillar(p, i));
+}
+
+/**
+ * Ensures every pillar has a non-empty display name and unique labels (business rules).
+ * Re-aligns weekly theme `pillar` strings when names were blank or renamed.
+ * Call after model JSON is parsed into a {@link ContentStrategy}.
+ */
+export function finalizeStrategyPillarNames(strategy: ContentStrategy): ContentStrategy {
+  let pillars: ContentPillar[] = strategy.pillars.map((p, i) => {
+    const trimmed = typeof p.name === "string" ? p.name.trim() : "";
+    const name = trimmed ? clampPillarTitle(trimmed) : titleFromDescription(p.description, i);
+    return { ...p, name };
+  });
+
+  const seen = new Set<string>();
+  pillars = pillars.map((p) => {
+    let candidate = p.name.trim();
+    const base = candidate;
+    let n = 2;
+    while (seen.has(candidate.toLowerCase())) {
+      candidate = clampPillarTitle(`${base} (${n})`);
+      n++;
+    }
+    seen.add(candidate.toLowerCase());
+    return { ...p, name: candidate };
+  });
+
+  const names = pillars.map((p) => p.name);
+  const nameSet = new Set(names);
+  const weeklyThemes = strategy.weeklyThemes.map((w) => {
+    const ref = w.pillar.trim();
+    if (ref && nameSet.has(ref)) return w;
+    const fuzzy = pillars.find((p) => p.name.toLowerCase() === ref.toLowerCase());
+    if (fuzzy) return { ...w, pillar: fuzzy.name };
+    const idx = Math.min(Math.max(0, w.weekNumber - 1), pillars.length - 1);
+    return { ...w, pillar: pillars[idx]!.name };
+  });
+
+  return { ...strategy, pillars, weeklyThemes };
+}
+
 export const strategyPillarsStepSchema = z.object({
   pillars: z.array(contentPillarSchema).length(5),
 });
@@ -30,7 +108,13 @@ export type StrategyThemesStep = z.infer<typeof strategyThemesStepSchema>;
 /** Gemini JSON sometimes uses the step array as the root object; Zod expects `{ pillars }` / `{ weeklyThemes }`. */
 export function coerceStrategyPillarsStep(raw: unknown): StrategyPillarsStep {
   if (Array.isArray(raw)) {
-    return { pillars: raw as StrategyPillarsStep["pillars"] };
+    return { pillars: normalizePillarRecords(raw) as StrategyPillarsStep["pillars"] };
+  }
+  if (raw && typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    if (Array.isArray(o.pillars)) {
+      return { pillars: normalizePillarRecords(o.pillars) as StrategyPillarsStep["pillars"] };
+    }
   }
   return raw as StrategyPillarsStep;
 }

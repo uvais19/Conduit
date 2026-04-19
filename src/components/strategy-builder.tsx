@@ -103,7 +103,7 @@ export function StrategyBuilder() {
           },
         });
         if (!doneReceived) {
-          const latest = await fetchLatestStrategyFromApi();
+          const latest = await fetchLatestStrategyFromApi({ attempts: 12, delayMs: 200 });
           if (latest) {
             setStrategy(latest.strategy);
             setVersion(latest.version);
@@ -138,10 +138,21 @@ export function StrategyBuilder() {
           return;
         }
 
-        const response = await fetch("/api/strategy", { cache: "no-store" });
-        const data = await response.json();
+        let response: Response | null = null;
+        let data: { strategy?: ContentStrategy | null; version?: number | null; error?: string } =
+          {};
 
-        if (!response.ok) {
+        for (let attempt = 0; attempt < 10; attempt++) {
+          response = await fetch("/api/strategy", { cache: "no-store" });
+          data = (await response.json()) as typeof data;
+          if (!response.ok) break;
+          if (data.strategy) break;
+          if (attempt < 9) {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
+
+        if (!response || !response.ok) {
           throw new Error(data.error || "Unable to load strategy");
         }
 
@@ -153,7 +164,7 @@ export function StrategyBuilder() {
         }
 
         setStrategy(data.strategy as ContentStrategy);
-        setVersion(data.version);
+        setVersion(data.version ?? null);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Unable to load strategy");

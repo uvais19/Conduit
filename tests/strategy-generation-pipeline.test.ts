@@ -5,7 +5,9 @@ import { buildPostAnalysisDigest } from "@/lib/strategy/post-analysis-digest";
 import {
   coerceStrategyPillarsStep,
   coerceStrategyThemesStep,
+  finalizeStrategyPillarNames,
   mergeStrategySteps,
+  strategyPillarsStepSchema,
   validateStrategyBusinessRules,
 } from "@/lib/strategy/strategy-generation-steps";
 import type { BrandManifesto, PostAnalysis } from "@/lib/types";
@@ -128,6 +130,48 @@ describe("strategy generation pipeline helpers", () => {
     const base = createDefaultStrategy();
     const wrapped = coerceStrategyPillarsStep(base.pillars as unknown);
     expect(wrapped.pillars).toHaveLength(5);
+  });
+
+  it("coerceStrategyPillarsStep maps pillarName (and empty name) before Zod parse", () => {
+    const row = (name: string, pillarName: string, description: string) => ({
+      name,
+      pillarName,
+      description,
+      percentage: 20,
+      exampleTopics: ["t"],
+    });
+    const raw = {
+      pillars: [
+        row("", "Thought leadership", "First pillar body."),
+        row("", "", "Second pillar only description."),
+        row("Kept name", "", "Third."),
+        row("", "Title wins", "Fourth."),
+        row("", "", "Fifth pillar text."),
+      ],
+    };
+    const coerced = coerceStrategyPillarsStep(raw);
+    const parsed = strategyPillarsStepSchema.safeParse(coerced);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.pillars[0].name).toBe("Thought leadership");
+    expect(parsed.data.pillars[1].name).toContain("Second pillar");
+    expect(parsed.data.pillars[2].name).toBe("Kept name");
+    expect(parsed.data.pillars[3].name).toBe("Title wins");
+    expect(parsed.data.pillars[4].name).toContain("Fifth pillar");
+  });
+
+  it("finalizeStrategyPillarNames fills blank names and dedupes", () => {
+    const base = createDefaultStrategy();
+    const dup = {
+      ...base,
+      pillars: base.pillars.map((p, i) =>
+        i < 2 ? { ...p, name: "", description: "Same opening words here." } : { ...p, name: `Pillar ${i}` }
+      ),
+    };
+    const out = finalizeStrategyPillarNames(dup);
+    expect(out.pillars[0].name.trim().length).toBeGreaterThan(0);
+    expect(out.pillars[1].name.trim().length).toBeGreaterThan(0);
+    expect(out.pillars[0].name).not.toBe(out.pillars[1].name);
   });
 
   it("coerceStrategyThemesStep wraps a root-level weeklyThemes array", () => {
