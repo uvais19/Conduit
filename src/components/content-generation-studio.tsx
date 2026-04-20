@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { PLATFORM_LABELS, PLATFORMS } from "@/lib/constants";
 import type { ContentDraftRecord } from "@/lib/content/types";
-import type { BrandManifesto } from "@/lib/types";
+import type { BrandManifesto, ContentStrategy } from "@/lib/types";
 import { deriveFieldsForPlatform } from "@/lib/content/platform-defaults";
+import { suggestObjectiveFromMonthlyGoals } from "@/lib/strategy/strategy-writer-context";
 import { toast } from "sonner";
 import {
   Card,
@@ -85,6 +86,9 @@ export function ContentGenerationStudio() {
   const [payload, setPayload] = useState<GenerationPayload>(initialPayload);
   const [campaignOptions, setCampaignOptions] = useState<CampaignOption[]>([]);
   const [manifesto, setManifesto] = useState<BrandManifesto | null>(null);
+  const [strategy, setStrategy] = useState<ContentStrategy | null>(null);
+  const didApplyStrategyObjectiveRef = useRef(false);
+  const plannedQueryMergedRef = useRef<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<ContentDraftRecord[]>([]);
@@ -206,6 +210,31 @@ export function ContentGenerationStudio() {
   }, []);
 
   useEffect(() => {
+    async function loadStrategy() {
+      try {
+        const res = await fetch("/api/strategy", { cache: "no-store" });
+        const data = await res.json();
+        if (res.ok && data.strategy) {
+          setStrategy(data.strategy as ContentStrategy);
+        }
+      } catch {
+        // optional
+      }
+    }
+    void loadStrategy();
+  }, []);
+
+  useEffect(() => {
+    if (!strategy || didApplyStrategyObjectiveRef.current) return;
+    didApplyStrategyObjectiveRef.current = true;
+    setPayload((current) => {
+      const suggested = suggestObjectiveFromMonthlyGoals(strategy, current.platform);
+      if (!suggested || current.objective !== initialPayload.objective) return current;
+      return { ...current, objective: suggested.slice(0, 80) };
+    });
+  }, [strategy]);
+
+  useEffect(() => {
     if (!manifesto) return;
     const derived = deriveFieldsForPlatform(manifesto, payload.platform);
     setPayload((current) => ({ ...current, ...derived }));
@@ -226,6 +255,31 @@ export function ContentGenerationStudio() {
         ...(campaignId && { campaignId }),
       }));
     }
+  }, [searchParams]);
+
+  /** Enrich deep links from planned strategy slots (drafts / calendar). */
+  useEffect(() => {
+    const keyMessage = searchParams.get("keyMessage");
+    const executionNotes = searchParams.get("executionNotes");
+    const contentType = searchParams.get("contentType");
+    const topicFromQuery = searchParams.get("topic");
+    if (!keyMessage && !executionNotes && !contentType) return;
+
+    const signature = `${topicFromQuery}|${keyMessage}|${executionNotes}|${contentType}`;
+    if (plannedQueryMergedRef.current === signature) return;
+    plannedQueryMergedRef.current = signature;
+
+    setPayload((current) => {
+      const add: string[] = [];
+      if (keyMessage) add.push(`Key message: ${keyMessage}`);
+      if (executionNotes) add.push(`Execution: ${executionNotes}`);
+      if (contentType) add.push(`Preferred format from strategy: ${contentType}`);
+      if (add.length === 0) return current;
+      const suffix = add.join(" — ");
+      const base = current.topic.trim();
+      const nextTopic = base ? `${base} — ${suffix}` : suffix;
+      return { ...current, topic: nextTopic.slice(0, 200) };
+    });
   }, [searchParams]);
 
   useEffect(() => {
@@ -354,6 +408,17 @@ export function ContentGenerationStudio() {
       <Card>
         <CardHeader>
           <CardTitle>Prompt Setup</CardTitle>
+          {strategy ? (
+            <CardDescription>
+              Your saved content strategy is loaded — generation also sends pillars, cadence, weekly
+              themes, and monthly goals to the writer so drafts stay aligned with the plan.
+            </CardDescription>
+          ) : (
+            <CardDescription>
+              Save a content strategy under Strategy to ground generation in your pillars, themes, and
+              goals (brand manifesto still shapes voice and audience).
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2 text-sm">
@@ -436,13 +501,40 @@ export function ContentGenerationStudio() {
               <FieldLabelWithHint htmlFor="gen-pillar" label="Pillar" hint={GENERATION_HINTS.pillar} />
               <FieldCharCounter current={payload.pillar.length} max={120} />
             </div>
+            {strategy && strategy.pillars.length > 0 && (
+              <datalist id="strategy-pillar-suggestions">
+                {strategy.pillars.map((p) => (
+                  <option key={p.name} value={p.name} />
+                ))}
+              </datalist>
+            )}
             <Input
               id="gen-pillar"
+              list={strategy && strategy.pillars.length > 0 ? "strategy-pillar-suggestions" : undefined}
               value={payload.pillar}
               onChange={(event) =>
                 setPayload((current) => ({ ...current, pillar: event.target.value }))
               }
             />
+            {strategy && strategy.pillars.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {strategy.pillars.slice(0, 8).map((p) => (
+                  <button
+                    key={p.name}
+                    type="button"
+                    className="rounded-full border border-border/80 bg-muted/40 px-2.5 py-0.5 text-xs font-medium hover:bg-muted"
+                    onClick={() =>
+                      setPayload((current) => ({
+                        ...current,
+                        pillar: p.name,
+                      }))
+                    }
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 text-sm md:col-span-2">
@@ -475,6 +567,25 @@ export function ContentGenerationStudio() {
                 setPayload((current) => ({ ...current, objective: event.target.value }))
               }
             />
+            {strategy && (
+              <button
+                type="button"
+                className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                onClick={() => {
+                  const suggested = suggestObjectiveFromMonthlyGoals(strategy, payload.platform);
+                  if (!suggested) {
+                    toast("No monthly goals for this platform in your strategy.");
+                    return;
+                  }
+                  setPayload((current) => ({
+                    ...current,
+                    objective: suggested.slice(0, 80),
+                  }));
+                }}
+              >
+                Use monthly goals for {PLATFORM_LABELS[payload.platform]}
+              </button>
+            )}
           </div>
 
           <div className="space-y-2 text-sm">

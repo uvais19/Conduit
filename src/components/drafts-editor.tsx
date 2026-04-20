@@ -572,6 +572,18 @@ export function DraftsEditor() {
                     <p className="text-sm font-medium">{selectedPlanned.theme}</p>
                   </div>
                   <div className="space-y-1">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Key message</p>
+                    <p className="text-sm">{selectedPlanned.keyMessage}</p>
+                  </div>
+                  {selectedPlanned.executionNotes ? (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Execution notes
+                      </p>
+                      <p className="text-sm text-muted-foreground">{selectedPlanned.executionNotes}</p>
+                    </div>
+                  ) : null}
+                  <div className="space-y-1">
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Summary</p>
                     <p className="text-sm">{selectedPlanned.summary}</p>
                   </div>
@@ -580,7 +592,7 @@ export function DraftsEditor() {
                       This is a planned post from your strategy. Generate a draft to edit and customize it.
                     </p>
                     <Link
-                      href={`/content/generate?platform=${selectedPlanned.platform}&pillar=${encodeURIComponent(selectedPlanned.pillar)}&topic=${encodeURIComponent(selectedPlanned.theme)}&contentType=${encodeURIComponent(selectedPlanned.contentType)}`}
+                      href={`/content/generate?platform=${selectedPlanned.platform}&pillar=${encodeURIComponent(selectedPlanned.pillar)}&topic=${encodeURIComponent(selectedPlanned.theme)}&contentType=${encodeURIComponent(selectedPlanned.contentType)}&keyMessage=${encodeURIComponent(selectedPlanned.keyMessage)}${selectedPlanned.executionNotes ? `&executionNotes=${encodeURIComponent(selectedPlanned.executionNotes)}` : ""}`}
                       className={buttonVariants({ className: "mt-3" })}
                     >
                       Generate Draft

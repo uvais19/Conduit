@@ -24,5 +24,8 @@ describe("strategy defaults", () => {
     expect(preview.length).toBeGreaterThan(0);
     const days = preview.map((item) => item.day);
     expect(days[0]).toBe("Monday");
+    const first = preview[0];
+    expect(first.keyMessage.length).toBeGreaterThan(0);
+    expect(first.id).toMatch(/^.+-\d+-\d+$/);
   });
 });

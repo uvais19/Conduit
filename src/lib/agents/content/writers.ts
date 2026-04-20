@@ -25,8 +25,10 @@ const LINKEDIN_WRITER_ADDENDUM = [
 
 export async function runPlatformWriterAgent(
   input: ContentGenerationRequest,
-  variantLabel: VariantLabel
+  variantLabel: VariantLabel,
+  options?: { strategyContext?: string | null }
 ): Promise<GeneratedVariant> {
+  const strategyContext = options?.strategyContext?.trim();
   const platformContext = getPlatformPromptContext(input.platform);
   const pk = PLATFORM_KNOWLEDGE[input.platform];
   const linkedinExtra =
@@ -64,6 +66,13 @@ export async function runPlatformWriterAgent(
       `Objective: ${input.objective}`,
       `Brand voice: ${input.voice}`,
       `CTA direction: ${input.cta}`,
+      ...(strategyContext
+        ? [
+            "",
+            "── Strategy-aligned guardrails (honor pillar intent, themes, and goals) ──",
+            strategyContext,
+          ]
+        : []),
       "",
       "Requirements:",
       `- Stay within ${pk.charLimit} characters`,
@@ -101,13 +110,16 @@ export async function runPlatformWriterAgent(
   };
 }
 
-export async function generatePlatformVariants(input: ContentGenerationRequest): Promise<{
+export async function generatePlatformVariants(
+  input: ContentGenerationRequest,
+  options?: { strategyContext?: string | null }
+): Promise<{
   variantGroup: string;
   variants: GeneratedVariant[];
 }> {
   const labels: VariantLabel[] = input.generateVariants ? ["A", "B", "C"] : ["A"];
   const variants = await Promise.all(
-    labels.map((label) => runPlatformWriterAgent(input, label))
+    labels.map((label) => runPlatformWriterAgent(input, label, options))
   );
   return {
     variantGroup: crypto.randomUUID(),

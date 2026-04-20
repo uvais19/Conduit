@@ -1,3 +1,4 @@
+import { desc, eq } from "drizzle-orm";
 import { requirePermission } from "@/lib/auth/permissions";
 import { runVisualDesignerAgent } from "@/lib/agents/content/visual-designer";
 import { runPlatformWriterAgent } from "@/lib/agents/content/writers";
@@ -5,6 +6,11 @@ import { createDraftsFromVariants, updateDraft } from "@/lib/content/store";
 import { contentGenerationRequestSchema } from "@/lib/content/types";
 import { getCampaignForTenant } from "@/lib/campaigns/store";
 import type { VariantLabel, GeneratedVariant } from "@/lib/content/types";
+import { db } from "@/lib/db";
+import { contentStrategies } from "@/lib/db/schema";
+import { finalizeStrategyPillarNames } from "@/lib/strategy/strategy-generation-steps";
+import { buildStrategyWriterContext } from "@/lib/strategy/strategy-writer-context";
+import { contentStrategySchema } from "@/lib/types";
 
 export async function POST(request: Request) {
   try {
@@ -34,6 +40,29 @@ export async function POST(request: Request) {
     const labels: VariantLabel[] = input.generateVariants ? ["A", "B", "C"] : ["A"];
     const variantGroup = crypto.randomUUID();
 
+    let strategyContext: string | null = null;
+    try {
+      const latestStrategyOrder = [desc(contentStrategies.createdAt), desc(contentStrategies.id)] as const;
+      const [latestStrategyRow] = await db
+        .select({ data: contentStrategies.data })
+        .from(contentStrategies)
+        .where(eq(contentStrategies.tenantId, tenantId))
+        .orderBy(...latestStrategyOrder)
+        .limit(1);
+
+      if (latestStrategyRow?.data) {
+        const stratParsed = contentStrategySchema.safeParse(latestStrategyRow.data);
+        if (stratParsed.success) {
+          strategyContext = buildStrategyWriterContext(
+            finalizeStrategyPillarNames(stratParsed.data),
+            input.platform
+          );
+        }
+      }
+    } catch (loadStrategyError) {
+      console.warn("Content generate: could not load strategy for writer context", loadStrategyError);
+    }
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -48,7 +77,7 @@ export async function POST(request: Request) {
 
           for (const label of labels) {
             send("progress", { variant: label, status: "generating" });
-            const variant = await runPlatformWriterAgent(input, label);
+            const variant = await runPlatformWriterAgent(input, label, { strategyContext });
             variants.push(variant);
             send("variant", variant);
           }

@@ -158,6 +158,10 @@ export type CalendarPreviewItem = {
   platform: Platform;
   pillar: string;
   theme: string;
+  /** Weekly theme key message (explicit for UI / deep links). */
+  keyMessage: string;
+  /** Optional execution notes from the weekly theme. */
+  executionNotes?: string;
   contentType: string;
   summary: string;
 };
@@ -176,12 +180,14 @@ export function buildCalendarPreview(strategy: ContentStrategy): CalendarPreview
       const contentType = schedule.contentMix[i % schedule.contentMix.length]?.type || "text-only";
 
       items.push({
-        id: `${schedule.platform}-${i}`,
+        id: `${schedule.platform}-${scheduleIndex}-${i}`,
         day,
         time,
         platform: schedule.platform,
         pillar: theme.pillar,
         theme: theme.theme,
+        keyMessage: theme.keyMessage,
+        executionNotes: theme.executionNotes,
         contentType,
         summary: `${theme.keyMessage} • ${contentType}`,
       });

@@ -151,6 +151,14 @@ function SortableCalendarItem({
             <>
               <p className="mt-1 font-medium truncate">{item.theme}</p>
               <p className="mt-0.5 text-xs opacity-70 truncate">{item.pillar}</p>
+              {item.keyMessage && (
+                <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{item.keyMessage}</p>
+              )}
+              {item.executionNotes && (
+                <p className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground/90">
+                  {item.executionNotes}
+                </p>
+              )}
             </>
           )}
         </div>
