@@ -2,6 +2,8 @@
 
 Conduit is an AI-powered social media management platform built with Next.js, TypeScript, Drizzle, and Auth.js.
 
+Roadmaps, blueprints, handoff notes, and other planning files are in the [`docs/`](./docs/) folder.
+
 ## Prerequisites
 
 - Node.js 18+
