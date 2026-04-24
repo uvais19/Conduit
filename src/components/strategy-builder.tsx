@@ -23,7 +23,8 @@ import {
   consumeStrategyGenerateStream,
   fetchLatestStrategyFromApi,
 } from "@/lib/strategy/consume-strategy-generate-stream";
-import type { ContentStrategy, Platform } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import type { ContentStrategy, PillarRole, Platform } from "@/lib/types";
 
 type PlatformScheduleRow = ContentStrategy["schedule"][number];
 type ContentMixEntry = PlatformScheduleRow["contentMix"][number];
@@ -52,8 +53,12 @@ const FIELD_HINTS = {
     "The share of your total content output dedicated to this pillar. All pillar percentages should ideally add up to 100%.",
   pillarPrimaryObjective:
     "Why this pillar exists in the mix (e.g. lead generation, brand awareness, authority). Keeps content aligned to funnel goals.",
+  pillarRole:
+    "The required strategic role this pillar owns in the monthly funnel. Each role should appear once.",
   pillarBestFitPlatform:
     "The channel where this pillar’s angles and formats naturally work best for your audience—not necessarily where you post most.",
+  pillarAlsoFitsPlatforms:
+    "Optional secondary channels where this pillar can be repurposed effectively. Pick up to two; do not repeat the primary platform.",
   platform:
     "The social media channel this schedule applies to. Each platform has different audience behaviour and content norms.",
   postsPerWeek:
@@ -75,6 +80,14 @@ const FIELD_HINTS = {
     "Concrete execution for this week per platform (e.g. which formats, posting windows, hooks)—optional but helps the team stay aligned.",
 } as const;
 
+const PILLAR_ROLE_OPTIONS: Array<{ value: PillarRole; label: string }> = [
+  { value: "awareness-education", label: "Awareness / Education" },
+  { value: "trust-proof", label: "Trust / Proof" },
+  { value: "differentiation-pov", label: "Differentiation / POV" },
+  { value: "community-engagement", label: "Community / Engagement" },
+  { value: "conversion-offer", label: "Conversion / Offer" },
+];
+
 export function StrategyBuilder() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -88,6 +101,20 @@ export function StrategyBuilder() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [generationStep, setGenerationStep] = useState("");
+
+  function sanitizeSecondaryPlatforms(
+    selected: Platform[] | undefined,
+    bestFitPlatform: Platform
+  ): Platform[] {
+    if (!Array.isArray(selected)) return [];
+    const unique = new Set<Platform>();
+    for (const platform of selected) {
+      if (platform === bestFitPlatform) continue;
+      unique.add(platform);
+      if (unique.size >= 2) break;
+    }
+    return Array.from(unique);
+  }
 
   const runStrategyGeneration = useCallback(
     async (successMessage: string) => {
@@ -365,7 +392,30 @@ export function StrategyBuilder() {
                   }
                 />
               </div>
-              <div className="space-y-2 md:col-span-3">
+              <div className="space-y-2 md:col-span-2">
+                <FieldLabelWithHint label="Pillar role" hint={FIELD_HINTS.pillarRole} />
+                <select
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                  value={pillar.pillarRole}
+                  onChange={(event) =>
+                    setStrategy((current) => ({
+                      ...current,
+                      pillars: current.pillars.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? { ...item, pillarRole: event.target.value as PillarRole }
+                          : item
+                      ),
+                    }))
+                  }
+                >
+                  {PILLAR_ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2 md:col-span-2">
                 <FieldLabelWithHint
                   label="Best-fit platform"
                   hint={FIELD_HINTS.pillarBestFitPlatform}
@@ -378,7 +428,14 @@ export function StrategyBuilder() {
                       ...current,
                       pillars: current.pillars.map((item, itemIndex) =>
                         itemIndex === index
-                          ? { ...item, bestFitPlatform: event.target.value as Platform }
+                          ? {
+                              ...item,
+                              bestFitPlatform: event.target.value as Platform,
+                              alsoFitsPlatforms: sanitizeSecondaryPlatforms(
+                                item.alsoFitsPlatforms ?? [],
+                                event.target.value as Platform
+                              ),
+                            }
                           : item
                       ),
                     }))
@@ -391,7 +448,7 @@ export function StrategyBuilder() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-2 md:col-span-3">
+              <div className="space-y-2 md:col-span-2">
                 <FieldLabelWithHint label="Percentage" hint={FIELD_HINTS.pillarPercentage} />
                 <Input
                   type="number"
@@ -409,6 +466,62 @@ export function StrategyBuilder() {
                     }))
                   }
                 />
+              </div>
+              <div className="space-y-2 md:col-span-12">
+                <FieldLabelWithHint
+                  label="Also fits platforms"
+                  hint={FIELD_HINTS.pillarAlsoFitsPlatforms}
+                />
+                <div className="rounded-md border bg-muted/20 p-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {PLATFORMS.map((platform) => {
+                      const pillarSecondaryPlatforms = pillar.alsoFitsPlatforms ?? [];
+                      const isPrimary = platform === pillar.bestFitPlatform;
+                      const selected = pillarSecondaryPlatforms.includes(platform);
+                      const maxed = !selected && pillarSecondaryPlatforms.length >= 2;
+                      return (
+                        <button
+                          key={`${pillar.name}-${platform}`}
+                          type="button"
+                          disabled={isPrimary || maxed}
+                          className={cn(
+                            "rounded-md border px-2 py-1 text-xs transition-colors",
+                            selected
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-input bg-background text-muted-foreground",
+                            (isPrimary || maxed) && "cursor-not-allowed opacity-50"
+                          )}
+                          onClick={() =>
+                            setStrategy((current) => ({
+                              ...current,
+                              pillars: current.pillars.map((item, itemIndex) => {
+                                if (itemIndex !== index) return item;
+                                const itemSecondaryPlatforms = item.alsoFitsPlatforms ?? [];
+                                const currentlySelected = itemSecondaryPlatforms.includes(platform);
+                                const next = currentlySelected
+                                  ? itemSecondaryPlatforms.filter((p) => p !== platform)
+                                  : [...itemSecondaryPlatforms, platform];
+                                return {
+                                  ...item,
+                                  alsoFitsPlatforms: sanitizeSecondaryPlatforms(
+                                    next,
+                                    item.bestFitPlatform
+                                  ),
+                                };
+                              }),
+                            }))
+                          }
+                        >
+                          {PLATFORM_LABELS[platform]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                    <p>Pick up to 2 secondary channels. Primary is disabled automatically.</p>
+                    <p>{(pillar.alsoFitsPlatforms ?? []).length}/2 selected</p>
+                  </div>
+                </div>
               </div>
               <div className="space-y-2 md:col-span-12">
                 <FieldLabelWithHint label="Description" hint={FIELD_HINTS.pillarDescription} />

@@ -60,6 +60,8 @@ export const brandManifestoSchema = z.object({
   brandColors: brandColorsSchema.optional(),
   fontPreferences: z.array(z.string()).optional(),
   logoUrl: z.string().optional(),
+  /** Canonical site URL from onboarding (https). Optional for older saved manifestos. */
+  websiteUrl: z.string().url().optional(),
   visualStyle: z.string().optional(),
   socialMediaGoals: z.array(z.string()),
   keyMessages: z.array(z.string()),
@@ -114,6 +116,60 @@ export const platformType = z.enum([
 ]);
 export type Platform = z.infer<typeof platformType>;
 
+export const pillarRoleType = z.enum([
+  "awareness-education",
+  "trust-proof",
+  "differentiation-pov",
+  "community-engagement",
+  "conversion-offer",
+]);
+export type PillarRole = z.infer<typeof pillarRoleType>;
+
+function normalizePlatformList(value: unknown): Platform[] {
+  if (!Array.isArray(value)) return [];
+  const out: Platform[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const lower = entry.toLowerCase();
+    if (lower === "instagram" || lower === "facebook" || lower === "linkedin") {
+      out.push(lower);
+    }
+  }
+  return out;
+}
+
+function normalizePillarRole(value: unknown): PillarRole {
+  if (typeof value === "string") {
+    const lower = value.trim().toLowerCase();
+    if (lower === "awareness-education" || lower === "awareness" || lower === "education") {
+      return "awareness-education";
+    }
+    if (lower === "trust-proof" || lower === "trust" || lower === "proof") {
+      return "trust-proof";
+    }
+    if (
+      lower === "differentiation-pov" ||
+      lower === "differentiation" ||
+      lower === "pov" ||
+      lower === "point-of-view"
+    ) {
+      return "differentiation-pov";
+    }
+    if (
+      lower === "community-engagement" ||
+      lower === "community" ||
+      lower === "engagement"
+    ) {
+      return "community-engagement";
+    }
+    if (lower === "conversion-offer" || lower === "conversion" || lower === "offer") {
+      return "conversion-offer";
+    }
+  }
+  // Backward-compatible default for older rows that do not yet carry role.
+  return "awareness-education";
+}
+
 export const contentType = z.enum([
   "image",
   "carousel",
@@ -128,6 +184,8 @@ export const contentType = z.enum([
 export const contentPillarSchema = z.object({
   name: z.string(),
   description: z.string(),
+  /** Strategic role in the monthly funnel mix; must be one of the canonical 5 roles. */
+  pillarRole: z.preprocess(normalizePillarRole, pillarRoleType),
   /** Strategic intent for this pillar (e.g. lead gen, brand awareness, authority). */
   primaryObjective: z.preprocess(
     (v) => (typeof v === "string" && v.trim() ? v.trim() : "Brand alignment"),
@@ -141,8 +199,38 @@ export const contentPillarSchema = z.object({
     }
     return "instagram";
   }, platformType),
+  /** Optional secondary channels where this pillar can also be repurposed effectively. */
+  alsoFitsPlatforms: z.preprocess(normalizePlatformList, z.array(platformType).default([])),
   percentage: z.number().min(0).max(100),
   exampleTopics: z.array(z.string()),
+}).superRefine((pillar, ctx) => {
+  const unique = new Set<Platform>();
+  for (let i = 0; i < pillar.alsoFitsPlatforms.length; i += 1) {
+    const platform = pillar.alsoFitsPlatforms[i]!;
+    if (platform === pillar.bestFitPlatform) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["alsoFitsPlatforms", i],
+        message: "Secondary platforms cannot include bestFitPlatform.",
+      });
+    }
+    if (unique.has(platform)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["alsoFitsPlatforms", i],
+        message: "Secondary platforms must be unique.",
+      });
+    } else {
+      unique.add(platform);
+    }
+  }
+  if (pillar.alsoFitsPlatforms.length > 2) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["alsoFitsPlatforms"],
+      message: "Provide at most 2 secondary platforms.",
+    });
+  }
 });
 
 export const platformScheduleSchema = z.object({

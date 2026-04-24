@@ -1,6 +1,13 @@
 import type { ContentStrategy, Platform } from "@/lib/types";
 
 const MAX_CHARS = 3800;
+const PILLAR_ROLE_LABELS: Record<ContentStrategy["pillars"][number]["pillarRole"], string> = {
+  "awareness-education": "Awareness/Education",
+  "trust-proof": "Trust/Proof",
+  "differentiation-pov": "Differentiation/POV",
+  "community-engagement": "Community/Engagement",
+  "conversion-offer": "Conversion/Offer",
+};
 
 /**
  * Compact context from the tenant's saved {@link ContentStrategy} for copy agents.
@@ -18,8 +25,11 @@ export function buildStrategyWriterContext(
   for (const p of strategy.pillars) {
     const desc =
       p.description.length > 200 ? `${p.description.slice(0, 200)}…` : p.description;
+    const secondary = p.alsoFitsPlatforms.length
+      ? `; also fits ${p.alsoFitsPlatforms.join(", ")}`
+      : "";
     lines.push(
-      `- **${p.name}** [best on ${p.bestFitPlatform}] (${p.primaryObjective}, ~${p.percentage}%): ${desc}`
+      `- **${p.name}** [${PILLAR_ROLE_LABELS[p.pillarRole]} · best on ${p.bestFitPlatform}${secondary}] (${p.primaryObjective}, ~${p.percentage}%): ${desc}`
     );
     if (p.exampleTopics?.length) {
       lines.push(`  Example topics: ${p.exampleTopics.slice(0, 5).join("; ")}`);
