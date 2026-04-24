@@ -1,11 +1,124 @@
 import { parseJsonFromModelResponse } from "@/lib/ai/parse-model-json";
 
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+
+export type GeminiModelFeature = "manifesto" | "strategy" | "draft" | "analysis";
+export type GeminiThinkingLevel = "minimal" | "low" | "medium" | "high";
+
+export type GeminiThinkingConfig = {
+  thinkingLevel?: GeminiThinkingLevel;
+  thinkingBudget?: number;
+};
+
+const GEMINI_FEATURE_ENV_KEYS: Record<GeminiModelFeature, string> = {
+  manifesto: "GEMINI_MANIFESTO_MODEL",
+  strategy: "GEMINI_STRATEGY_MODEL",
+  draft: "GEMINI_DRAFT_MODEL",
+  analysis: "GEMINI_ANALYSIS_MODEL",
+};
+
+const GEMINI_FEATURE_DEFAULTS: Record<GeminiModelFeature, string> = {
+  manifesto: "gemini-3.0-flash-high",
+  strategy: "gemini-3.0-flash-high",
+  draft: "gemini-3.0-flash-low",
+  analysis: "gemini-3.0-pro",
+};
+
+const GEMINI_FEATURE_THINKING_DEFAULTS: Record<GeminiModelFeature, GeminiThinkingLevel> = {
+  manifesto: "high",
+  strategy: "high",
+  draft: "low",
+  analysis: "high",
+};
+
+/**
+ * Resolution order:
+ * 1) explicit override
+ * 2) feature-specific env var
+ * 3) global GEMINI_MODEL
+ * 4) feature default model
+ * 5) global hardcoded default
+ */
+export function resolveGeminiModel(
+  feature: GeminiModelFeature,
+  explicitModel?: string
+): string {
+  if (explicitModel?.trim()) return explicitModel.trim();
+
+  const featureEnvKey = GEMINI_FEATURE_ENV_KEYS[feature];
+  const featureEnvModel = process.env[featureEnvKey];
+  if (featureEnvModel?.trim()) return featureEnvModel.trim();
+
+  if (process.env.GEMINI_MODEL?.trim()) return process.env.GEMINI_MODEL.trim();
+
+  return GEMINI_FEATURE_DEFAULTS[feature] ?? DEFAULT_GEMINI_MODEL;
+}
+
+function parseThinkingLevel(value?: string): GeminiThinkingLevel | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === "minimal" ||
+    normalized === "low" ||
+    normalized === "medium" ||
+    normalized === "high"
+  ) {
+    return normalized;
+  }
+  return undefined;
+}
+
+function parseThinkingBudget(value?: string): number | undefined {
+  if (!value?.trim()) return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.trunc(parsed);
+}
+
+function defaultBudgetForLevel(level: GeminiThinkingLevel): number {
+  if (level === "minimal") return 0;
+  if (level === "low") return 1024;
+  if (level === "medium") return 4096;
+  return 12288;
+}
+
+/**
+ * Resolve feature-specific thinking config for Gemini.
+ * - Gemini 3 family: uses thinkingLevel
+ * - Gemini 2.5 family: uses thinkingBudget (mapped from level when budget not explicitly set)
+ */
+export function resolveGeminiThinking(
+  feature: GeminiModelFeature,
+  model: string
+): GeminiThinkingConfig {
+  const upper = feature.toUpperCase();
+  const levelFromEnv = parseThinkingLevel(process.env[`GEMINI_${upper}_THINKING_LEVEL`]);
+  const budgetFromEnv = parseThinkingBudget(process.env[`GEMINI_${upper}_THINKING_BUDGET`]);
+  const level = levelFromEnv ?? GEMINI_FEATURE_THINKING_DEFAULTS[feature];
+
+  if (budgetFromEnv !== undefined) {
+    return { thinkingBudget: budgetFromEnv };
+  }
+
+  if (model.startsWith("gemini-3")) {
+    return { thinkingLevel: level };
+  }
+
+  if (model.startsWith("gemini-2.5")) {
+    return { thinkingBudget: defaultBudgetForLevel(level) };
+  }
+
+  return {};
+}
+
 export type GenerateTextOptions = {
   systemPrompt?: string;
   userPrompt: string;
   temperature?: number;
   geminiModel?: string;
   groqModel?: string;
+  geminiThinking?: GeminiThinkingConfig;
   /**
    * Gemini structured output: JSON MIME type and optional responseSchema (JSON Schema object).
    * If the API rejects the schema, callers can retry without `responseSchema`.
@@ -15,11 +128,27 @@ export type GenerateTextOptions = {
   };
 };
 
+function stripGeminiUnsupportedSchemaKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripGeminiUnsupportedSchemaKeys);
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (k === "$schema" || k === "additionalProperties") continue;
+      out[k] = stripGeminiUnsupportedSchemaKeys(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 async function callGemini({
   systemPrompt,
   userPrompt,
   temperature = 0.4,
-  geminiModel = process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+  geminiModel = process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
+  geminiThinking,
   geminiJson,
 }: GenerateTextOptions): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -33,8 +162,20 @@ async function callGemini({
     temperature,
     responseMimeType: geminiJson ? "application/json" : "text/plain",
   };
+  if (geminiThinking?.thinkingLevel || geminiThinking?.thinkingBudget !== undefined) {
+    generationConfig.thinkingConfig = {
+      ...(geminiThinking.thinkingLevel
+        ? { thinkingLevel: geminiThinking.thinkingLevel }
+        : {}),
+      ...(geminiThinking.thinkingBudget !== undefined
+        ? { thinkingBudget: geminiThinking.thinkingBudget }
+        : {}),
+    };
+  }
   if (geminiJson?.responseSchema !== undefined) {
-    generationConfig.responseSchema = geminiJson.responseSchema;
+    const rawSchema = geminiJson.responseSchema;
+    const sanitizedSchema = stripGeminiUnsupportedSchemaKeys(rawSchema);
+    generationConfig.responseSchema = sanitizedSchema;
   }
 
   const response = await fetch(
@@ -115,7 +256,7 @@ async function callGroq({
   systemPrompt,
   userPrompt,
   temperature = 0.4,
-  groqModel = "llama-3.3-70b-versatile",
+  groqModel = process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
 }: GenerateTextOptions): Promise<string | null> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
@@ -175,7 +316,7 @@ export async function generateTextStream(
   options: GenerateTextOptions
 ): Promise<ReadableStream<string>> {
   const apiKey = process.env.GEMINI_API_KEY;
-  const geminiModel = options.geminiModel ?? process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+  const geminiModel = options.geminiModel ?? process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL;
 
   if (apiKey) {
     const prompt = [options.systemPrompt, options.userPrompt].filter(Boolean).join("\n\n");
@@ -190,6 +331,19 @@ export async function generateTextStream(
           generationConfig: {
             temperature: options.temperature ?? 0.4,
             responseMimeType: "text/plain",
+            ...(options.geminiThinking?.thinkingLevel ||
+            options.geminiThinking?.thinkingBudget !== undefined
+              ? {
+                  thinkingConfig: {
+                    ...(options.geminiThinking.thinkingLevel
+                      ? { thinkingLevel: options.geminiThinking.thinkingLevel }
+                      : {}),
+                    ...(options.geminiThinking.thinkingBudget !== undefined
+                      ? { thinkingBudget: options.geminiThinking.thinkingBudget }
+                      : {}),
+                  },
+                }
+              : {}),
           },
         }),
       }

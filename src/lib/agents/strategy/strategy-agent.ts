@@ -1,4 +1,8 @@
-import { generateJsonStructured } from "@/lib/ai/clients";
+import {
+  generateJsonStructured,
+  resolveGeminiModel,
+  resolveGeminiThinking,
+} from "@/lib/ai/clients";
 import { getMultiPlatformPromptContext } from "@/lib/agents/platform-knowledge";
 import { createDefaultStrategy } from "@/lib/strategy/defaults";
 import { buildManifestoStrategyDigest } from "@/lib/strategy/manifesto-digest";
@@ -35,10 +39,6 @@ Each pillar must express a clear strategic objective (why it exists in the mix) 
 You may add up to two secondary platforms per pillar in alsoFitsPlatforms only when cross-platform repurposing is truly natural.
 Avoid vague pillar names (e.g. a lone "Tips") unless clearly anchored to the industry and brand.`;
 
-function strategyGeminiModel(): string {
-  return process.env.GEMINI_STRATEGY_MODEL ?? process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
-}
-
 function manifestoAppendix(manifesto: BrandManifesto): string {
   const raw = JSON.stringify(manifesto, null, 2);
   const max = 8000;
@@ -56,7 +56,8 @@ export async function runStrategyAgent(
   const analysisDigest = buildPostAnalysisDigest(postAnalyses);
   const plats = platforms ?? ["instagram", "facebook", "linkedin"];
   const platformCtx = getMultiPlatformPromptContext(plats);
-  const model = strategyGeminiModel();
+  const model = resolveGeminiModel("strategy");
+  const thinking = resolveGeminiThinking("strategy", model);
 
   const competitorBlock =
     competitorInsights?.trim()
@@ -126,6 +127,7 @@ export async function runStrategyAgent(
       ].join("\n\n"),
       temperature: 0.35,
       geminiModel: model,
+      geminiThinking: thinking,
       fallback: step1Fallback,
       responseSchema: geminiSchemaForPillarsStep(),
     })) as unknown
@@ -161,6 +163,7 @@ export async function runStrategyAgent(
     ].join("\n\n"),
     temperature: 0.28,
     geminiModel: model,
+    geminiThinking: thinking,
     fallback: step2Fallback,
     responseSchema: geminiSchemaForScheduleGoalsStep(),
   });
@@ -194,6 +197,7 @@ export async function runStrategyAgent(
       ].join("\n\n"),
       temperature: 0.35,
       geminiModel: model,
+      geminiThinking: thinking,
       fallback: step3Fallback,
       responseSchema: geminiSchemaForThemesStep(),
     })) as unknown
@@ -227,6 +231,7 @@ You are fixing an existing strategy. Apply minimal edits so all validation issue
     userPrompt: buildStrategyRepairUserPrompt({ issues, strategy: mergedFinal }),
     temperature: 0.22,
     geminiModel: model,
+    geminiThinking: thinking,
     fallback: mergedFinal,
   });
 

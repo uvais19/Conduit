@@ -1,4 +1,4 @@
-import { generateText } from "@/lib/ai/clients";
+import { generateText, resolveGeminiModel, resolveGeminiThinking } from "@/lib/ai/clients";
 import type { DiscoveryInput, DocumentAnalysisResult } from "./types";
 
 /** Same payload as the analyst’s no-input early return; used by the discovery graph to skip work. */
@@ -13,6 +13,8 @@ export function emptyDocumentAnalysisResult(): DocumentAnalysisResult {
 export async function runDocumentAnalystAgent(
   input: DiscoveryInput
 ): Promise<DocumentAnalysisResult> {
+  const manifestoModel = resolveGeminiModel("manifesto");
+  const manifestoThinking = resolveGeminiThinking("manifesto", manifestoModel);
   const documentSnippets = input.documents.map((document) => {
     const noteText = document.notes?.trim() || document.extractedText?.trim() || "";
     return `${document.fileName} (${document.fileType})${noteText ? `: ${noteText}` : ""}`;
@@ -38,6 +40,8 @@ export async function runDocumentAnalystAgent(
       "You are the Document Analyst Agent for a social media marketing app. Extract only the most useful brand insights.",
     userPrompt: prompt,
     temperature: 0.2,
+    geminiModel: manifestoModel,
+    geminiThinking: manifestoThinking,
   });
 
   const summary =

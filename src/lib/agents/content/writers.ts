@@ -1,4 +1,4 @@
-import { generateJson } from "@/lib/ai/clients";
+import { generateJson, resolveGeminiModel, resolveGeminiThinking } from "@/lib/ai/clients";
 import { getPlatformPromptContext, PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
 import type {
   ContentGenerationRequest,
@@ -28,6 +28,8 @@ export async function runPlatformWriterAgent(
   variantLabel: VariantLabel,
   options?: { strategyContext?: string | null }
 ): Promise<GeneratedVariant> {
+  const draftModel = resolveGeminiModel("draft");
+  const draftThinking = resolveGeminiThinking("draft", draftModel);
   const strategyContext = options?.strategyContext?.trim();
   const platformContext = getPlatformPromptContext(input.platform);
   const pk = PLATFORM_KNOWLEDGE[input.platform];
@@ -89,6 +91,8 @@ export async function runPlatformWriterAgent(
       .filter(Boolean)
       .join("\n"),
     temperature: 0.45,
+    geminiModel: draftModel,
+    geminiThinking: draftThinking,
     fallback: null as unknown as {
       caption: string;
       hashtags: string[];

@@ -1,5 +1,5 @@
 import type { ZodError } from "zod";
-import { generateJson } from "@/lib/ai/clients";
+import { generateJson, resolveGeminiModel, resolveGeminiThinking } from "@/lib/ai/clients";
 import {
   createEmptyBrandManifesto,
   textToList,
@@ -76,6 +76,8 @@ export async function runIdentitySynthesizerAgent({
   documents: DocumentAnalysisResult;
 }): Promise<BrandManifesto> {
   const fallback = buildFallbackManifesto(input, scraper, documents);
+  const manifestoModel = resolveGeminiModel("manifesto");
+  const manifestoThinking = resolveGeminiThinking("manifesto", manifestoModel);
 
   const generated = await generateJson<Partial<BrandManifesto>>({
     systemPrompt: `You are the Identity Synthesizer Agent for Conduit, an AI social media manager.
@@ -142,6 +144,8 @@ Return valid JSON only. No markdown, no explanation, no code fences.`,
       "Return the completed JSON object only. Be specific, practical, and grounded in the actual business data above.",
     ].join("\n"),
     temperature: 0.3,
+    geminiModel: manifestoModel,
+    geminiThinking: manifestoThinking,
     fallback,
   });
 
@@ -170,6 +174,8 @@ Return JSON only. No markdown or code fences.`,
       JSON.stringify(coercedBase, null, 2),
     ].join("\n"),
     temperature: 0.1,
+    geminiModel: manifestoModel,
+    geminiThinking: manifestoThinking,
     fallback: {},
   });
 

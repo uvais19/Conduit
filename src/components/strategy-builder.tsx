@@ -87,6 +87,13 @@ const PILLAR_ROLE_OPTIONS: Array<{ value: PillarRole; label: string }> = [
   { value: "community-engagement", label: "Community / Engagement" },
   { value: "conversion-offer", label: "Conversion / Offer" },
 ];
+const DEFAULT_PILLAR_ROLE_ORDER: PillarRole[] = [
+  "awareness-education",
+  "trust-proof",
+  "differentiation-pov",
+  "community-engagement",
+  "conversion-offer",
+];
 
 export function StrategyBuilder() {
   const router = useRouter();
@@ -116,6 +123,18 @@ export function StrategyBuilder() {
     return Array.from(unique);
   }
 
+  function normalizeStrategyRoles(input: ContentStrategy): ContentStrategy {
+    return {
+      ...input,
+      pillars: input.pillars.map((pillar, index) => ({
+        ...pillar,
+        pillarRole:
+          pillar.pillarRole ??
+          DEFAULT_PILLAR_ROLE_ORDER[index % DEFAULT_PILLAR_ROLE_ORDER.length]!,
+      })),
+    };
+  }
+
   const runStrategyGeneration = useCallback(
     async (successMessage: string) => {
       setGenerating(true);
@@ -128,7 +147,7 @@ export function StrategyBuilder() {
         const { doneReceived } = await consumeStrategyGenerateStream(response, {
           onProgress: (step) => setGenerationStep(step),
           onDone: ({ strategy: nextStrategy, version: nextVersion }) => {
-            setStrategy(nextStrategy);
+            setStrategy(normalizeStrategyRoles(nextStrategy));
             setVersion(nextVersion);
             setMessage(successMessage);
             void router.refresh();
@@ -137,7 +156,7 @@ export function StrategyBuilder() {
         if (!doneReceived) {
           const latest = await fetchLatestStrategyFromApi({ attempts: 12, delayMs: 200 });
           if (latest) {
-            setStrategy(latest.strategy);
+            setStrategy(normalizeStrategyRoles(latest.strategy));
             setVersion(latest.version);
             setMessage(successMessage);
           }
@@ -195,7 +214,9 @@ export function StrategyBuilder() {
           return;
         }
 
-        setStrategy(data.strategy as ContentStrategy);
+        const incoming = data.strategy as ContentStrategy;
+        const normalized = normalizeStrategyRoles(incoming);
+        setStrategy(normalized);
         setVersion(data.version ?? null);
       } catch (loadError) {
         if (!cancelled) {
@@ -247,11 +268,11 @@ export function StrategyBuilder() {
       const reload = await fetch(`/api/strategy?_=${Date.now()}`, { cache: "no-store" });
       const reloaded = await reload.json();
       if (reload.ok && reloaded.strategy) {
-        setStrategy(reloaded.strategy as ContentStrategy);
+        setStrategy(normalizeStrategyRoles(reloaded.strategy as ContentStrategy));
         setVersion(reloaded.version);
         setMessage(`Strategy saved successfully as version ${reloaded.version}.`);
       } else {
-        setStrategy(data.strategy as ContentStrategy);
+        setStrategy(normalizeStrategyRoles(data.strategy as ContentStrategy));
         setVersion(data.version as number);
         setMessage(`Strategy saved successfully as version ${data.version}.`);
       }

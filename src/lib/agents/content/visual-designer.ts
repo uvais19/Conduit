@@ -1,5 +1,10 @@
 import { randomUUID } from "crypto";
-import { generateJson, generateText } from "@/lib/ai/clients";
+import {
+  generateJson,
+  generateText,
+  resolveGeminiModel,
+  resolveGeminiThinking,
+} from "@/lib/ai/clients";
 import {
   PLATFORM_KNOWLEDGE,
   getPlatformPromptContext,
@@ -188,6 +193,8 @@ async function expandProductionImagePrompt(params: {
   generationContext?: ContentGenerationRequest;
 }): Promise<string> {
   const { draft, model, generationContext } = params;
+  const draftModel = resolveGeminiModel("draft");
+  const draftThinking = resolveGeminiThinking("draft", draftModel);
   const pk = PLATFORM_KNOWLEDGE[draft.platform];
   const slides =
     model.carousel?.map((s, i) => `Slide ${i + 1}: "${s.heading}" — ${s.body}`).join("\n") ??
@@ -253,6 +260,8 @@ async function expandProductionImagePrompt(params: {
       systemPrompt,
       userPrompt,
       temperature: 0.35,
+      geminiModel: draftModel,
+      geminiThinking: draftThinking,
     }))?.trim() ?? "";
 
   if (expanded.length > 120) {
@@ -282,6 +291,8 @@ export async function runVisualDesignerAgent({
   generationContext?: ContentGenerationRequest;
   manifesto?: BrandManifesto | null;
 }): Promise<VisualDesignerOutput> {
+  const draftModel = resolveGeminiModel("draft");
+  const draftThinking = resolveGeminiThinking("draft", draftModel);
   const pk = PLATFORM_KNOWLEDGE[draft.platform];
   const supportsCarousel = pk.visualFormats.includes("carousel");
   const supportsStory = pk.visualFormats.includes("story");
@@ -346,6 +357,8 @@ export async function runVisualDesignerAgent({
       JSON.stringify(fallbackModel, null, 2),
     ].join("\n\n"),
     temperature: 0.35,
+    geminiModel: draftModel,
+    geminiThinking: draftThinking,
     fallback: fallbackModel,
   });
 

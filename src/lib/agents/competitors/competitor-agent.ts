@@ -1,4 +1,4 @@
-import { generateJson } from "@/lib/ai/clients";
+import { generateJson, resolveGeminiModel, resolveGeminiThinking } from "@/lib/ai/clients";
 import {
   addCompetitor,
   getCompetitorById,
@@ -29,6 +29,8 @@ export async function discoverCompetitors(
   industry: string,
   location: string
 ): Promise<DiscoveredCompetitor[]> {
+  const analysisModel = resolveGeminiModel("analysis");
+  const analysisThinking = resolveGeminiThinking("analysis", analysisModel);
   const existing = await listCompetitors(tenantId);
   const existingNames = existing.map((c) => c.name.toLowerCase());
 
@@ -56,6 +58,8 @@ export async function discoverCompetitors(
       "Return JSON array only. Return [] if you cannot identify competitors.",
     ].join("\n"),
     temperature: 0.4,
+    geminiModel: analysisModel,
+    geminiThinking: analysisThinking,
     fallback,
   });
 
@@ -89,6 +93,8 @@ export async function analyzeCompetitor(
   tenantId: string,
   competitorId: string
 ): Promise<CompetitorAnalysis | null> {
+  const analysisModel = resolveGeminiModel("analysis");
+  const analysisThinking = resolveGeminiThinking("analysis", analysisModel);
   const competitor = await getCompetitorById(tenantId, competitorId);
   if (!competitor) return null;
 
@@ -115,6 +121,8 @@ export async function analyzeCompetitor(
       "Return JSON only.",
     ].join("\n"),
     temperature: 0.3,
+    geminiModel: analysisModel,
+    geminiThinking: analysisThinking,
     fallback: DEFAULT_ANALYSIS,
   });
 

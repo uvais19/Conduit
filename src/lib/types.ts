@@ -124,6 +124,13 @@ export const pillarRoleType = z.enum([
   "conversion-offer",
 ]);
 export type PillarRole = z.infer<typeof pillarRoleType>;
+const DEFAULT_PILLAR_ROLE_ORDER: PillarRole[] = [
+  "awareness-education",
+  "trust-proof",
+  "differentiation-pov",
+  "community-engagement",
+  "conversion-offer",
+];
 
 function normalizePlatformList(value: unknown): Platform[] {
   if (!Array.isArray(value)) return [];
@@ -233,6 +240,19 @@ export const contentPillarSchema = z.object({
   }
 });
 
+function normalizePillarsWithRoleFallback(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((pillar, index) => {
+    if (!pillar || typeof pillar !== "object") return pillar;
+    const asRecord = pillar as Record<string, unknown>;
+    if (asRecord.pillarRole !== undefined && asRecord.pillarRole !== null) return pillar;
+    return {
+      ...asRecord,
+      pillarRole: DEFAULT_PILLAR_ROLE_ORDER[index % DEFAULT_PILLAR_ROLE_ORDER.length],
+    };
+  });
+}
+
 export const platformScheduleSchema = z.object({
   platform: platformType,
   postsPerWeek: z.number().min(1).max(21),
@@ -256,7 +276,10 @@ export const weeklyThemeSchema = z.object({
 });
 
 export const contentStrategySchema = z.object({
-  pillars: z.array(contentPillarSchema),
+  pillars: z.preprocess(
+    normalizePillarsWithRoleFallback,
+    z.array(contentPillarSchema)
+  ),
   schedule: z.array(platformScheduleSchema),
   weeklyThemes: z.array(weeklyThemeSchema),
   monthlyGoals: z.array(

@@ -1,5 +1,5 @@
-import { generateJson } from "@/lib/ai/clients";
-import { getPlatformPromptContext, PLATFORM_KNOWLEDGE } from "@/lib/agents/platform-knowledge";
+import { generateJson, resolveGeminiModel, resolveGeminiThinking } from "@/lib/ai/clients";
+import { getPlatformPromptContext } from "@/lib/agents/platform-knowledge";
 import {
   postAnalysisSchema,
   type BrandManifesto,
@@ -82,6 +82,8 @@ export async function runPostAnalyserAgent(params: {
   manifesto: BrandManifesto;
   strategy?: ContentStrategy;
 }): Promise<PostAnalysis> {
+  const analysisModel = resolveGeminiModel("analysis");
+  const analysisThinking = resolveGeminiThinking("analysis", analysisModel);
   const { posts, platform, manifesto, strategy } = params;
   const fallback = createDefaultAnalysis();
 
@@ -150,6 +152,8 @@ export async function runPostAnalyserAgent(params: {
       "\nReturn JSON only.",
     ].join("\n"),
     temperature: 0.3,
+    geminiModel: analysisModel,
+    geminiThinking: analysisThinking,
     fallback,
   });
 

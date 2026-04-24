@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/permissions";
 import { rateLimitResponse } from "@/lib/rate-limit";
-import { generateText } from "@/lib/ai/clients";
+import { generateText, resolveGeminiModel, resolveGeminiThinking } from "@/lib/ai/clients";
 import { PLATFORM_LABELS } from "@/lib/constants";
 
 export async function POST(request: NextRequest) {
+  const draftModel = resolveGeminiModel("draft");
+  const draftThinking = resolveGeminiThinking("draft", draftModel);
   const limited = rateLimitResponse("adapt", { limit: 20, windowSeconds: 60 });
   if (limited) return limited;
 
@@ -49,7 +51,11 @@ ${cta ? `\nOriginal CTA: ${cta}` : ""}
 
 Adapted ${targetLabel} post:`;
 
-    const adapted = await generateText({ userPrompt: prompt });
+    const adapted = await generateText({
+      userPrompt: prompt,
+      geminiModel: draftModel,
+      geminiThinking: draftThinking,
+    });
 
     if (!adapted) {
       return NextResponse.json({ error: "AI generation returned no result" }, { status: 502 });

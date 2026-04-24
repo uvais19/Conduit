@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/permissions";
 import { rateLimitResponse } from "@/lib/rate-limit";
-import { generateText } from "@/lib/ai/clients";
+import { generateText, resolveGeminiModel, resolveGeminiThinking } from "@/lib/ai/clients";
 
 const SUPPORTED_LANGUAGES = [
   "English",
@@ -27,6 +27,8 @@ const SUPPORTED_LANGUAGES = [
 ] as const;
 
 export async function POST(request: NextRequest) {
+  const draftModel = resolveGeminiModel("draft");
+  const draftThinking = resolveGeminiThinking("draft", draftModel);
   const limited = rateLimitResponse("translate", { limit: 20, windowSeconds: 60 });
   if (limited) return limited;
 
@@ -73,7 +75,11 @@ ${content}
 
 Translated content:`;
 
-    const translated = await generateText({ userPrompt: prompt });
+    const translated = await generateText({
+      userPrompt: prompt,
+      geminiModel: draftModel,
+      geminiThinking: draftThinking,
+    });
 
     if (!translated) {
       return NextResponse.json({ error: "AI generation returned no result" }, { status: 502 });
