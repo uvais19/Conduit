@@ -132,6 +132,11 @@ export function OnboardingWizard() {
     string | null
   >(null);
   const [hydrated, setHydrated] = useState(false);
+  const [savedOnboardingInfo, setSavedOnboardingInfo] = useState<{
+    businessName: string;
+    websiteUrl?: string;
+  } | null>(null);
+  const [savedOnboardingChecked, setSavedOnboardingChecked] = useState(false);
 
   const reviewSectionRef = useRef<HTMLDivElement>(null);
 
@@ -156,6 +161,33 @@ export function OnboardingWizard() {
       /* ignore */
     }
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/brand");
+        if (res.ok) {
+          const data = (await res.json()) as { manifesto: BrandManifesto | null };
+          if (!cancelled && data.manifesto) {
+            setSavedOnboardingInfo({
+              businessName: data.manifesto.businessName,
+              websiteUrl: data.manifesto.websiteUrl,
+            });
+          }
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) {
+          setSavedOnboardingChecked(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -410,7 +442,13 @@ export function OnboardingWizard() {
                   setSynthesisActive(true);
                 }
               } else if (currentEvent === "done") {
+                const donePayload = data as { manifesto: BrandManifesto };
                 setResult(data as unknown as DiscoveryResponse);
+                setSavedOnboardingInfo({
+                  businessName: donePayload.manifesto.businessName,
+                  websiteUrl: donePayload.manifesto.websiteUrl,
+                });
+                setSavedOnboardingChecked(true);
                 router.refresh();
               } else if (currentEvent === "error") {
                 throw new Error(
@@ -466,6 +504,48 @@ export function OnboardingWizard() {
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           {error}
         </div>
+      )}
+
+      {savedOnboardingChecked && savedOnboardingInfo && !result && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">You&apos;re already onboarded</CardTitle>
+            <CardDescription>
+              A Brand Manifesto is on file for this business. You can run through
+              onboarding again to add a new version, or open your manifesto to
+              edit it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Company
+              </p>
+              <p className="mt-0.5 font-medium leading-snug">
+                {savedOnboardingInfo.businessName}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Website
+              </p>
+              {savedOnboardingInfo.websiteUrl ? (
+                <a
+                  href={savedOnboardingInfo.websiteUrl}
+                  className="mt-0.5 block break-all font-medium text-primary underline-offset-4 hover:underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {savedOnboardingInfo.websiteUrl}
+                </a>
+              ) : (
+                <p className="mt-0.5 text-muted-foreground">
+                  Not on file (saved before we stored this)
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {submitting && (

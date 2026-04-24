@@ -8,6 +8,8 @@ import {
 import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { brandManifestos } from "@/lib/db/schema";
+import { safeParseBrandManifestoFromPartial } from "@/lib/brand/manifesto";
+import { normalizeOnboardingWebsiteUrl } from "@/lib/onboarding/url";
 
 function progressPayload(event: DiscoveryProgressEvent) {
   return {
@@ -55,11 +57,23 @@ export async function POST(request: Request) {
             .orderBy(desc(brandManifestos.createdAt))
             .limit(1);
 
+          const normalizedSite = input.websiteUrl?.trim()
+            ? normalizeOnboardingWebsiteUrl(input.websiteUrl)
+            : "";
+          const withSite = normalizedSite
+            ? safeParseBrandManifestoFromPartial({
+                ...result.manifesto,
+                websiteUrl: normalizedSite,
+              })
+            : null;
+          const manifestoToSave =
+            withSite?.success ? withSite.data : result.manifesto;
+
           const [saved] = await db
             .insert(brandManifestos)
             .values({
               tenantId,
-              data: result.manifesto,
+              data: manifestoToSave,
               version: (latestManifesto?.version ?? 0) + 1,
               createdBy: userId,
             })

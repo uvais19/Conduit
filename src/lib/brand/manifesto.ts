@@ -138,6 +138,7 @@ export function buildBrandManifestoCandidate(
     brandColors: partial.brandColors,
     fontPreferences: partial.fontPreferences?.filter(Boolean) ?? [],
     logoUrl: partial.logoUrl,
+    websiteUrl: partial.websiteUrl?.trim() || undefined,
     visualStyle: partial.visualStyle?.trim() || "Clean, modern, and consistent.",
     socialMediaGoals: normalizeList(partial.socialMediaGoals, [
       "Grow brand awareness",
