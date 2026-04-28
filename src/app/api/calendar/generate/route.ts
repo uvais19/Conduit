@@ -142,18 +142,41 @@ export async function POST(request: Request) {
         .where(eq(contentCalendarPlans.id, existing.id));
     }
 
-    const [inserted] = await db
-      .insert(contentCalendarPlans)
-      .values({
-        tenantId,
-        strategyId: latestStrategy.id,
-        strategyVersion: latestStrategy.version,
-        month,
-        timezone: plan.timezone,
-        data: plan,
-        status: "active",
-      })
-      .returning();
+    let inserted: typeof contentCalendarPlans.$inferSelect | undefined;
+    try {
+      [inserted] = await db
+        .insert(contentCalendarPlans)
+        .values({
+          tenantId,
+          strategyId: latestStrategy.id,
+          strategyVersion: latestStrategy.version,
+          month,
+          timezone: plan.timezone,
+          data: plan,
+          status: "active",
+        })
+        .returning();
+    } catch (insertError) {
+      // Another request may have inserted an active plan concurrently.
+      const duplicateActive =
+        insertError instanceof Error &&
+        (insertError.message.includes(
+          "content_calendar_plans_tenant_month_status_unique"
+        ) ||
+          insertError.message.includes("code: '23505'"));
+      if (!duplicateActive) {
+        throw insertError;
+      }
+      const concurrent = await findActivePlan(tenantId, month);
+      if (concurrent) {
+        return NextResponse.json({
+          plan: concurrent.data,
+          month,
+          source: "existing",
+        });
+      }
+      throw insertError;
+    }
 
     return NextResponse.json({
       plan: inserted?.data ?? plan,
