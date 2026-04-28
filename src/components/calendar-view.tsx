@@ -309,6 +309,33 @@ export function CalendarView() {
   );
 
   useEffect(() => {
+    function planToCalendarItems(plan: CalendarMonthPlan, strat: ContentStrategy): CalendarPreviewItem[] {
+      const strategyByPlatform = new Map(strat.schedule.map((entry) => [entry.platform, entry]));
+      const counters = new Map<string, number>();
+      return plan.items.map((item) => {
+        const dt = new Date(`${item.date}T00:00:00`);
+        const day = dt.toLocaleDateString("en-US", { weekday: "long" });
+        const schedule = strategyByPlatform.get(item.platform);
+        const idx = counters.get(item.platform) ?? 0;
+        counters.set(item.platform, idx + 1);
+        const time = schedule?.preferredTimes[idx % Math.max(1, schedule.preferredTimes.length)] ?? "09:00";
+        return {
+          id: item.id,
+          date: item.date,
+          day,
+          time,
+          platform: item.platform,
+          pillar: item.pillar,
+          idea: item.idea,
+          theme: item.idea,
+          keyMessage: item.keyMessage ?? "",
+          executionNotes: item.notes,
+          contentType: item.contentType ?? "text-only",
+          summary: `${item.idea} • ${item.contentType ?? "text-only"}`,
+        } satisfies CalendarPreviewItem;
+      });
+    }
+
     async function load() {
       try {
         const [stratRes, draftsRes] = await Promise.all([
@@ -323,104 +350,48 @@ export function CalendarView() {
         const strat = (stratData.strategy as ContentStrategy | null) ?? null;
         setStrategy(strat);
         if (strat) {
-          const generatedRes = await fetch("/api/calendar/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({}),
-          });
-          if (generatedRes.ok) {
-            const generatedData = await generatedRes.json();
-            const plan = generatedData.plan as CalendarMonthPlan | null;
-            if (plan?.items?.length) {
-              const needsRegeneration =
-                generatedData.source === "stale" ||
-                plan.items.some((item) => !item.idea || item.idea.trim().length < 8);
-              if (needsRegeneration) {
-                const regenRes = await fetch("/api/calendar/generate", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ force: true }),
-                });
-                if (regenRes.ok) {
-                  const regenData = await regenRes.json();
-                  if (regenData.plan?.items?.length) {
-                    setCalendarSource("generated");
-                    const regenPlan = regenData.plan as CalendarMonthPlan;
-                    const strategyByPlatform = new Map(
-                      strat.schedule.map((entry) => [entry.platform, entry])
-                    );
-                    const counters = new Map<string, number>();
-                    setCalendarItems(
-                      regenPlan.items.map((item) => {
-                        const dt = new Date(`${item.date}T00:00:00`);
-                        const day = dt.toLocaleDateString("en-US", { weekday: "long" });
-                        const schedule = strategyByPlatform.get(item.platform);
-                        const idx = counters.get(item.platform) ?? 0;
-                        counters.set(item.platform, idx + 1);
-                        const time =
-                          schedule?.preferredTimes[
-                            idx % Math.max(1, schedule.preferredTimes.length)
-                          ] ?? "09:00";
-                        return {
-                          id: item.id,
-                          date: item.date,
-                          day,
-                          time,
-                          platform: item.platform,
-                          pillar: item.pillar,
-                          idea: item.idea,
-                          theme: item.idea,
-                          keyMessage: item.keyMessage ?? "",
-                          executionNotes: item.notes,
-                          contentType: item.contentType ?? "text-only",
-                          summary: `${item.idea} • ${item.contentType ?? "text-only"}`,
-                        } satisfies CalendarPreviewItem;
-                      })
-                    );
-                    return;
-                  }
-                }
+          const existingRes = await fetch("/api/calendar/generate");
+          let existingPlan: CalendarMonthPlan | null = null;
+          let existingSource: "existing" | "stale" | null = null;
+
+          if (existingRes.ok) {
+            const existingData = await existingRes.json();
+            existingPlan = (existingData.plan as CalendarMonthPlan | null) ?? null;
+            existingSource = (existingData.source as "existing" | "stale" | undefined) ?? null;
+          }
+
+          const hasLowQualityItems = Boolean(
+            existingPlan?.items?.some((item) => !item.idea || item.idea.trim().length < 8),
+          );
+          const needsGeneration =
+            !existingPlan?.items?.length || existingSource === "stale" || hasLowQualityItems;
+
+          if (existingPlan?.items?.length && !needsGeneration) {
+            setCalendarItems(planToCalendarItems(existingPlan, strat));
+            setCalendarSource("existing");
+          } else {
+            const generatedRes = await fetch("/api/calendar/generate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ force: existingSource === "stale" || hasLowQualityItems }),
+            });
+
+            if (generatedRes.ok) {
+              const generatedData = await generatedRes.json();
+              const generatedPlan = generatedData.plan as CalendarMonthPlan | null;
+              if (generatedPlan?.items?.length) {
+                setCalendarItems(planToCalendarItems(generatedPlan, strat));
+                setCalendarSource(
+                  generatedData.source === "generated" ? "generated" : "existing",
+                );
+              } else {
+                setCalendarItems(buildCalendarPreview(strat));
+                setCalendarSource("fallback");
               }
-              const strategyByPlatform = new Map(
-                strat.schedule.map((entry) => [entry.platform, entry])
-              );
-              const counters = new Map<string, number>();
-              setCalendarItems(
-                plan.items.map((item) => {
-                  const dt = new Date(`${item.date}T00:00:00`);
-                  const day = dt.toLocaleDateString("en-US", { weekday: "long" });
-                  const schedule = strategyByPlatform.get(item.platform);
-                  const idx = counters.get(item.platform) ?? 0;
-                  counters.set(item.platform, idx + 1);
-                  const time =
-                    schedule?.preferredTimes[idx % Math.max(1, schedule.preferredTimes.length)] ??
-                    "09:00";
-                  return {
-                    id: item.id,
-                    date: item.date,
-                    day,
-                    time,
-                    platform: item.platform,
-                    pillar: item.pillar,
-                    idea: item.idea,
-                    theme: item.idea,
-                    keyMessage: item.keyMessage ?? "",
-                    executionNotes: item.notes,
-                    contentType: item.contentType ?? "text-only",
-                    summary: `${item.idea} • ${item.contentType ?? "text-only"}`,
-                  } satisfies CalendarPreviewItem;
-                })
-              );
-              setCalendarSource(
-                generatedData.source === "generated" ? "generated" : "existing"
-              );
             } else {
               setCalendarItems(buildCalendarPreview(strat));
               setCalendarSource("fallback");
             }
-          } else {
-            setCalendarItems(buildCalendarPreview(strat));
-            setCalendarSource("fallback");
           }
         }
         if (draftsRes.ok && draftsData.drafts) {
