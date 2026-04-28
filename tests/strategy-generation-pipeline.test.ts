@@ -25,9 +25,11 @@ describe("strategy generation pipeline helpers", () => {
     expect(merged!.weeklyThemes).toHaveLength(4);
   });
 
-  it("validateStrategyBusinessRules passes for default strategy", () => {
+  it("validateStrategyBusinessRules flags generic defaults from fallback template", () => {
     const base = createDefaultStrategy();
-    expect(validateStrategyBusinessRules(base)).toEqual([]);
+    const issues = validateStrategyBusinessRules(base);
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.some((x) => x.includes("too short/generic"))).toBe(true);
   });
 
   it("validateStrategyBusinessRules flags bad pillar sum", () => {

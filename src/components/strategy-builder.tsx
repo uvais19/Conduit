@@ -319,8 +319,8 @@ export function StrategyBuilder() {
           </h1>
           <p className="text-sm text-muted-foreground">
             Your pillars, cadence, and weekly themes — edit anytime, then save.{" "}
-            <Link href="/content/drafts" className="text-primary underline-offset-4 hover:underline">
-              Go to content drafts
+            <Link href="/calendar" className="text-primary underline-offset-4 hover:underline">
+              Open content calendar
             </Link>
           </p>
         </div>

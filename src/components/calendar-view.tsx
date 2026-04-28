@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   CalendarDays,
   ChevronLeft,
@@ -24,7 +25,7 @@ import {
   type CalendarPreviewItem,
 } from "@/lib/strategy/defaults";
 import { PLATFORM_LABELS } from "@/lib/constants";
-import type { ContentStrategy } from "@/lib/types";
+import type { CalendarMonthPlan, ContentStrategy } from "@/lib/types";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import {
   DndContext,
@@ -70,6 +71,13 @@ function addDays(d: Date, n: number): Date {
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function toIsoDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function getMonthGrid(year: number, month: number): DaySlot[] {
@@ -151,6 +159,11 @@ function SortableCalendarItem({
             <>
               <p className="mt-1 font-medium truncate">{item.theme}</p>
               <p className="mt-0.5 text-xs opacity-70 truncate">{item.pillar}</p>
+              {item.idea ? (
+                <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                  {item.idea}
+                </p>
+              ) : null}
               {item.keyMessage && (
                 <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{item.keyMessage}</p>
               )}
@@ -227,7 +240,8 @@ function ConflictBanner({ items }: { items: CalendarPreviewItem[] }) {
   const conflicts = useMemo(() => {
     const seen = new Map<string, CalendarPreviewItem[]>();
     for (const item of items) {
-      const key = `${item.day}-${item.time}-${item.platform}`;
+      const dayKey = item.date ?? item.day;
+      const key = `${dayKey}-${item.time}-${item.platform}`;
       if (!seen.has(key)) seen.set(key, []);
       seen.get(key)!.push(item);
     }
@@ -265,6 +279,7 @@ function ConflictBanner({ items }: { items: CalendarPreviewItem[] }) {
 
 // ── main component ──────────────────────────────────────────
 export function CalendarView() {
+  const searchParams = useSearchParams();
   const [strategy, setStrategy] = useState<ContentStrategy | null>(null);
   const [scheduledDrafts, setScheduledDrafts] = useState<ContentDraftRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -292,7 +307,53 @@ export function CalendarView() {
 
         const strat = (stratData.strategy as ContentStrategy | null) ?? null;
         setStrategy(strat);
-        if (strat) setCalendarItems(buildCalendarPreview(strat));
+        if (strat) {
+          const generatedRes = await fetch("/api/calendar/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          if (generatedRes.ok) {
+            const generatedData = await generatedRes.json();
+            const plan = generatedData.plan as CalendarMonthPlan | null;
+            if (plan?.items?.length) {
+              const strategyByPlatform = new Map(
+                strat.schedule.map((entry) => [entry.platform, entry])
+              );
+              const counters = new Map<string, number>();
+              setCalendarItems(
+                plan.items.map((item) => {
+                  const dt = new Date(`${item.date}T00:00:00`);
+                  const day = dt.toLocaleDateString("en-US", { weekday: "long" });
+                  const schedule = strategyByPlatform.get(item.platform);
+                  const idx = counters.get(item.platform) ?? 0;
+                  counters.set(item.platform, idx + 1);
+                  const time =
+                    schedule?.preferredTimes[idx % Math.max(1, schedule.preferredTimes.length)] ??
+                    "09:00";
+                  return {
+                    id: item.id,
+                    date: item.date,
+                    day,
+                    time,
+                    platform: item.platform,
+                    pillar: item.pillar,
+                    idea: item.idea,
+                    theme: item.idea,
+                    keyMessage: item.keyMessage ?? "",
+                    executionNotes: item.notes,
+                    contentType: item.contentType ?? "text-only",
+                    summary: `${item.idea} • ${item.contentType ?? "text-only"}`,
+                  } satisfies CalendarPreviewItem;
+                })
+              );
+            } else {
+              setCalendarItems(buildCalendarPreview(strat));
+            }
+          } else {
+            setCalendarItems(buildCalendarPreview(strat));
+          }
+        }
         if (draftsRes.ok && draftsData.drafts) {
           setScheduledDrafts(draftsData.drafts as ContentDraftRecord[]);
         }
@@ -317,14 +378,19 @@ export function CalendarView() {
       if (!over || active.id === over.id) return;
 
       // If dropped on a different day column, reschedule
-      const overDay = String(over.id);
-      if (WEEKDAYS.includes(overDay as (typeof WEEKDAYS)[number])) {
+      const overDate = String(over.id);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(overDate)) {
+        const overDay = new Date(`${overDate}T00:00:00`).toLocaleDateString("en-US", {
+          weekday: "long",
+        });
         setCalendarItems((prev) =>
           prev.map((item) =>
-            item.id === String(active.id) ? { ...item, day: overDay } : item,
+            item.id === String(active.id)
+              ? { ...item, date: overDate, day: overDay }
+              : item,
           ),
         );
-        toast.success(`Post rescheduled to ${overDay}`);
+        toast.success(`Post rescheduled to ${overDate}`);
       }
     },
     [],
@@ -509,6 +575,11 @@ export function CalendarView() {
       )}
 
       {/* Conflict banner */}
+      {searchParams.get("from") === "onboarding" ? (
+        <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm">
+          Month 1 calendar generated from your strategy. Review slots, then generate drafts only for posts you want to execute.
+        </div>
+      ) : null}
       <ConflictBanner items={calendarItems} />
 
       {/* Heatmap */}
@@ -535,7 +606,10 @@ export function CalendarView() {
         {mode === "week" ? (
           <div className="grid gap-3 xl:grid-cols-7">
             {weekDays.map(({ name, date, isToday }) => {
-              const dayItems = calendarItems.filter((item) => item.day === name);
+              const dateKey = toIsoDate(date);
+              const dayItems = calendarItems.filter((item) =>
+                item.date ? item.date === dateKey : item.day === name
+              );
               const dayDrafts = draftsByDay.get(name) ?? [];
               return (
                 <Card key={name} className={isToday ? "ring-2 ring-primary/50" : ""}>
@@ -552,6 +626,7 @@ export function CalendarView() {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <SortableContext items={dayItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                      <div id={dateKey} className="space-y-2">
                       {dayDrafts.map((draft) => (
                         <ScheduledDraftItem key={draft.id} draft={draft} />
                       ))}
@@ -564,6 +639,7 @@ export function CalendarView() {
                           <SortableCalendarItem key={item.id} item={item} />
                         ))
                       )}
+                      </div>
                     </SortableContext>
                   </CardContent>
                 </Card>
@@ -582,8 +658,11 @@ export function CalendarView() {
             </div>
             <div className="grid grid-cols-7">
               {monthSlots.map((slot, i) => {
+                const dayKey = toIsoDate(slot.date);
                 const dayName = slot.date.toLocaleDateString("en-US", { weekday: "long" });
-                const dayItems = calendarItems.filter((item) => item.day === dayName);
+                const dayItems = calendarItems.filter((item) =>
+                  item.date ? item.date === dayKey : item.day === dayName
+                );
                 return (
                   <div
                     key={i}
@@ -604,7 +683,7 @@ export function CalendarView() {
                           key={item.id}
                           className={`truncate rounded px-1 py-0.5 text-[10px] ${PLATFORM_COLORS[item.platform] ?? "bg-muted"}`}
                         >
-                          {item.time} {PLATFORM_LABELS[item.platform]?.slice(0, 4)}
+                          {item.time} {item.idea ? item.idea.slice(0, 22) : PLATFORM_LABELS[item.platform]?.slice(0, 4)}
                         </div>
                       ))}
                       {dayItems.length > 3 && (
@@ -636,8 +715,11 @@ export function CalendarView() {
                   </div>
                   <div className="grid grid-cols-7">
                     {slots.map((slot, i) => {
+                      const dayKey = toIsoDate(slot.date);
                       const dayName = slot.date.toLocaleDateString("en-US", { weekday: "long" });
-                      const dayItems = calendarItems.filter((item) => item.day === dayName);
+                      const dayItems = calendarItems.filter((item) =>
+                        item.date ? item.date === dayKey : item.day === dayName
+                      );
                       return (
                         <div
                           key={i}

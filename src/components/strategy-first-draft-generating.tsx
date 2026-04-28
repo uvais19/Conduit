@@ -43,7 +43,7 @@ export function StrategyFirstDraftGenerating() {
           }
         }
         if (!cancelledRef.current) {
-          router.replace("/strategy?welcome=1");
+          router.replace("/calendar?from=onboarding");
         }
       } catch (e) {
         if (!cancelledRef.current) {
@@ -55,7 +55,7 @@ export function StrategyFirstDraftGenerating() {
     if (firstDraftGenerationInFlight) {
       void firstDraftGenerationInFlight.then(() => {
         if (!cancelledRef.current) {
-          router.replace("/strategy?welcome=1");
+          router.replace("/calendar?from=onboarding");
         }
       });
       return () => {

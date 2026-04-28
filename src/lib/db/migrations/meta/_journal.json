@@ -64,6 +64,13 @@
       "when": 1776200000000,
       "tag": "0008_remove_x_gbp_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777400000000,
+      "tag": "0009_calendar_plans",
+      "breakpoints": true
     }
   ]
 }

@@ -294,6 +294,32 @@ export const contentStrategySchema = z.object({
 export type ContentStrategy = z.infer<typeof contentStrategySchema>;
 
 // ============================================================
+// Content Calendar Plan
+// ============================================================
+
+export const calendarPlanItemSchema = z.object({
+  id: z.string().min(1),
+  /** ISO date (YYYY-MM-DD) in tenant timezone. */
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  platform: platformType,
+  pillar: z.string().min(1),
+  /** Short slot concept only; never full draft copy. */
+  idea: z.string().min(1).max(240),
+  contentType: contentType.optional(),
+  keyMessage: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const calendarMonthPlanSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  timezone: z.string().min(1),
+  items: z.array(calendarPlanItemSchema),
+});
+
+export type CalendarPlanItem = z.infer<typeof calendarPlanItemSchema>;
+export type CalendarMonthPlan = z.infer<typeof calendarMonthPlanSchema>;
+
+// ============================================================
 // User Roles
 // ============================================================
 

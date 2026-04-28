@@ -9,6 +9,7 @@ import {
   jsonb,
   decimal,
   real,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ============================================================
@@ -56,6 +57,11 @@ export const approvalActionEnum = pgEnum("approval_action", [
 
 export const strategyStatusEnum = pgEnum("strategy_status", [
   "draft",
+  "active",
+  "archived",
+]);
+
+export const calendarPlanStatusEnum = pgEnum("calendar_plan_status", [
   "active",
   "archived",
 ]);
@@ -164,6 +170,33 @@ export const contentStrategies = pgTable("content_strategies", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const contentCalendarPlans = pgTable(
+  "content_calendar_plans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    strategyId: uuid("strategy_id").references(() => contentStrategies.id, {
+      onDelete: "set null",
+    }),
+    strategyVersion: integer("strategy_version").notNull().default(1),
+    month: text("month").notNull(), // YYYY-MM
+    timezone: text("timezone").notNull().default("UTC"),
+    data: jsonb("data").notNull(), // CalendarMonthPlan
+    status: calendarPlanStatusEnum("status").notNull().default("active"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantMonthStatusUnique: uniqueIndex("content_calendar_plans_tenant_month_status_unique").on(
+      table.tenantId,
+      table.month,
+      table.status
+    ),
+  })
+);
 
 export const campaigns = pgTable("campaigns", {
   id: uuid("id").defaultRandom().primaryKey(),

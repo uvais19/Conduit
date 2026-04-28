@@ -168,10 +168,14 @@ export function createDefaultStrategy(
 
 export type CalendarPreviewItem = {
   id: string;
+  /** Optional exact slot date (YYYY-MM-DD). */
+  date?: string;
   day: string;
   time: string;
   platform: Platform;
   pillar: string;
+  /** Slot idea concept (calendar agent output). */
+  idea?: string;
   theme: string;
   /** Weekly theme key message (explicit for UI / deep links). */
   keyMessage: string;

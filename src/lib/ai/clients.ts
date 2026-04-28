@@ -3,7 +3,12 @@ import { parseJsonFromModelResponse } from "@/lib/ai/parse-model-json";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
 
-export type GeminiModelFeature = "manifesto" | "strategy" | "draft" | "analysis";
+export type GeminiModelFeature =
+  | "manifesto"
+  | "strategy"
+  | "draft"
+  | "analysis"
+  | "calendar";
 export type GeminiThinkingLevel = "minimal" | "low" | "medium" | "high";
 
 export type GeminiThinkingConfig = {
@@ -16,6 +21,7 @@ const GEMINI_FEATURE_ENV_KEYS: Record<GeminiModelFeature, string> = {
   strategy: "GEMINI_STRATEGY_MODEL",
   draft: "GEMINI_DRAFT_MODEL",
   analysis: "GEMINI_ANALYSIS_MODEL",
+  calendar: "GEMINI_CALENDAR_MODEL",
 };
 
 const GEMINI_FEATURE_DEFAULTS: Record<GeminiModelFeature, string> = {
@@ -23,6 +29,7 @@ const GEMINI_FEATURE_DEFAULTS: Record<GeminiModelFeature, string> = {
   strategy: "gemini-3.0-flash-high",
   draft: "gemini-3.0-flash-low",
   analysis: "gemini-3.0-pro",
+  calendar: "gemini-3.0-flash-high",
 };
 
 const GEMINI_FEATURE_THINKING_DEFAULTS: Record<GeminiModelFeature, GeminiThinkingLevel> = {
@@ -30,6 +37,7 @@ const GEMINI_FEATURE_THINKING_DEFAULTS: Record<GeminiModelFeature, GeminiThinkin
   strategy: "high",
   draft: "low",
   analysis: "high",
+  calendar: "high",
 };
 
 /**
