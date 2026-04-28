@@ -191,27 +191,32 @@ export const landingContent: LandingContent = {
   carousel: {
     sectionTitle: "How teams use Conduit",
     sectionSubtitle:
-      "From first login to scheduled posts — here is the rhythm teams run in Conduit.",
+      "From first login to execution — here is the exact onboarding rhythm teams run in Conduit.",
     slides: [
       {
         step: "01",
-        title: "Connect & onboard",
-        body: "Link social accounts, upload brand docs, and describe your business so strategy and AI outputs reflect how you actually sound — not a generic template.",
+        title: "Business onboarding",
+        body: "Add your business context, website, and brand inputs so Conduit understands your positioning before any planning starts.",
       },
       {
         step: "02",
-        title: "Shape the strategy",
-        body: "Define pillars, posting cadence, and goals in one place. Everyone sees the same plan, so drafts stay aligned with what you promised to publish.",
+        title: "Generate strategy",
+        body: "Create your content strategy with pillars, cadence, and weekly themes so your month has a clear structure before writing drafts.",
       },
       {
         step: "03",
-        title: "Create & collaborate",
-        body: "Use the content studio to draft and refine copy, attach media, and send work through approval — reviewers leave feedback before anything goes live.",
+        title: "Review AI calendar",
+        body: "Open the content calendar to review AI-generated post ideas for month one across pillars and platforms, then adjust timing as needed.",
       },
       {
         step: "04",
-        title: "Schedule & learn",
-        body: "Drop approved posts on the calendar, ship on time, then read analytics to see what landed. Double down on winners and adjust the next cycle with data.",
+        title: "Create content drafts",
+        body: "Move from calendar ideas to draft creation, refine the copy, and prepare execution-ready posts aligned to each planned slot.",
+      },
+      {
+        step: "05",
+        title: "Connect platforms",
+        body: "Connect your social platforms to publish and schedule from Conduit once your strategy, calendar, and drafts are ready.",
       },
     ],
     prev: "Previous slide",
