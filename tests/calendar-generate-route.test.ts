@@ -46,7 +46,20 @@ describe("POST /api/calendar/generate", () => {
   it("returns existing plan when present and not forced", async () => {
     const existing = {
       id: "plan-1",
-      data: { month: "2026-04", timezone: "UTC", items: [] },
+      data: {
+        month: "2026-04",
+        timezone: "UTC",
+        items: [
+          {
+            id: "linkedin-2026-04-01-1",
+            date: "2026-04-01",
+            platform: "linkedin",
+            pillar: "Education",
+            idea: "Share a concise educational idea for the target audience.",
+            contentType: "text-only",
+          },
+        ],
+      },
     };
     selectQueue.push([existing]);
 

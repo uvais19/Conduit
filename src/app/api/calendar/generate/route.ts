@@ -48,6 +48,13 @@ async function findActivePlan(tenantId: string, month: string) {
   return row ?? null;
 }
 
+function hasIdeaRichItems(plan: unknown): boolean {
+  const parsed = calendarMonthPlanSchema.safeParse(plan);
+  if (!parsed.success) return false;
+  if (parsed.data.items.length === 0) return false;
+  return parsed.data.items.every((item) => item.idea.trim().length >= 8);
+}
+
 export async function GET(request: Request) {
   try {
     const session = await requireAuth();
@@ -58,7 +65,11 @@ export async function GET(request: Request) {
     if (!plan) {
       return NextResponse.json({ plan: null, month });
     }
-    return NextResponse.json({ plan: plan.data, month, source: "existing" });
+    return NextResponse.json({
+      plan: plan.data,
+      month,
+      source: hasIdeaRichItems(plan.data) ? "existing" : "stale",
+    });
   } catch (error) {
     console.error("Failed to fetch calendar plan:", error);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -75,7 +86,7 @@ export async function POST(request: Request) {
     const force = Boolean(body.force);
 
     const existing = await findActivePlan(tenantId, month);
-    if (existing && !force) {
+    if (existing && !force && hasIdeaRichItems(existing.data)) {
       return NextResponse.json({ plan: existing.data, month, source: "existing" });
     }
 

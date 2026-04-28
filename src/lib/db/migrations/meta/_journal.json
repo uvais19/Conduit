@@ -71,6 +71,13 @@
       "when": 1777400000000,
       "tag": "0009_calendar_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777400400000,
+      "tag": "0010_schema_repair_writer_rationale_publish_jobs",
+      "breakpoints": true
     }
   ]
 }

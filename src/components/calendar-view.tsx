@@ -157,10 +157,9 @@ function SortableCalendarItem({
           </div>
           {!compact && (
             <>
-              <p className="mt-1 font-medium truncate">{item.theme}</p>
-              <p className="mt-0.5 text-xs opacity-70 truncate">{item.pillar}</p>
+              <p className="mt-1 text-xs opacity-80 truncate">Pillar: {item.pillar}</p>
               {item.idea ? (
-                <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                <p className="mt-0.5 line-clamp-3 text-[12px] font-semibold text-foreground">
                   {item.idea}
                 </p>
               ) : null}
@@ -288,6 +287,9 @@ export function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [calendarItems, setCalendarItems] = useState<CalendarPreviewItem[]>([]);
+  const [calendarSource, setCalendarSource] = useState<"generated" | "existing" | "fallback">(
+    "fallback"
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -317,6 +319,55 @@ export function CalendarView() {
             const generatedData = await generatedRes.json();
             const plan = generatedData.plan as CalendarMonthPlan | null;
             if (plan?.items?.length) {
+              const needsRegeneration =
+                generatedData.source === "stale" ||
+                plan.items.some((item) => !item.idea || item.idea.trim().length < 8);
+              if (needsRegeneration) {
+                const regenRes = await fetch("/api/calendar/generate", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ force: true }),
+                });
+                if (regenRes.ok) {
+                  const regenData = await regenRes.json();
+                  if (regenData.plan?.items?.length) {
+                    setCalendarSource("generated");
+                    const regenPlan = regenData.plan as CalendarMonthPlan;
+                    const strategyByPlatform = new Map(
+                      strat.schedule.map((entry) => [entry.platform, entry])
+                    );
+                    const counters = new Map<string, number>();
+                    setCalendarItems(
+                      regenPlan.items.map((item) => {
+                        const dt = new Date(`${item.date}T00:00:00`);
+                        const day = dt.toLocaleDateString("en-US", { weekday: "long" });
+                        const schedule = strategyByPlatform.get(item.platform);
+                        const idx = counters.get(item.platform) ?? 0;
+                        counters.set(item.platform, idx + 1);
+                        const time =
+                          schedule?.preferredTimes[
+                            idx % Math.max(1, schedule.preferredTimes.length)
+                          ] ?? "09:00";
+                        return {
+                          id: item.id,
+                          date: item.date,
+                          day,
+                          time,
+                          platform: item.platform,
+                          pillar: item.pillar,
+                          idea: item.idea,
+                          theme: item.idea,
+                          keyMessage: item.keyMessage ?? "",
+                          executionNotes: item.notes,
+                          contentType: item.contentType ?? "text-only",
+                          summary: `${item.idea} • ${item.contentType ?? "text-only"}`,
+                        } satisfies CalendarPreviewItem;
+                      })
+                    );
+                    return;
+                  }
+                }
+              }
               const strategyByPlatform = new Map(
                 strat.schedule.map((entry) => [entry.platform, entry])
               );
@@ -347,11 +398,16 @@ export function CalendarView() {
                   } satisfies CalendarPreviewItem;
                 })
               );
+              setCalendarSource(
+                generatedData.source === "generated" ? "generated" : "existing"
+              );
             } else {
               setCalendarItems(buildCalendarPreview(strat));
+              setCalendarSource("fallback");
             }
           } else {
             setCalendarItems(buildCalendarPreview(strat));
+            setCalendarSource("fallback");
           }
         }
         if (draftsRes.ok && draftsData.drafts) {
@@ -515,10 +571,13 @@ export function CalendarView() {
             Content Calendar
           </h1>
           <p className="text-sm text-muted-foreground">
-            Drag posts between days to reschedule. Toggle between week, month, and quarter views.
+            Review AI slot ideas, adjust dates, then continue to drafts when ready.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Link href="/content/drafts" className={buttonVariants()}>
+            Continue to content drafts
+          </Link>
           <div className="inline-flex rounded-xl border border-border/80 p-0.5">
             <button
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
@@ -580,6 +639,13 @@ export function CalendarView() {
           Month 1 calendar generated from your strategy. Review slots, then generate drafts only for posts you want to execute.
         </div>
       ) : null}
+      <div className="text-xs text-muted-foreground">
+        {calendarSource === "generated"
+          ? "Calendar source: AI-generated month plan."
+          : calendarSource === "existing"
+            ? "Calendar source: saved AI month plan."
+            : "Calendar source: strategy fallback preview (AI plan unavailable)."}
+      </div>
       <ConflictBanner items={calendarItems} />
 
       {/* Heatmap */}
@@ -734,7 +800,7 @@ export function CalendarView() {
                                 key={item.id}
                                 className={`truncate rounded px-1 py-0.5 text-[10px] ${PLATFORM_COLORS[item.platform] ?? "bg-muted"}`}
                               >
-                                {item.time}
+                                {item.time} {item.idea ? item.idea.slice(0, 16) : ""}
                               </div>
                             ))}
                             {dayItems.length > 2 && (
