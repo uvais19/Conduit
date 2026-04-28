@@ -11,6 +11,7 @@ import {
   type ContentStrategy,
   type Platform,
 } from "@/lib/types";
+import { PLATFORM_LABELS } from "@/lib/constants";
 
 const WEEKDAY_INDEX: Record<string, number> = {
   sunday: 0,
@@ -28,6 +29,29 @@ type CalendarSlotBlueprint = {
   platform: Platform;
   suggestedContentType: string;
 };
+
+type CalendarPromptContext = {
+  targetMonth: string;
+  timezone: string;
+  strategy: ContentStrategy;
+  slots: CalendarSlotBlueprint[];
+  digest: string;
+};
+
+const CALENDAR_HARD_CONSTRAINTS = [
+  "Return only valid JSON matching the response schema.",
+  "Generate exactly one item per provided slot id and date.",
+  "Never invent ids, dates, platforms, pillars, or additional fields.",
+  "Do not write captions, hooks, hashtags, scripts, media prompts, or production checklists.",
+  "Keep each idea concise (8-24 words), strategic, and draft-free.",
+] as const;
+
+const CALENDAR_QUALITY_RUBRIC = [
+  "Ideas are specific enough to execute but not full post copy.",
+  "Concepts are distinct across the full window (avoid repetition).",
+  "Pillar choice aligns with weekly themes and platform behavior.",
+  "Content type feels native to each platform and schedule intent.",
+] as const;
 
 function toIsoDate(date: Date): string {
   const year = date.getUTCFullYear();
@@ -75,6 +99,94 @@ function normalizeDays(days: string[]): number[] {
     if (!picked.includes(idx)) picked.push(idx);
   }
   return picked;
+}
+
+function contentTypeLabel(type?: string): string {
+  if (!type) return "post";
+  return type.replace(/-/g, " ");
+}
+
+function buildExecutionNote({
+  platform,
+  pillar,
+  contentType,
+  strategy,
+}: {
+  platform: Platform;
+  pillar: string;
+  contentType?: string;
+  strategy: ContentStrategy;
+}): string {
+  const schedule = strategy.schedule.find((entry) => entry.platform === platform);
+  const platformLabel = PLATFORM_LABELS[platform] ?? platform;
+  const times = (schedule?.preferredTimes ?? []).slice(0, 2).join(" / ");
+  const days = (schedule?.preferredDays ?? []).slice(0, 3).join(", ");
+  const cadence = schedule?.postsPerWeek ?? 1;
+  const format = contentTypeLabel(contentType);
+  const parts = [
+    `${platformLabel} ${format} aligned to "${pillar}".`,
+    days ? `Publish on ${days}.` : "",
+    times ? `Target ${times}.` : "",
+    `Keep to ${cadence}/week cadence from strategy.`,
+  ].filter(Boolean);
+  return parts.join(" ");
+}
+
+function buildCalendarSystemPrompt(): string {
+  return [
+    "You are Conduit's principal content strategy planner.",
+    "Your job is to transform strategy constraints into a one-month calendar blueprint.",
+    "",
+    "Hard constraints:",
+    ...CALENDAR_HARD_CONSTRAINTS.map((item) => `- ${item}`),
+    "",
+    "Quality rubric:",
+    ...CALENDAR_QUALITY_RUBRIC.map((item) => `- ${item}`),
+    "",
+    "If constraints conflict, prioritize slot fidelity and schema validity.",
+  ].join("\n");
+}
+
+function buildCalendarUserPrompt({
+  targetMonth,
+  timezone,
+  strategy,
+  slots,
+  digest,
+}: CalendarPromptContext): string {
+  return [
+    "## Objective",
+    `Generate a rolling one-month calendar window starting ${targetMonth} in timezone ${timezone}.`,
+    "The window continues through the same day next month (inclusive, clamped to month-end when needed).",
+    "",
+    "## Output contract",
+    "- Keep month and timezone consistent with the requested values.",
+    "- Keep item count exactly equal to slot count.",
+    "- For every slot, copy id/date/platform exactly as provided.",
+    "- pillar must match one of the strategy pillar names exactly.",
+    "- idea must be 8-24 words and must remain concept-level (not draft copy).",
+    "- contentType should align with the slot suggestion unless strategy fit strongly requires another listed type.",
+    "- keyMessage and notes are optional.",
+    "",
+    "## Do not do",
+    "- Do not generate media directions, production instructions, or execution runbooks.",
+    "- Do not output complete post copy, scripts, or long-form drafts.",
+    "- Do not add, remove, or reorder schema fields.",
+    "",
+    "## Brand digest",
+    digest,
+    "",
+    "## Strategy (JSON)",
+    JSON.stringify(strategy, null, 2),
+    "",
+    "## Slot blueprint (JSON)",
+    JSON.stringify(slots, null, 2),
+    "",
+    "## Final self-check before returning JSON",
+    "- Is every slot represented exactly once?",
+    "- Are all ids/dates/platforms copied verbatim from slots?",
+    "- Are ideas concise, non-repetitive, and non-draft?",
+  ].join("\n");
 }
 
 function buildSlotBlueprint(windowStart: string, strategy: ContentStrategy): CalendarSlotBlueprint[] {
@@ -148,7 +260,12 @@ function fallbackPlan(
         | "poll"
         | "reel",
       keyMessage: theme.keyMessage,
-      notes: theme.executionNotes,
+      notes: buildExecutionNote({
+        platform: slot.platform,
+        pillar: theme.pillar,
+        contentType: slot.suggestedContentType,
+        strategy,
+      }),
     };
   });
   return { month: windowStart, timezone, items };
@@ -174,44 +291,14 @@ export async function runCalendarAgent({
   const digest = buildManifestoStrategyDigest(manifesto);
 
   const raw = await generateJsonStructured<CalendarMonthPlan>({
-    systemPrompt: `You are Conduit's senior content planning strategist.
-Return only JSON.
-Generate a first-month content calendar plan only.
-Do not write captions, hooks, hashtags, scripts, or media prompts.
-Do not create media assets.
-Do not call or assume draft-generation agents.
-Each item idea must be a concise post concept (not full copy).`,
-    userPrompt: [
-      "## Task",
-      `Generate a rolling one-month calendar window starting ${targetMonth} in timezone ${tz}.`,
-      "The window should continue through the same day next month (inclusive, clamped to month-end when needed).",
-      "Use the exact slot ids and dates provided. Keep one item per slot.",
-      "",
-      "## Required fields per item",
-      "- id (exact slot id provided)",
-      "- date (exact date provided)",
-      "- platform",
-      "- pillar (must match an existing strategy pillar name)",
-      "- idea (8-24 words; concept only, no full draft text)",
-      "- contentType",
-      "- keyMessage (optional)",
-      "- notes (optional)",
-      "",
-      "## Constraints",
-      "- Do not generate media directions or production instructions.",
-      "- Do not produce complete post copy or detailed draft body.",
-      "- Keep ideas distinct across the window.",
-      "- Respect platform fit and weekly strategic themes.",
-      "",
-      "## Brand digest",
+    systemPrompt: buildCalendarSystemPrompt(),
+    userPrompt: buildCalendarUserPrompt({
+      targetMonth,
+      timezone: tz,
+      strategy,
+      slots,
       digest,
-      "",
-      "## Strategy (JSON)",
-      JSON.stringify(strategy, null, 2),
-      "",
-      "## Slot blueprint (JSON)",
-      JSON.stringify(slots, null, 2),
-    ].join("\n"),
+    }),
     temperature: 0.35,
     geminiModel: model,
     geminiThinking: thinking,
@@ -248,11 +335,19 @@ Each item idea must be a concise post concept (not full copy).`,
     return fallback;
   }
 
-  const normalizedItems = parsed.data.items.filter((item) =>
-    slots.some((slot) => slot.id === item.id && slot.date === item.date)
+  const itemsBySlot = new Map(
+    parsed.data.items.map((item) => [`${item.id}::${item.date}`, item])
   );
+  if (itemsBySlot.size !== slots.length) {
+    return fallback;
+  }
 
-  if (normalizedItems.length !== slots.length) {
+  const normalizedItems = slots.map((slot) => {
+    const key = `${slot.id}::${slot.date}`;
+    return itemsBySlot.get(key) ?? null;
+  });
+
+  if (normalizedItems.some((item) => item === null)) {
     return fallback;
   }
 
@@ -260,6 +355,17 @@ Each item idea must be a concise post concept (not full copy).`,
     ...parsed.data,
     month: targetMonth,
     timezone: tz,
-    items: normalizedItems,
+    items: normalizedItems.map((item) => {
+      const resolved = item!;
+      return {
+        ...resolved,
+        notes: buildExecutionNote({
+          platform: resolved.platform,
+          pillar: resolved.pillar,
+          contentType: resolved.contentType,
+          strategy,
+        }),
+      };
+    }),
   };
 }

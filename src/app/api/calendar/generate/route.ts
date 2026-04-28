@@ -28,11 +28,28 @@ type GeneratePayload = {
   force?: boolean;
 };
 
+function isValidWindowStart(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return false;
+  }
+  if (month < 1 || month > 12) return false;
+  const lastDayOfMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return day >= 1 && day <= lastDayOfMonth;
+}
+
 function coerceWindowStart(raw?: string): string {
   if (!raw) return currentWindowStart();
   const value = raw.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  if (/^\d{4}-\d{2}$/.test(value)) return `${value}-01`;
+  if (isValidWindowStart(value)) return value;
+  if (/^\d{4}-\d{2}$/.test(value)) {
+    const normalized = `${value}-01`;
+    if (isValidWindowStart(normalized)) return normalized;
+  }
   return currentWindowStart();
 }
 
@@ -50,6 +67,31 @@ async function findActivePlan(tenantId: string, month: string) {
     .orderBy(desc(contentCalendarPlans.createdAt), desc(contentCalendarPlans.id))
     .limit(1);
   return row ?? null;
+}
+
+function isDuplicateActivePlanError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as {
+    message?: string;
+    code?: string;
+    constraint?: string;
+    cause?: {
+      code?: string;
+      constraint?: string;
+      detail?: string;
+      message?: string;
+    };
+  };
+  const message = err.message ?? "";
+  const code = err.code ?? err.cause?.code ?? "";
+  const constraint = err.constraint ?? err.cause?.constraint ?? "";
+  const detail = err.cause?.detail ?? "";
+  return (
+    code === "23505" ||
+    constraint === "content_calendar_plans_tenant_month_status_unique" ||
+    message.includes("content_calendar_plans_tenant_month_status_unique") ||
+    detail.includes("content_calendar_plans_tenant_month_status_unique")
+  );
 }
 
 function hasIdeaRichItems(plan: unknown): boolean {
@@ -166,13 +208,7 @@ export async function POST(request: Request) {
         .returning();
     } catch (insertError) {
       // Another request may have inserted an active plan concurrently.
-      const duplicateActive =
-        insertError instanceof Error &&
-        (insertError.message.includes(
-          "content_calendar_plans_tenant_month_status_unique"
-        ) ||
-          insertError.message.includes("code: '23505'"));
-      if (!duplicateActive) {
+      if (!isDuplicateActivePlanError(insertError)) {
         throw insertError;
       }
       const concurrent = await findActivePlan(tenantId, month);

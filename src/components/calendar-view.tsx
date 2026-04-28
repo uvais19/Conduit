@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   buildCalendarPreview,
   type CalendarPreviewItem,
@@ -117,9 +118,11 @@ function getQuarterMonths(d: Date): Date[] {
 function SortableCalendarItem({
   item,
   compact,
+  onOpenDetails,
 }: {
   item: CalendarPreviewItem;
   compact?: boolean;
+  onOpenDetails?: (item: CalendarPreviewItem) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -138,6 +141,15 @@ function SortableCalendarItem({
       className={`group rounded-lg border p-2 text-sm ${PLATFORM_COLORS[item.platform] ?? "bg-muted"} ${
         compact ? "p-1.5 text-xs" : "p-2"
       }`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpenDetails?.(item)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpenDetails?.(item);
+        }
+      }}
     >
       <div className="flex items-start gap-1">
         <button
@@ -290,6 +302,7 @@ export function CalendarView() {
   const [calendarSource, setCalendarSource] = useState<"generated" | "existing" | "fallback">(
     "fallback"
   );
+  const [selectedItem, setSelectedItem] = useState<CalendarPreviewItem | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -702,7 +715,11 @@ export function CalendarView() {
                         </div>
                       ) : (
                         dayItems.map((item) => (
-                          <SortableCalendarItem key={item.id} item={item} />
+                          <SortableCalendarItem
+                            key={item.id}
+                            item={item}
+                            onOpenDetails={setSelectedItem}
+                          />
                         ))
                       )}
                       </div>
@@ -745,12 +762,14 @@ export function CalendarView() {
                     </span>
                     <div className="mt-1 space-y-0.5">
                       {dayItems.slice(0, 3).map((item) => (
-                        <div
+                        <button
                           key={item.id}
-                          className={`truncate rounded px-1 py-0.5 text-[10px] ${PLATFORM_COLORS[item.platform] ?? "bg-muted"}`}
+                          type="button"
+                          onClick={() => setSelectedItem(item)}
+                          className={`w-full truncate rounded px-1 py-0.5 text-left text-[10px] ${PLATFORM_COLORS[item.platform] ?? "bg-muted"}`}
                         >
                           {item.time} {item.idea ? item.idea.slice(0, 22) : PLATFORM_LABELS[item.platform]?.slice(0, 4)}
-                        </div>
+                        </button>
                       ))}
                       {dayItems.length > 3 && (
                         <p className="px-1 text-[10px] text-muted-foreground">
@@ -796,12 +815,14 @@ export function CalendarView() {
                           <span className="text-[10px] text-muted-foreground">{slot.label}</span>
                           <div className="mt-0.5 space-y-0.5">
                             {dayItems.slice(0, 2).map((item) => (
-                              <div
+                              <button
                                 key={item.id}
-                                className={`truncate rounded px-1 py-0.5 text-[10px] ${PLATFORM_COLORS[item.platform] ?? "bg-muted"}`}
+                                type="button"
+                                onClick={() => setSelectedItem(item)}
+                                className={`w-full truncate rounded px-1 py-0.5 text-left text-[10px] ${PLATFORM_COLORS[item.platform] ?? "bg-muted"}`}
                               >
                                 {item.time} {item.idea ? item.idea.slice(0, 16) : ""}
-                              </div>
+                              </button>
                             ))}
                             {dayItems.length > 2 && (
                               <div className="text-[10px] text-muted-foreground">+{dayItems.length - 2}</div>
@@ -826,6 +847,61 @@ export function CalendarView() {
           )}
         </DragOverlay>
       </DndContext>
+
+      <Dialog open={Boolean(selectedItem)} onOpenChange={(open) => !open && setSelectedItem(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Post idea details</DialogTitle>
+          </DialogHeader>
+          {selectedItem ? (
+            <div className="space-y-3 text-sm">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Platform</p>
+                  <p className="font-medium">{PLATFORM_LABELS[selectedItem.platform] ?? selectedItem.platform}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Date</p>
+                  <p className="font-medium">{selectedItem.date ?? selectedItem.day}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Time</p>
+                  <p className="font-medium">{selectedItem.time}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Pillar</p>
+                  <p className="font-medium">{selectedItem.pillar}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Idea</p>
+                <p className="mt-1 leading-relaxed">{selectedItem.idea || selectedItem.theme}</p>
+              </div>
+              {selectedItem.keyMessage ? (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Key message</p>
+                  <p className="mt-1 leading-relaxed">{selectedItem.keyMessage}</p>
+                </div>
+              ) : null}
+              {selectedItem.executionNotes ? (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Execution notes</p>
+                  <p className="mt-1 leading-relaxed text-muted-foreground">{selectedItem.executionNotes}</p>
+                </div>
+              ) : null}
+              <div className="pt-1">
+                <Link
+                  href={`/content/generate?platform=${selectedItem.platform}&pillar=${encodeURIComponent(selectedItem.pillar)}&topic=${encodeURIComponent(selectedItem.idea || selectedItem.theme)}&contentType=${encodeURIComponent(selectedItem.contentType)}${selectedItem.keyMessage ? `&keyMessage=${encodeURIComponent(selectedItem.keyMessage)}` : ""}${selectedItem.executionNotes ? `&executionNotes=${encodeURIComponent(selectedItem.executionNotes)}` : ""}`}
+                  className={buttonVariants()}
+                  onClick={() => setSelectedItem(null)}
+                >
+                  Generate draft from this idea
+                </Link>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
