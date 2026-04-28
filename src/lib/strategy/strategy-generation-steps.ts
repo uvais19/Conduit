@@ -93,41 +93,12 @@ function normalizePillarRoleValue(v: unknown, index: number): PillarRole {
 }
 
 function normalizeSecondaryPlatformsValue(
-  raw: Record<string, unknown>,
-  primary: Platform
+  _raw: Record<string, unknown>,
+  _primary: Platform
 ): Platform[] {
-  const keys = [
-    "alsoFitsPlatforms",
-    "also_fit_platforms",
-    "secondaryPlatforms",
-    "secondary_platforms",
-    "supportingPlatforms",
-    "repurposePlatforms",
-  ] as const;
-
-  let source: unknown;
-  for (const key of keys) {
-    if (raw[key] !== undefined && raw[key] !== null) {
-      source = raw[key];
-      break;
-    }
-  }
-
-  if (!Array.isArray(source)) return [];
-
-  const out: Platform[] = [];
-  const seen = new Set<Platform>();
-  for (const item of source) {
-    if (typeof item !== "string") continue;
-    const lower = item.toLowerCase();
-    if (lower !== "instagram" && lower !== "facebook" && lower !== "linkedin") continue;
-    if (lower === primary) continue;
-    if (seen.has(lower)) continue;
-    seen.add(lower);
-    out.push(lower);
-    if (out.length >= 2) break;
-  }
-  return out;
+  // Secondary platforms are now user-controlled in the strategy editor only.
+  // Generation paths must not pre-select these values.
+  return [];
 }
 
 function normalizePrimaryObjectiveValue(raw: Record<string, unknown>): string {

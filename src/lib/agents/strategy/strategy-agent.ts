@@ -36,7 +36,7 @@ const STRATEGY_SYSTEM_PREAMBLE = `You are Conduit's senior social media strategi
 Return only JSON for the requested shape (no markdown, no commentary).
 Ground every pillar in the brand digest: tie to audience pains, goals, key messages, voice, or offers.
 Each pillar must express a clear strategic objective (why it exists in the mix) and a realistic best-fit primary platform.
-You may add up to two secondary platforms per pillar in alsoFitsPlatforms only when cross-platform repurposing is truly natural.
+Do not choose secondary platforms; always return alsoFitsPlatforms as an empty array for every pillar.
 Avoid vague pillar names (e.g. a lone "Tips") unless clearly anchored to the industry and brand.`;
 
 function manifestoAppendix(manifesto: BrandManifesto): string {
@@ -93,7 +93,7 @@ export async function runStrategyAgent(
         "",
         "## Platform rules (pillar format fit)",
         "Each pillar must pick exactly one bestFitPlatform: instagram, facebook, or linkedin—the channel where that pillar’s story angles and formats naturally work best for this audience (not where you post most often).",
-        "Optionally include alsoFitsPlatforms as an array of up to two additional platforms for repurposing. Keep this empty when there is no clear fit.",
+        "Set alsoFitsPlatforms to [] for every pillar. Secondary platform selection is done only by the user in the editor.",
         "Use norms below; a pillar skewed to long-form thought leadership usually fits LinkedIn better than Instagram Reels unless the digest clearly says otherwise.",
         platformCtx,
         "",
@@ -111,7 +111,7 @@ export async function runStrategyAgent(
         "- Each pillar must include a primaryObjective: one short phrase naming its job in the funnel (e.g. Lead generation, Brand awareness, Authority building, Community retention, Conversion support)—use wording grounded in the digest, not generic jargon alone.",
         "- primaryObjective values must be distinct across all pillars.",
         "- bestFitPlatform must be exactly one of: instagram, facebook, linkedin and must match format/depth implied by the pillar.",
-        "- alsoFitsPlatforms is optional, max 2, unique, and must not include bestFitPlatform.",
+        "- alsoFitsPlatforms must be [] for every pillar.",
         "- Each description includes audience + angle + intended outcome.",
         "- Each pillar has 4-6 concrete exampleTopics; no generic filler terms.",
         "- Percentages are integers or sensible decimals summing to 100.",

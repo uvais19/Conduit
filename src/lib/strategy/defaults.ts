@@ -19,7 +19,7 @@ export function createDefaultStrategy(
         pillarRole: "awareness-education",
         primaryObjective: "Brand awareness & education",
         bestFitPlatform: "linkedin",
-        alsoFitsPlatforms: ["facebook"],
+        alsoFitsPlatforms: [],
         percentage: 20,
         exampleTopics: [
           `Best practices in ${industry}`,
@@ -34,7 +34,7 @@ export function createDefaultStrategy(
         pillarRole: "trust-proof",
         primaryObjective: "Authority building & trust",
         bestFitPlatform: "instagram",
-        alsoFitsPlatforms: ["facebook"],
+        alsoFitsPlatforms: [],
         percentage: 20,
         exampleTopics: [
           "Customer wins",
@@ -49,7 +49,7 @@ export function createDefaultStrategy(
         pillarRole: "conversion-offer",
         primaryObjective: "Lead generation & conversion",
         bestFitPlatform: "facebook",
-        alsoFitsPlatforms: ["instagram"],
+        alsoFitsPlatforms: [],
         percentage: 20,
         exampleTopics: [
           "Offer highlights",
@@ -79,7 +79,7 @@ export function createDefaultStrategy(
         pillarRole: "differentiation-pov",
         primaryObjective: "Engagement & retention",
         bestFitPlatform: "facebook",
-        alsoFitsPlatforms: ["instagram"],
+        alsoFitsPlatforms: [],
         percentage: 20,
         exampleTopics: [
           "Ask the audience",
