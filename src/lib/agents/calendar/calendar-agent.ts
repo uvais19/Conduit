@@ -29,12 +29,6 @@ type CalendarSlotBlueprint = {
   suggestedContentType: string;
 };
 
-function toIsoMonth(date: Date): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
-}
-
 function toIsoDate(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -42,10 +36,19 @@ function toIsoDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function buildMonthDates(month: string): Date[] {
-  const [y, m] = month.split("-").map((part) => Number(part));
-  const start = new Date(Date.UTC(y, (m ?? 1) - 1, 1));
-  const end = new Date(Date.UTC(y, m ?? 1, 0));
+function addOneMonthClamped(date: Date): Date {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+  const targetMonth = month + 1;
+  const lastDay = new Date(Date.UTC(year, targetMonth + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, targetMonth, Math.min(day, lastDay)));
+}
+
+function buildWindowDates(windowStart: string): Date[] {
+  const [y, m, d] = windowStart.split("-").map((part) => Number(part));
+  const start = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+  const end = addOneMonthClamped(start);
   const dates: Date[] = [];
   const cursor = new Date(start);
   while (cursor <= end) {
@@ -74,8 +77,8 @@ function normalizeDays(days: string[]): number[] {
   return picked;
 }
 
-function buildSlotBlueprint(month: string, strategy: ContentStrategy): CalendarSlotBlueprint[] {
-  const dates = buildMonthDates(month);
+function buildSlotBlueprint(windowStart: string, strategy: ContentStrategy): CalendarSlotBlueprint[] {
+  const dates = buildWindowDates(windowStart);
   const slots: CalendarSlotBlueprint[] = [];
 
   for (const schedule of strategy.schedule) {
@@ -112,11 +115,11 @@ function buildSlotBlueprint(month: string, strategy: ContentStrategy): CalendarS
 }
 
 function fallbackPlan(
-  month: string,
+  windowStart: string,
   timezone: string,
   strategy: ContentStrategy
 ): CalendarMonthPlan {
-  const slots = buildSlotBlueprint(month, strategy);
+  const slots = buildSlotBlueprint(windowStart, strategy);
   const themes = strategy.weeklyThemes.length > 0
     ? strategy.weeklyThemes
     : [
@@ -148,7 +151,7 @@ function fallbackPlan(
       notes: theme.executionNotes,
     };
   });
-  return { month, timezone, items };
+  return { month: windowStart, timezone, items };
 }
 
 export async function runCalendarAgent({
@@ -162,7 +165,7 @@ export async function runCalendarAgent({
   month?: string;
   timezone?: string;
 }): Promise<CalendarMonthPlan> {
-  const targetMonth = month ?? toIsoMonth(new Date());
+  const targetMonth = month ?? toIsoDate(new Date());
   const tz = timezone ?? "UTC";
   const fallback = fallbackPlan(targetMonth, tz, strategy);
   const slots = buildSlotBlueprint(targetMonth, strategy);
@@ -180,7 +183,8 @@ Do not call or assume draft-generation agents.
 Each item idea must be a concise post concept (not full copy).`,
     userPrompt: [
       "## Task",
-      `Generate the monthly calendar plan for ${targetMonth} in timezone ${tz}.`,
+      `Generate a rolling one-month calendar window starting ${targetMonth} in timezone ${tz}.`,
+      "The window should continue through the same day next month (inclusive, clamped to month-end when needed).",
       "Use the exact slot ids and dates provided. Keep one item per slot.",
       "",
       "## Required fields per item",
@@ -196,7 +200,7 @@ Each item idea must be a concise post concept (not full copy).`,
       "## Constraints",
       "- Do not generate media directions or production instructions.",
       "- Do not produce complete post copy or detailed draft body.",
-      "- Keep ideas distinct across the month.",
+      "- Keep ideas distinct across the window.",
       "- Respect platform fit and weekly strategic themes.",
       "",
       "## Brand digest",

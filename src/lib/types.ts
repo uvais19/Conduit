@@ -311,7 +311,8 @@ export const calendarPlanItemSchema = z.object({
 });
 
 export const calendarMonthPlanSchema = z.object({
-  month: z.string().regex(/^\d{4}-\d{2}$/),
+  // Legacy plans used YYYY-MM; rolling-window plans use YYYY-MM-DD (window start).
+  month: z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/),
   timezone: z.string().min(1),
   items: z.array(calendarPlanItemSchema),
 });

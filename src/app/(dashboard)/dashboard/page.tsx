@@ -17,6 +17,7 @@ import { requireAuth } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import {
   brandManifestos,
+  contentCalendarPlans,
   platformConnections,
   contentStrategies,
   contentDrafts,
@@ -61,19 +62,26 @@ const STEPS = [
     href: "/strategy",
     step: 2,
     title: "Generate your strategy",
-    description: "AI creates content pillars, schedule, and calendar",
+    description: "AI creates content pillars, cadence, and weekly themes",
     icon: TrendingUp,
   },
   {
-    href: "/content/drafts",
+    href: "/calendar",
     step: 3,
+    title: "Review AI calendar",
+    description: "Validate month-one post ideas across pillars and platforms",
+    icon: Calendar,
+  },
+  {
+    href: "/content/drafts",
+    step: 4,
     title: "Create and approve content",
     description: "AI writes platform-native posts for your review",
     icon: FileText,
   },
   {
     href: "/settings/platforms",
-    step: 4,
+    step: 5,
     title: "Connect platforms",
     description: "Link Instagram, Facebook, and LinkedIn",
     icon: Zap,
@@ -87,7 +95,7 @@ export default async function DashboardPage() {
   const now = new Date();
   const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  const [manifesto, platform, strategy, draft, analyses, analyticsAgg, scheduledCount, pendingCount, recentActivity] = await Promise.all([
+  const [manifesto, platform, strategy, calendarPlan, draft, analyses, analyticsAgg, scheduledCount, pendingCount, recentActivity] = await Promise.all([
     db
       .select({ id: brandManifestos.id })
       .from(brandManifestos)
@@ -102,6 +110,16 @@ export default async function DashboardPage() {
       .select({ id: contentStrategies.id })
       .from(contentStrategies)
       .where(eq(contentStrategies.tenantId, tenantId))
+      .limit(1),
+    db
+      .select({ id: contentCalendarPlans.id })
+      .from(contentCalendarPlans)
+      .where(
+        and(
+          eq(contentCalendarPlans.tenantId, tenantId),
+          eq(contentCalendarPlans.status, "active")
+        )
+      )
       .limit(1),
     db
       .select({ id: contentDrafts.id })
@@ -193,6 +211,7 @@ export default async function DashboardPage() {
   const completed = [
     manifesto.length > 0,
     strategy.length > 0,
+    calendarPlan.length > 0,
     draft.length > 0,
     platform.length > 0,
   ];

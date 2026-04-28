@@ -14,22 +14,26 @@ import {
   type BrandManifesto,
 } from "@/lib/types";
 
-function currentMonth(): string {
+function currentWindowStart(): string {
   const now = new Date();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  return `${now.getUTCFullYear()}-${month}`;
+  const day = String(now.getUTCDate()).padStart(2, "0");
+  return `${now.getUTCFullYear()}-${month}-${day}`;
 }
 
 type GeneratePayload = {
   month?: string;
+  startDate?: string;
   timezone?: string;
   force?: boolean;
 };
 
-function coerceMonth(raw?: string): string {
-  if (!raw) return currentMonth();
+function coerceWindowStart(raw?: string): string {
+  if (!raw) return currentWindowStart();
   const value = raw.trim();
-  return /^\d{4}-\d{2}$/.test(value) ? value : currentMonth();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (/^\d{4}-\d{2}$/.test(value)) return `${value}-01`;
+  return currentWindowStart();
 }
 
 async function findActivePlan(tenantId: string, month: string) {
@@ -60,7 +64,11 @@ export async function GET(request: Request) {
     const session = await requireAuth();
     const tenantId = session.user.tenantId;
     const url = new URL(request.url);
-    const month = coerceMonth(url.searchParams.get("month") ?? undefined);
+    const month = coerceWindowStart(
+      url.searchParams.get("startDate") ??
+        url.searchParams.get("month") ??
+        undefined
+    );
     const plan = await findActivePlan(tenantId, month);
     if (!plan) {
       return NextResponse.json({ plan: null, month });
@@ -81,7 +89,7 @@ export async function POST(request: Request) {
     const session = await requireAuth();
     const tenantId = session.user.tenantId;
     const body = (await request.json().catch(() => ({}))) as GeneratePayload;
-    const month = coerceMonth(body.month);
+    const month = coerceWindowStart(body.startDate ?? body.month);
     const timezone = body.timezone?.trim() || "UTC";
     const force = Boolean(body.force);
 
