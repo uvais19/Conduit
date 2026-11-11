@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const connection = savePlatformConnection({
+    const connection = await savePlatformConnection({
       tenantId: session.user.tenantId,
       platform: parsed.data.platform,
       displayName: parsed.data.displayName,

@@ -120,7 +120,7 @@ export async function GET(request: Request) {
       );
     }
 
-    savePlatformConnection({
+    await savePlatformConnection({
       tenantId: payload.tenantId,
       platform: payload.platform,
       displayName: chosen.name,

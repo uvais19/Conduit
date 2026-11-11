@@ -5,7 +5,7 @@ import { listPlatformConnections } from "@/lib/platforms/store";
 export async function GET() {
   try {
     const session = await requireAuth();
-    const connections = listPlatformConnections(session.user.tenantId);
+    const connections = await listPlatformConnections(session.user.tenantId);
     return NextResponse.json({ connections });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

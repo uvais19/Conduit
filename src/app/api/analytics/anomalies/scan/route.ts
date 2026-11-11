@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getEngagementAnomalies } from "@/lib/analytics/store";
-import { fireNotification } from "@/lib/notifications/store";
+import { notifyTenant } from "@/lib/notifications";
 import { logActivity } from "@/lib/audit-log";
 
 const lastAlertByTenant = new Map<string, string>();
@@ -27,12 +27,13 @@ export async function POST() {
       });
     }
 
-    fireNotification({
+    await notifyTenant({
       tenantId,
-      draftId: "anomaly-monitor",
-      type: "submitted",
-      actorName: "Analytics Monitor",
+      excludeUserId: session.user.id,
+      type: "analytics_summary",
+      title: "Engagement anomaly",
       message: `Engagement anomaly detected (${latest.deltaPercent}% on ${latest.date}).`,
+      link: "/analytics",
     });
     await logActivity({
       tenantId,

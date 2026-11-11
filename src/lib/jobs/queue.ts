@@ -5,11 +5,12 @@
  */
 
 import { db } from "@/lib/db";
-import { contentDrafts, publishJobs } from "@/lib/db/schema";
+import { contentDrafts, platformConnections, publishJobs } from "@/lib/db/schema";
 import { eq, and, lte, desc } from "drizzle-orm";
 import { logActivity } from "@/lib/audit-log";
 import { getPlatformConnection } from "@/lib/platforms/store";
-import { publishDraft, simulatePublish } from "@/lib/agents/publishing/publisher";
+import { publishDraft } from "@/lib/agents/publishing/publisher";
+import { decidePublishBranch } from "@/lib/agents/publishing/publish-decision";
 import type { ContentDraftRecord } from "@/lib/content/types";
 import { refreshConnectionToken } from "@/lib/platforms/token-lifecycle";
 import type { Platform } from "@/lib/types";
@@ -166,55 +167,59 @@ export function enqueueTokenRefreshJob(payload: TokenRefreshPayload): Job {
   return enqueueJob("refresh_platform_tokens", payload);
 }
 
-export async function processTokenRefreshJobs(maxJobs = 100): Promise<{
+const TOKEN_REFRESH_WINDOW_MS = 1000 * 60 * 60 * 24 * 7;
+
+export async function processTokenRefreshJobs(options?: {
+  tenantId?: string;
+  maxJobs?: number;
+}): Promise<{
   processed: number;
   succeeded: number;
   failed: number;
+  refreshed: Array<{ tenantId: string; platform: string; ok: boolean }>;
 }> {
-  const pending = jobQueue
-    .filter((job) => job.type === "refresh_platform_tokens" && job.status === "pending")
-    .slice(0, maxJobs);
-  let processed = 0;
+  const empty = {
+    processed: 0,
+    succeeded: 0,
+    failed: 0,
+    refreshed: [] as Array<{ tenantId: string; platform: string; ok: boolean }>,
+  };
+  if (!hasDatabase()) return empty;
+
+  const maxJobs = options?.maxJobs ?? 100;
+  const horizon = new Date(Date.now() + TOKEN_REFRESH_WINDOW_MS);
+  const dueBefore = lte(platformConnections.tokenExpiresAt, horizon);
+  const whereClause = options?.tenantId
+    ? and(dueBefore, eq(platformConnections.tenantId, options.tenantId))
+    : dueBefore;
+
+  const due = await db
+    .select({
+      tenantId: platformConnections.tenantId,
+      platform: platformConnections.platform,
+    })
+    .from(platformConnections)
+    .where(whereClause)
+    .limit(maxJobs);
+
   let succeeded = 0;
   let failed = 0;
-  for (const job of pending) {
-    processed += 1;
-    job.status = "running";
-    job.attempts += 1;
-    const payload = job.payload as Partial<TokenRefreshPayload>;
-    const tenantId = typeof payload.tenantId === "string" ? payload.tenantId : "";
-    const platform = payload.platform as Platform | undefined;
-    if (!tenantId || !platform) {
-      job.status = "failed";
-      job.lastError = "Invalid refresh job payload";
+  const refreshed: Array<{ tenantId: string; platform: string; ok: boolean }> = [];
+  for (const row of due) {
+    try {
+      const connection = await getPlatformConnection(row.tenantId, row.platform);
+      if (!connection) continue;
+      const result = await refreshConnectionToken(connection);
+      refreshed.push({ tenantId: row.tenantId, platform: row.platform, ok: result.ok });
+      if (result.ok) succeeded += 1;
+      else failed += 1;
+    } catch {
       failed += 1;
-      continue;
-    }
-    const connection = getPlatformConnection(tenantId, platform);
-    if (!connection) {
-      job.status = "completed";
-      job.completedAt = new Date();
-      continue;
-    }
-    const refreshed = await refreshConnectionToken(connection);
-    if (refreshed.ok) {
-      job.status = "completed";
-      job.lastError = undefined;
-      job.completedAt = new Date();
-      succeeded += 1;
-    } else if (job.attempts < job.maxAttempts) {
-      job.status = "pending";
-      job.lastError = refreshed.error;
-      const backoffMs = Math.min(300_000, 1000 * 2 ** job.attempts);
-      job.scheduledAt = new Date(Date.now() + backoffMs);
-    } else {
-      job.status = "failed";
-      job.lastError = refreshed.error;
-      job.completedAt = new Date();
-      failed += 1;
+      refreshed.push({ tenantId: row.tenantId, platform: row.platform, ok: false });
     }
   }
-  return { processed, succeeded, failed };
+
+  return { processed: refreshed.length, succeeded, failed, refreshed };
 }
 
 /**
@@ -243,6 +248,45 @@ export async function processScheduledPosts(): Promise<number> {
   let processed = 0;
 
   for (const draft of dueDrafts) {
+    const connection = await getPlatformConnection(draft.tenantId, draft.platform);
+    const decision = decidePublishBranch(connection);
+    if (decision.kind === "blocked") {
+      const lastError = "Platform is not connected";
+      const [existing] = await db
+        .select({ id: publishJobs.id })
+        .from(publishJobs)
+        .where(
+          and(
+            eq(publishJobs.draftId, draft.id),
+            eq(publishJobs.status, "failed"),
+            eq(publishJobs.lastError, lastError)
+          )
+        )
+        .limit(1);
+      if (existing) {
+        await db
+          .update(publishJobs)
+          .set({ lastError, updatedAt: now })
+          .where(eq(publishJobs.id, existing.id));
+      } else {
+        await db.insert(publishJobs).values({
+          tenantId: draft.tenantId,
+          draftId: draft.id,
+          status: "failed",
+          attempts: 1,
+          maxAttempts: 3,
+          scheduledFor: draft.scheduledAt ?? now,
+          lastError,
+          metadata: {
+            platform: draft.platform,
+            source: "cron",
+          },
+          updatedAt: now,
+        });
+      }
+      continue;
+    }
+
     const [job] = await db
       .insert(publishJobs)
       .values({
@@ -277,10 +321,7 @@ export async function processScheduledPosts(): Promise<number> {
         cta: draft.cta ?? "",
         platformPostId: draft.platformPostId ?? null,
       } as unknown as ContentDraftRecord;
-      const connection = getPlatformConnection(draft.tenantId, draft.platform);
-      const publishResult = connection
-        ? await publishDraft(mappedDraft, connection)
-        : await simulatePublish(mappedDraft);
+      const publishResult = await publishDraft(mappedDraft, decision.connection);
       if (!publishResult.success) {
         throw new Error(publishResult.error ?? "Scheduled publish failed");
       }

@@ -299,13 +299,3 @@ export async function publishDraft(
   const handler = PLATFORM_PUBLISHERS[draft.platform];
   return handler(draft, connection);
 }
-
-/**
- * Simulated publish for when a platform connection is not available.
- * Useful during development and demo flows.
- */
-export async function simulatePublish(draft: ContentDraftRecord): Promise<PublishResult> {
-  const now = new Date().toISOString();
-  const simulatedId = `sim_${draft.platform}_${Date.now()}_${draft.id.slice(0, 8)}`;
-  return { success: true, platformPostId: simulatedId, publishedAt: now };
-}

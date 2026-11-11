@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { signOAuthState, verifyOAuthState } from "@/lib/platforms/oauth-state";
 import {
   classifyWebhookEventType,
-  ingestWebhookEvent,
 } from "@/lib/platforms/webhook-events";
 
 describe("section1 platform integrations", () => {
@@ -37,17 +36,7 @@ describe("section1 platform integrations", () => {
     expect(verifyOAuthState(tampered)).toBeNull();
   });
 
-  it("classifies and ingests webhook events", () => {
-    const eventType = classifyWebhookEventType({ type: "comment_created" });
-    expect(eventType).toBe("comment");
-    expect(() =>
-      ingestWebhookEvent("tenant_1", {
-        id: "evt_1",
-        platform: "facebook",
-        eventType,
-        occurredAt: new Date().toISOString(),
-        payload: { message: "test" },
-      })
-    ).not.toThrow();
+  it("classifies webhook events", () => {
+    expect(classifyWebhookEventType({ type: "comment_created" })).toBe("comment");
   });
 });

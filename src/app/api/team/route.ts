@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { logActivity } from "@/lib/audit-log";
+import { normalizeEmail } from "@/lib/auth/login-claim";
+
+function teamError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (message === "Unauthorized") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (message === "Forbidden") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return NextResponse.json({ error: "Server error" }, { status: 500 });
+}
 
 /** GET /api/team — list team members */
 export async function GET() {
@@ -23,24 +35,22 @@ export async function GET() {
       .where(eq(users.tenantId, user.tenantId));
 
     return NextResponse.json({ members });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Server error";
-    if (msg === "Unauthorized")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch (error) {
+    return teamError(error);
   }
 }
 
 /** POST /api/team — invite a member (create user with email + role) */
 export async function POST(req: NextRequest) {
   try {
-    const { user } = await requireAuth();
+    const { user } = await requirePermission("invite_members");
 
     const limited = rateLimitResponse(`team-invite:${user.id}`, { limit: 10, windowSeconds: 60 });
     if (limited) return limited;
 
     const body = await req.json();
-    const { email, role } = body as { email?: string; role?: string };
+    const { email: rawEmail, role } = body as { email?: string; role?: string };
+    const email = rawEmail ? normalizeEmail(rawEmail) : "";
 
     if (!email || !role) {
       return NextResponse.json({ error: "Email and role are required" }, { status: 400 });
@@ -50,18 +60,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
 
-    // Check if user already exists in tenant
     const existing = await db
       .select({ id: users.id })
       .from(users)
-      .where(and(eq(users.email, email), eq(users.tenantId, user.tenantId)))
+      .where(sql`lower(${users.email}) = ${email}`)
       .limit(1);
 
     if (existing.length > 0) {
-      return NextResponse.json({ error: "User already in workspace" }, { status: 409 });
+      return NextResponse.json({ error: "Email already belongs to a workspace" }, { status: 409 });
     }
 
-    // Create the user placeholder (they'll link via Clerk on first login)
     const [created] = await db
       .insert(users)
       .values({
@@ -82,23 +90,31 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, member: created });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Server error";
-    if (msg === "Unauthorized")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/duplicate|unique/i.test(message)) {
+      return NextResponse.json(
+        { error: "Email already belongs to a workspace" },
+        { status: 409 },
+      );
+    }
+    return teamError(error);
   }
 }
 
 /** PATCH /api/team — change role */
 export async function PATCH(req: NextRequest) {
   try {
-    const { user } = await requireAuth();
+    const { user } = await requirePermission("manage_workspace");
     const body = await req.json();
     const { userId, role } = body as { userId?: string; role?: string };
 
     if (!userId || !role || !["admin", "creator", "approver"].includes(role)) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    }
+
+    if (userId === user.id) {
+      return NextResponse.json({ error: "Cannot change your own role" }, { status: 400 });
     }
 
     await db
@@ -116,18 +132,15 @@ export async function PATCH(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Server error";
-    if (msg === "Unauthorized")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch (error) {
+    return teamError(error);
   }
 }
 
 /** DELETE /api/team — remove member */
 export async function DELETE(req: NextRequest) {
   try {
-    const { user } = await requireAuth();
+    const { user } = await requirePermission("manage_workspace");
     const body = await req.json();
     const { userId } = body as { userId?: string };
 
@@ -152,10 +165,7 @@ export async function DELETE(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Server error";
-    if (msg === "Unauthorized")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch (error) {
+    return teamError(error);
   }
 }

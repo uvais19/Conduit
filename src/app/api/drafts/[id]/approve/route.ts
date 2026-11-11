@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { recordAuditEvent, resolveTransition } from "@/lib/content/audit";
-import { fireNotification } from "@/lib/notifications/store";
+import { notifyDraftOwnerOrReviewers } from "@/lib/notifications";
 import { validateDraftAgainstBrand } from "@/lib/brand/validation";
 
 const bodySchema = z.object({
@@ -61,12 +61,14 @@ export async function POST(
       notes,
     });
 
-    fireNotification({
+    await notifyDraftOwnerOrReviewers({
       tenantId,
-      type: "approved",
       draftId: id,
-      actorName: session.user.name ?? session.user.email,
+      actorId: session.user.id,
+      type: "draft_approved",
+      title: "Draft approved",
       message: `Draft approved by ${session.user.name ?? session.user.email}.`,
+      link: "/approval",
     });
 
     return NextResponse.json({ draft: updated, validation });

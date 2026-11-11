@@ -78,6 +78,20 @@
       "when": 1777400400000,
       "tag": "0010_schema_repair_writer_rationale_publish_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777400800000,
+      "tag": "0011_platform_connection_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777401200000,
+      "tag": "0012_webhook_deliveries",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,8 @@
+import { and, eq, or } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { platformConnections, webhookDeliveries } from "@/lib/db/schema";
+import { notifyTenant } from "@/lib/notifications";
 import type { Platform } from "@/lib/types";
-import { fireNotification } from "@/lib/notifications/store";
 
 export type NormalizedPlatformWebhookEvent = {
   id: string;
@@ -13,79 +16,38 @@ export type NormalizedPlatformWebhookEvent = {
   processingStatus?: "ingested" | "deduped" | "processed";
 };
 
-type WebhookQueueJob = {
-  id: string;
+export type WebhookDeliveryDecision = "duplicate" | "skipped" | "pending";
+
+export type ConnectionIdentity = {
   tenantId: string;
-  event: NormalizedPlatformWebhookEvent;
-  status: "pending" | "running" | "processed" | "failed";
-  attempts: number;
-  maxAttempts: number;
-  lastError?: string;
-  scheduledAt: string;
-  processedAt?: string;
+  platformPageId: string;
+  platformUserId: string;
 };
 
-const webhookEventsByTenant = new Map<string, NormalizedPlatformWebhookEvent[]>();
-const seenWebhookKeysByTenant = new Map<string, Set<string>>();
-const webhookDeliveryMetricsByTenant = new Map<
-  string,
-  { ingested: number; deduped: number; processed: number }
->();
-const webhookJobsByTenant = new Map<string, WebhookQueueJob[]>();
-
-function bumpWebhookMetric(
-  tenantId: string,
-  key: "ingested" | "deduped" | "processed"
-): void {
-  const existing = webhookDeliveryMetricsByTenant.get(tenantId) ?? {
-    ingested: 0,
-    deduped: 0,
-    processed: 0,
-  };
-  existing[key] += 1;
-  webhookDeliveryMetricsByTenant.set(tenantId, existing);
+export function decideWebhookDelivery(
+  duplicate: boolean,
+  tenantId: string | null,
+): WebhookDeliveryDecision {
+  if (duplicate) return "duplicate";
+  if (!tenantId) return "skipped";
+  return "pending";
 }
 
-function shouldDedupe(tenantId: string, dedupeKey?: string): boolean {
-  if (!dedupeKey) return false;
-  const existing = seenWebhookKeysByTenant.get(tenantId) ?? new Set<string>();
-  if (existing.has(dedupeKey)) return true;
-  existing.add(dedupeKey);
-  // bounded memory
-  if (existing.size > 1000) {
-    const values = [...existing.values()];
-    values.slice(0, 200).forEach((value) => existing.delete(value));
-  }
-  seenWebhookKeysByTenant.set(tenantId, existing);
-  return false;
+export function shouldNotifyWebhook(decision: WebhookDeliveryDecision): boolean {
+  return decision === "pending";
 }
 
-export function ingestWebhookEvent(
-  tenantId: string,
-  event: NormalizedPlatformWebhookEvent
-): void {
-  if (shouldDedupe(tenantId, event.dedupeKey)) {
-    bumpWebhookMetric(tenantId, "deduped");
-    const existing = webhookEventsByTenant.get(tenantId) ?? [];
-    const dedupedEvent: NormalizedPlatformWebhookEvent = {
-      ...event,
-      processingStatus: "deduped",
-    };
-    webhookEventsByTenant.set(
-      tenantId,
-      [dedupedEvent, ...existing].slice(0, 500)
-    );
-    return;
-  }
-
-  bumpWebhookMetric(tenantId, "ingested");
-  const withStatus: NormalizedPlatformWebhookEvent = {
-    ...event,
-    processingStatus: "ingested",
-  };
-  const existing = webhookEventsByTenant.get(tenantId) ?? [];
-  webhookEventsByTenant.set(tenantId, [withStatus, ...existing].slice(0, 500));
-  enqueueWebhookEvent(tenantId, withStatus);
+export function matchConnectionTenant(
+  providerId: string,
+  connections: ConnectionIdentity[],
+): string | null {
+  const id = providerId.trim();
+  if (!id || id === "global") return null;
+  return (
+    connections.find(
+      (connection) => connection.platformPageId === id || connection.platformUserId === id,
+    )?.tenantId ?? null
+  );
 }
 
 export function classifyWebhookEventType(value: unknown): NormalizedPlatformWebhookEvent["eventType"] {
@@ -96,100 +58,108 @@ export function classifyWebhookEventType(value: unknown): NormalizedPlatformWebh
   return "other";
 }
 
-function processWebhookDownstream(
-  tenantId: string,
-  event: NormalizedPlatformWebhookEvent
-): void {
-  const typeLabel =
-    event.eventType === "comment"
-      ? "new comment activity"
-      : event.eventType === "mention"
-        ? "new mention activity"
-        : event.eventType === "engagement"
-          ? "new engagement activity"
-          : "platform webhook activity";
-  fireNotification({
-    tenantId,
-    type: "submitted",
-    draftId: event.postId ?? event.id,
-    actorName: `${event.platform} webhook`,
-    message: `Received ${typeLabel}.`,
-  });
-  bumpWebhookMetric(tenantId, "processed");
+function activityLabel(eventType: NormalizedPlatformWebhookEvent["eventType"]): string {
+  if (eventType === "comment") return "new comment activity";
+  if (eventType === "mention") return "new mention activity";
+  if (eventType === "engagement") return "new engagement activity";
+  return "platform webhook activity";
 }
 
-function enqueueWebhookEvent(
-  tenantId: string,
-  event: NormalizedPlatformWebhookEvent
-): WebhookQueueJob {
-  const job: WebhookQueueJob = {
-    id: event.id,
-    tenantId,
-    event,
-    status: "pending",
-    attempts: 0,
-    maxAttempts: 3,
-    scheduledAt: new Date().toISOString(),
-  };
-  const existing = webhookJobsByTenant.get(tenantId) ?? [];
-  webhookJobsByTenant.set(tenantId, [job, ...existing].slice(0, 1000));
-  return job;
+async function resolveTenantId(platform: Platform, providerId: string): Promise<string | null> {
+  const id = providerId.trim();
+  if (!id || id === "global") return null;
+  const rows = await db
+    .select({
+      tenantId: platformConnections.tenantId,
+      platformPageId: platformConnections.platformPageId,
+      platformUserId: platformConnections.platformUserId,
+    })
+    .from(platformConnections)
+    .where(
+      and(
+        eq(platformConnections.platform, platform),
+        or(
+          eq(platformConnections.platformPageId, id),
+          eq(platformConnections.platformUserId, id),
+        ),
+      ),
+    );
+  return matchConnectionTenant(
+    id,
+    rows.map((row) => ({
+      tenantId: row.tenantId,
+      platformPageId: row.platformPageId ?? "",
+      platformUserId: row.platformUserId ?? "",
+    })),
+  );
 }
 
-export function processWebhookJobs(maxJobs = 100): {
+export async function ingestWebhookEvent(
+  providerId: string,
+  event: NormalizedPlatformWebhookEvent,
+): Promise<WebhookDeliveryDecision> {
+  const tenantId = await resolveTenantId(event.platform, providerId);
+  const dedupeKey = event.dedupeKey?.trim() || event.id;
+  const [inserted] = await db
+    .insert(webhookDeliveries)
+    .values({
+      platform: event.platform,
+      dedupeKey,
+      tenantId,
+      eventType: event.eventType,
+      payload: event.payload ?? {},
+      status: tenantId ? "pending" : "skipped",
+      occurredAt: new Date(event.occurredAt),
+      updatedAt: new Date(),
+    })
+    .onConflictDoNothing({
+      target: [webhookDeliveries.platform, webhookDeliveries.dedupeKey],
+    })
+    .returning({ id: webhookDeliveries.id });
+
+  return decideWebhookDelivery(!inserted, tenantId);
+}
+
+export async function processWebhookJobs(maxJobs = 100): Promise<{
   processed: number;
   succeeded: number;
   failed: number;
-} {
-  const now = Date.now();
-  const jobs: WebhookQueueJob[] = [];
-  webhookJobsByTenant.forEach((tenantJobs) => {
-    tenantJobs.forEach((job) => jobs.push(job));
-  });
-  const pending = jobs
-    .filter(
-      (job) =>
-        job.status === "pending" &&
-        new Date(job.scheduledAt).getTime() <= now
-    )
-    .slice(0, maxJobs);
+}> {
+  const pending = await db
+    .select()
+    .from(webhookDeliveries)
+    .where(eq(webhookDeliveries.status, "pending"))
+    .limit(maxJobs);
+
   let processed = 0;
   let succeeded = 0;
   let failed = 0;
-  for (const job of pending) {
+  for (const row of pending) {
     processed += 1;
-    job.status = "running";
-    job.attempts += 1;
+    if (!row.tenantId) {
+      await db
+        .update(webhookDeliveries)
+        .set({ status: "skipped", updatedAt: new Date() })
+        .where(eq(webhookDeliveries.id, row.id));
+      continue;
+    }
     try {
-      processWebhookDownstream(job.tenantId, { ...job.event, processingStatus: "processed" });
-      job.status = "processed";
-      job.processedAt = new Date().toISOString();
+      await notifyTenant({
+        tenantId: row.tenantId,
+        roles: ["admin", "approver"],
+        type: "draft_ready",
+        title: `${row.platform} activity`,
+        message: `Received ${activityLabel(row.eventType as NormalizedPlatformWebhookEvent["eventType"])}.`,
+        link: "/approval",
+      });
+      await db
+        .update(webhookDeliveries)
+        .set({ status: "processed", updatedAt: new Date() })
+        .where(eq(webhookDeliveries.id, row.id));
       succeeded += 1;
-    } catch (error) {
-      if (job.attempts < job.maxAttempts) {
-        job.status = "pending";
-        job.lastError = error instanceof Error ? error.message : "webhook-processing-error";
-        job.scheduledAt = new Date(Date.now() + 1000 * 2 ** job.attempts).toISOString();
-      } else {
-        job.status = "failed";
-        job.lastError = error instanceof Error ? error.message : "webhook-processing-error";
-        failed += 1;
-      }
+    } catch {
+      failed += 1;
     }
   }
   return { processed, succeeded, failed };
-}
-
-export function getWebhookDeliveryMetrics(tenantId: string): {
-  ingested: number;
-  deduped: number;
-  processed: number;
-} {
-  return (
-    webhookDeliveryMetricsByTenant.get(tenantId) ?? {
-      ingested: 0,
-      deduped: 0,
-      processed: 0,
-    }
-  );
 }

@@ -213,7 +213,9 @@ export async function collectMetricsForDraft(
  */
 export async function collectAllMetrics(
   tenantId: string,
-  getConnection: (platform: Platform) => PlatformConnection | null
+  getConnection: (
+    platform: Platform
+  ) => PlatformConnection | null | Promise<PlatformConnection | null>
 ): Promise<number> {
   // Import here to avoid circular dependency at module level
   const { listDrafts } = await import("@/lib/content/store");
@@ -221,7 +223,7 @@ export async function collectAllMetrics(
 
   let count = 0;
   for (const draft of published) {
-    const connection = getConnection(draft.platform);
+    const connection = await getConnection(draft.platform);
     await collectMetricsForDraft(draft, tenantId, connection);
     count++;
   }

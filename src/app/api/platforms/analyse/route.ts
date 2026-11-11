@@ -50,7 +50,7 @@ export async function POST() {
     const strategy = latestStrategy?.data as ContentStrategy | undefined;
 
     // Get all connected platforms
-    const connections = listPlatformConnections(tenantId);
+    const connections = await listPlatformConnections(tenantId);
     if (connections.length === 0) {
       return NextResponse.json(
         { error: "No platforms connected. Connect at least one platform first." },
@@ -60,7 +60,7 @@ export async function POST() {
 
     // Analyse each connected platform
     for (const conn of connections) {
-      const fullConnection = getPlatformConnection(tenantId, conn.platform);
+      const fullConnection = await getPlatformConnection(tenantId, conn.platform);
       if (!fullConnection) continue;
 
       const fetched = await fetchRecentPostsWithDiagnostics(fullConnection, 30);

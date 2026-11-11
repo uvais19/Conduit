@@ -31,7 +31,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const connection = getPlatformConnection(tenantId, draft.platform);
+      const connection = await getPlatformConnection(tenantId, draft.platform);
       const metric = await collectMetricsForDraft(draft, tenantId, connection);
 
       return NextResponse.json({

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
-import { notifications } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { contentDrafts, notifications, users } from "@/lib/db/schema";
+import type { UserRole } from "@/lib/types";
+import { and, eq, inArray, desc } from "drizzle-orm";
 
 export type CreateNotificationInput = {
   tenantId: string;
@@ -92,4 +93,76 @@ export async function broadcastToTenant(
     link: payload.link ?? null,
   }));
   await db.insert(notifications).values(values);
+}
+
+export async function notifyTenant(input: {
+  tenantId: string;
+  roles?: UserRole[];
+  userIds?: string[];
+  excludeUserId?: string;
+  type: CreateNotificationInput["type"];
+  title: string;
+  message: string;
+  link?: string;
+}) {
+  let ids = input.userIds;
+  if (!ids) {
+    const filters = [eq(users.tenantId, input.tenantId)];
+    if (input.roles && input.roles.length > 0) {
+      filters.push(inArray(users.role, input.roles));
+    }
+    const rows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(...filters));
+    ids = rows.map((row) => row.id);
+  }
+  if (input.excludeUserId) {
+    ids = ids.filter((id) => id !== input.excludeUserId);
+  }
+  await broadcastToTenant(input.tenantId, ids, {
+    type: input.type,
+    title: input.title,
+    message: input.message,
+    link: input.link,
+  });
+}
+
+/** Notify the draft owner when known, otherwise workspace reviewers. */
+export async function notifyDraftOwnerOrReviewers(input: {
+  tenantId: string;
+  draftId: string;
+  actorId?: string;
+  type: CreateNotificationInput["type"];
+  title: string;
+  message: string;
+  link?: string;
+}) {
+  const [draft] = await db
+    .select({ createdBy: contentDrafts.createdBy })
+    .from(contentDrafts)
+    .where(and(eq(contentDrafts.id, input.draftId), eq(contentDrafts.tenantId, input.tenantId)))
+    .limit(1);
+
+  if (draft?.createdBy && draft.createdBy !== input.actorId) {
+    await notifyTenant({
+      tenantId: input.tenantId,
+      userIds: [draft.createdBy],
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      link: input.link,
+    });
+    return;
+  }
+
+  await notifyTenant({
+    tenantId: input.tenantId,
+    roles: ["admin", "approver"],
+    excludeUserId: input.actorId,
+    type: input.type,
+    title: input.title,
+    message: input.message,
+    link: input.link,
+  });
 }

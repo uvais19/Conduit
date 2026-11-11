@@ -24,32 +24,37 @@ export async function POST(request: Request) {
   const raw = await request.text();
   const secret = process.env.LINKEDIN_WEBHOOK_SECRET;
   const signature = request.headers.get("x-linkedin-signature");
-  if (secret && !verifyLinkedInSignature(raw, signature, secret)) {
+  if (!secret || !verifyLinkedInSignature(raw, signature, secret)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
+
+  let parsed: unknown;
   try {
-    const parsed = raw ? JSON.parse(raw) : {};
-    const events = Array.isArray(parsed?.elements) ? parsed.elements : [parsed];
-    for (const event of events) {
-      const eventId =
-        typeof event?.activity === "string"
-          ? event.activity
-          : typeof event?.id === "string"
-            ? event.id
-            : randomUUID();
-      ingestWebhookEvent(String(event?.organization ?? "global"), {
-        id: eventId,
-        platform: "linkedin",
-        eventType: classifyWebhookEventType(event),
-        occurredAt: new Date().toISOString(),
-        postId: typeof event?.activity === "string" ? event.activity : undefined,
-        dedupeKey: `${event?.organization ?? "global"}:${eventId}`,
-        payload: event,
-      });
-    }
+    parsed = raw ? JSON.parse(raw) : {};
   } catch {
-    // swallow malformed payloads to avoid provider retries storms
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
-  const processed = processWebhookJobs(50);
+
+  const record = parsed as { elements?: unknown };
+  const events = Array.isArray(record?.elements) ? record.elements : [parsed];
+  for (const event of events) {
+    const item = event as { activity?: unknown; id?: unknown; organization?: unknown };
+    const eventId =
+      typeof item?.activity === "string"
+        ? item.activity
+        : typeof item?.id === "string"
+          ? item.id
+          : randomUUID();
+    await ingestWebhookEvent(String(item?.organization ?? "global"), {
+      id: eventId,
+      platform: "linkedin",
+      eventType: classifyWebhookEventType(event),
+      occurredAt: new Date().toISOString(),
+      postId: typeof item?.activity === "string" ? item.activity : undefined,
+      dedupeKey: `${item?.organization ?? "global"}:${eventId}`,
+      payload: event,
+    });
+  }
+  const processed = await processWebhookJobs(50);
   return NextResponse.json({ received: true, processed });
 }

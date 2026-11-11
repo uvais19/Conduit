@@ -7,30 +7,26 @@ import {
 } from "@/lib/jobs/queue";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { processWebhookJobs } from "@/lib/platforms/webhook-events";
+import { authorizeCron, cronUnauthorizedResponse } from "@/lib/jobs/cron-auth";
 
 /**
  * POST: Trigger processing of scheduled posts (called by cron).
  * GET: Return queue stats and recent jobs.
  */
 export async function POST(request: Request) {
+  const authResult = authorizeCron(request);
+  if (authResult !== "ok") return cronUnauthorizedResponse(authResult);
+
   const limited = rateLimitResponse("cron-publish", { limit: 5, windowSeconds: 60 });
   if (limited) return limited;
   const jobKind = new URL(request.url).searchParams.get("kind") ?? "publish";
-
-  const secret = process.env.CRON_JOB_SECRET;
-  if (secret) {
-    const token = request.headers.get("x-cron-secret");
-    if (!token || token !== secret) {
-      return NextResponse.json({ error: "Unauthorized cron request" }, { status: 401 });
-    }
-  }
 
   try {
     const processed =
       jobKind === "token-refresh"
         ? await processTokenRefreshJobs()
         : jobKind === "webhooks"
-          ? processWebhookJobs()
+          ? await processWebhookJobs()
           : await processScheduledPosts();
     const stats = await getQueueStatsAsync();
     return NextResponse.json({ processed, stats });
@@ -42,7 +38,10 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authResult = authorizeCron(request);
+  if (authResult !== "ok") return cronUnauthorizedResponse(authResult);
+
   const queueLimited = rateLimitResponse("queue-stats", { limit: 30, windowSeconds: 60 });
   if (queueLimited) return queueLimited;
 

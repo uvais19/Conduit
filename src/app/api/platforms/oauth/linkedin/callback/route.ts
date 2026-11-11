@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     }
 
     const profile = await fetchLinkedInProfile(tokenJson.access_token);
-    savePlatformConnection({
+    await savePlatformConnection({
       tenantId: parsed.tenantId,
       platform: "linkedin",
       displayName: profile.displayName,

@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { recordAuditEvent } from "@/lib/content/audit";
-import { fireNotification } from "@/lib/notifications/store";
+import { notifyDraftOwnerOrReviewers } from "@/lib/notifications";
 import { getPlatformConnection } from "@/lib/platforms/store";
-import { publishDraft, simulatePublish } from "@/lib/agents/publishing/publisher";
+import { publishDraft } from "@/lib/agents/publishing/publisher";
+import { decidePublishBranch } from "@/lib/agents/publishing/publish-decision";
 import { refreshConnectionToken } from "@/lib/platforms/token-lifecycle";
 import {
   dequeue,
@@ -46,8 +47,7 @@ export async function POST(
       );
     }
 
-    // Try real publish if platform is connected, otherwise simulate
-    let connection = getPlatformConnection(tenantId, draft.platform);
+    let connection = await getPlatformConnection(tenantId, draft.platform);
     if (connection?.tokenExpiresAt) {
       const msToExpiry = new Date(connection.tokenExpiresAt).getTime() - Date.now();
       if (msToExpiry <= 1000 * 60 * 60 * 24) {
@@ -59,10 +59,17 @@ export async function POST(
             error: refreshed.error,
           });
         }
-        connection = getPlatformConnection(tenantId, draft.platform);
+        connection = await getPlatformConnection(tenantId, draft.platform);
       }
     }
-    const result = connection ? await publishDraft(draft, connection) : await simulatePublish(draft);
+    const decision = decidePublishBranch(connection);
+    if (decision.kind === "blocked") {
+      return NextResponse.json(
+        { error: "Connect this platform before publishing." },
+        { status: 409 }
+      );
+    }
+    const result = await publishDraft(draft, decision.connection);
 
     if (result.success) {
       const updated = await updateDraft(tenantId, id, {
@@ -81,17 +88,17 @@ export async function POST(
         actorName: session.user.name ?? session.user.email,
         fromStatus: draft.status,
         toStatus: "published",
-        notes: connection
-          ? `Published to ${draft.platform} (ID: ${result.platformPostId})`
-          : `Simulated publish (ID: ${result.platformPostId})`,
+        notes: `Published to ${draft.platform} (ID: ${result.platformPostId})`,
       });
 
-      fireNotification({
+      await notifyDraftOwnerOrReviewers({
         tenantId,
-        type: "submitted",
         draftId: id,
-        actorName: "Publisher Agent",
+        actorId: session.user.id,
+        type: "post_published",
+        title: "Post published",
         message: `Draft successfully published to ${draft.platform}.`,
+        link: "/approval",
       });
 
       return NextResponse.json({ draft: updated, result, validation });
@@ -113,12 +120,14 @@ export async function POST(
         notes: `Publish failed after max retries: ${result.error}`,
       });
 
-      fireNotification({
+      await notifyDraftOwnerOrReviewers({
         tenantId,
-        type: "submitted",
         draftId: id,
-        actorName: "Publisher Agent",
+        actorId: session.user.id,
+        type: "post_failed",
+        title: "Publish failed",
         message: `Draft failed to publish to ${draft.platform}: ${result.error}`,
+        link: "/approval",
       });
 
       return NextResponse.json({ draft: failed, result }, { status: 502 });

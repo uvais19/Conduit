@@ -1,6 +1,8 @@
-import { randomUUID } from "crypto";
+import { and, eq } from "drizzle-orm";
 import type { Platform } from "@/lib/types";
-import { encrypt, decrypt } from "@/lib/encryption";
+import { decrypt, encrypt } from "@/lib/encryption";
+import { db } from "@/lib/db";
+import { platformConnections } from "@/lib/db/schema";
 
 export type PlatformConnection = {
   id: string;
@@ -10,9 +12,9 @@ export type PlatformConnection = {
   displayName: string;
   platformUserId: string;
   platformPageId: string;
-  /** Encrypted at rest */
+  /** Decrypted for callers. Stored encrypted. */
   accessToken: string;
-  /** Encrypted at rest */
+  /** Decrypted for callers. Stored encrypted. */
   refreshToken: string;
   tokenExpiresAt: string | null;
   connectedBy: string;
@@ -22,25 +24,45 @@ export type PlatformConnection = {
   updatedAt: string;
 };
 
-const connectionsByTenant = new Map<string, PlatformConnection[]>();
+type ConnectionRow = typeof platformConnections.$inferSelect;
 
-export function listTenantIdsWithPlatformConnections(): string[] {
-  return [...connectionsByTenant.keys()];
+function toIso(value: Date | null): string | null {
+  return value ? value.toISOString() : null;
 }
 
-function hasEncryptionKey(): boolean {
-  return !!process.env.ENCRYPTION_KEY;
+function toPublic(row: ConnectionRow): Omit<PlatformConnection, "accessToken" | "refreshToken"> {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    platform: row.platform,
+    displayName: row.displayName,
+    platformUserId: row.platformUserId ?? "",
+    platformPageId: row.platformPageId ?? "",
+    tokenExpiresAt: toIso(row.tokenExpiresAt),
+    connectedBy: row.connectedBy ?? "",
+    lastRefreshAttemptAt: toIso(row.lastRefreshAttemptAt),
+    lastRefreshError: row.lastRefreshError,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
-function safeEncrypt(value: string): string {
-  return hasEncryptionKey() ? encrypt(value) : value;
+function toConnection(row: ConnectionRow): PlatformConnection {
+  return {
+    ...toPublic(row),
+    accessToken: decrypt(row.accessToken),
+    refreshToken: row.refreshToken ? decrypt(row.refreshToken) : "",
+  };
 }
 
-function safeDecrypt(value: string): string {
-  return hasEncryptionKey() ? decrypt(value) : value;
+export async function listTenantIdsWithPlatformConnections(): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ tenantId: platformConnections.tenantId })
+    .from(platformConnections);
+  return rows.map((row) => row.tenantId);
 }
 
-export function savePlatformConnection(params: {
+export async function savePlatformConnection(params: {
   tenantId: string;
   platform: Platform;
   displayName: string;
@@ -50,92 +72,122 @@ export function savePlatformConnection(params: {
   refreshToken?: string;
   tokenExpiresAt?: string;
   connectedBy: string;
-}): PlatformConnection {
-  const now = new Date().toISOString();
-  const existing = connectionsByTenant.get(params.tenantId) ?? [];
-
-  // Remove previous connection for the same platform (replace)
-  const filtered = existing.filter((c) => c.platform !== params.platform);
-
-  const connection: PlatformConnection = {
-    id: randomUUID(),
+}): Promise<PlatformConnection> {
+  const now = new Date();
+  const accessToken = encrypt(params.accessToken);
+  const refreshToken = encrypt(params.refreshToken ?? "");
+  const tokenExpiresAt = params.tokenExpiresAt ? new Date(params.tokenExpiresAt) : null;
+  const values = {
     tenantId: params.tenantId,
     platform: params.platform,
     displayName: params.displayName,
     platformUserId: params.platformUserId,
     platformPageId: params.platformPageId,
-    accessToken: safeEncrypt(params.accessToken),
-    refreshToken: safeEncrypt(params.refreshToken ?? ""),
-    tokenExpiresAt: params.tokenExpiresAt ?? null,
+    accessToken,
+    refreshToken,
+    tokenExpiresAt,
     connectedBy: params.connectedBy,
     lastRefreshAttemptAt: null,
     lastRefreshError: null,
-    createdAt: now,
     updatedAt: now,
   };
 
-  connectionsByTenant.set(params.tenantId, [connection, ...filtered]);
-  return connection;
+  const [row] = await db
+    .insert(platformConnections)
+    .values(values)
+    .onConflictDoUpdate({
+      target: [platformConnections.tenantId, platformConnections.platform],
+      set: {
+        displayName: values.displayName,
+        platformUserId: values.platformUserId,
+        platformPageId: values.platformPageId,
+        accessToken: values.accessToken,
+        refreshToken: values.refreshToken,
+        tokenExpiresAt: values.tokenExpiresAt,
+        connectedBy: values.connectedBy,
+        lastRefreshAttemptAt: null,
+        lastRefreshError: null,
+        updatedAt: now,
+      },
+    })
+    .returning();
+
+  return toConnection(row);
 }
 
-export function listPlatformConnections(tenantId: string): Omit<PlatformConnection, "accessToken" | "refreshToken">[] {
-  const connections = connectionsByTenant.get(tenantId) ?? [];
-  return connections.map(({ accessToken, refreshToken, ...rest }) => rest);
+export async function listPlatformConnections(
+  tenantId: string
+): Promise<Omit<PlatformConnection, "accessToken" | "refreshToken">[]> {
+  const rows = await db
+    .select()
+    .from(platformConnections)
+    .where(eq(platformConnections.tenantId, tenantId));
+  return rows.map(toPublic);
 }
 
-export function getPlatformConnection(
+export async function getPlatformConnection(
   tenantId: string,
   platform: Platform
-): PlatformConnection | null {
-  const connections = connectionsByTenant.get(tenantId) ?? [];
-  const found = connections.find((c) => c.platform === platform);
-  if (!found) return null;
-
-  return {
-    ...found,
-    accessToken: safeDecrypt(found.accessToken),
-    refreshToken: safeDecrypt(found.refreshToken),
-  };
+): Promise<PlatformConnection | null> {
+  const [row] = await db
+    .select()
+    .from(platformConnections)
+    .where(
+      and(eq(platformConnections.tenantId, tenantId), eq(platformConnections.platform, platform))
+    )
+    .limit(1);
+  if (!row) return null;
+  return toConnection(row);
 }
 
-export function disconnectPlatform(tenantId: string, platform: Platform): boolean {
-  const connections = connectionsByTenant.get(tenantId) ?? [];
-  const filtered = connections.filter((c) => c.platform !== platform);
-  if (filtered.length === connections.length) return false;
-  connectionsByTenant.set(tenantId, filtered);
-  return true;
+export async function disconnectPlatform(tenantId: string, platform: Platform): Promise<boolean> {
+  const removed = await db
+    .delete(platformConnections)
+    .where(
+      and(eq(platformConnections.tenantId, tenantId), eq(platformConnections.platform, platform))
+    )
+    .returning({ id: platformConnections.id });
+  return removed.length > 0;
 }
 
-export function updatePlatformConnectionTokens(params: {
+export async function updatePlatformConnectionTokens(params: {
   tenantId: string;
   platform: Platform;
   accessToken: string;
   refreshToken?: string;
   tokenExpiresAt?: string | null;
   refreshError?: string | null;
-}): PlatformConnection | null {
-  const existing = connectionsByTenant.get(params.tenantId) ?? [];
-  const index = existing.findIndex((c) => c.platform === params.platform);
-  if (index === -1) return null;
+}): Promise<PlatformConnection | null> {
+  const existing = await getPlatformConnection(params.tenantId, params.platform);
+  if (!existing) return null;
 
-  const current = existing[index];
-  const next: PlatformConnection = {
-    ...current,
-    accessToken: safeEncrypt(params.accessToken),
-    refreshToken: safeEncrypt(params.refreshToken ?? safeDecrypt(current.refreshToken)),
-    tokenExpiresAt: params.tokenExpiresAt ?? current.tokenExpiresAt,
-    lastRefreshAttemptAt: new Date().toISOString(),
-    lastRefreshError: params.refreshError ?? null,
-    updatedAt: new Date().toISOString(),
-  };
+  const now = new Date();
+  const tokenExpiresAt =
+    params.tokenExpiresAt === undefined
+      ? existing.tokenExpiresAt
+        ? new Date(existing.tokenExpiresAt)
+        : null
+      : params.tokenExpiresAt
+        ? new Date(params.tokenExpiresAt)
+        : null;
 
-  const copy = [...existing];
-  copy[index] = next;
-  connectionsByTenant.set(params.tenantId, copy);
+  const [row] = await db
+    .update(platformConnections)
+    .set({
+      accessToken: encrypt(params.accessToken),
+      refreshToken: encrypt(params.refreshToken ?? existing.refreshToken),
+      tokenExpiresAt,
+      lastRefreshAttemptAt: now,
+      lastRefreshError: params.refreshError ?? null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(platformConnections.tenantId, params.tenantId),
+        eq(platformConnections.platform, params.platform)
+      )
+    )
+    .returning();
 
-  return {
-    ...next,
-    accessToken: safeDecrypt(next.accessToken),
-    refreshToken: safeDecrypt(next.refreshToken),
-  };
+  return row ? toConnection(row) : null;
 }

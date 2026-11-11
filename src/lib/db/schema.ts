@@ -98,6 +98,12 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "competitor_alert",
 ]);
 
+export const webhookDeliveryStatusEnum = pgEnum("webhook_delivery_status", [
+  "pending",
+  "processed",
+  "skipped",
+]);
+
 export const publishJobStatusEnum = pgEnum("publish_job_status", [
   "pending",
   "running",
@@ -143,21 +149,33 @@ export const brandManifestos = pgTable("brand_manifestos", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const platformConnections = pgTable("platform_connections", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  tenantId: uuid("tenant_id")
-    .references(() => tenants.id, { onDelete: "cascade" })
-    .notNull(),
-  platform: platformEnum("platform").notNull(),
-  accessToken: text("access_token").notNull(), // Encrypted
-  refreshToken: text("refresh_token"), // Encrypted
-  tokenExpiresAt: timestamp("token_expires_at"),
-  platformUserId: text("platform_user_id"),
-  platformPageId: text("platform_page_id"),
-  connectedBy: uuid("connected_by").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+export const platformConnections = pgTable(
+  "platform_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    platform: platformEnum("platform").notNull(),
+    displayName: text("display_name").notNull().default(""),
+    accessToken: text("access_token").notNull(), // Encrypted
+    refreshToken: text("refresh_token"), // Encrypted
+    tokenExpiresAt: timestamp("token_expires_at"),
+    platformUserId: text("platform_user_id"),
+    platformPageId: text("platform_page_id"),
+    connectedBy: uuid("connected_by").references(() => users.id),
+    lastRefreshAttemptAt: timestamp("last_refresh_attempt_at"),
+    lastRefreshError: text("last_refresh_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantPlatformUnique: uniqueIndex("platform_connections_tenant_platform_unique").on(
+      table.tenantId,
+      table.platform
+    ),
+  })
+);
 
 export const contentStrategies = pgTable("content_strategies", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -322,6 +340,28 @@ export const notifications = pgTable("notifications", {
   read: boolean("read").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    platform: platformEnum("platform").notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: webhookDeliveryStatusEnum("status").notNull().default("pending"),
+    occurredAt: timestamp("occurred_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    platformDedupeUnique: uniqueIndex("webhook_deliveries_platform_dedupe_unique").on(
+      table.platform,
+      table.dedupeKey
+    ),
+  })
+);
 
 export const platformPosts = pgTable("platform_posts", {
   id: uuid("id").defaultRandom().primaryKey(),

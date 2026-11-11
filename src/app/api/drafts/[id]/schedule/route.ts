@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { recordAuditEvent } from "@/lib/content/audit";
-import { fireNotification } from "@/lib/notifications/store";
+import { notifyTenant } from "@/lib/notifications";
 import { validateDraftAgainstBrand } from "@/lib/brand/validation";
 import {
   enqueue,
@@ -78,12 +78,14 @@ export async function POST(
       notes: `Scheduled for ${new Date(scheduledAt).toLocaleString()}`,
     });
 
-    fireNotification({
+    await notifyTenant({
       tenantId,
-      type: "submitted",
-      draftId: id,
-      actorName: session.user.name ?? session.user.email,
+      roles: ["admin", "approver"],
+      excludeUserId: session.user.id,
+      type: "draft_ready",
+      title: "Draft scheduled",
       message: `Draft scheduled for ${new Date(scheduledAt).toLocaleString()}.`,
+      link: "/approval",
     });
 
     return NextResponse.json({ draft: updated, scheduledAt, validation });

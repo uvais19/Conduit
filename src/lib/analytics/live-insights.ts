@@ -19,7 +19,7 @@ export async function collectLiveAudienceBreakdown(tenantId: string): Promise<{
   source: "live" | "fallback";
 }> {
   // Instagram has the richest audience demographics in our currently supported APIs.
-  const instagram = getPlatformConnection(tenantId, "instagram");
+  const instagram = await getPlatformConnection(tenantId, "instagram");
   if (instagram) {
     const igUserId = await resolveInstagramUserId(instagram);
     if (igUserId) {
@@ -48,7 +48,7 @@ export async function collectLiveAudienceBreakdown(tenantId: string): Promise<{
     }
   }
 
-  const facebook = getPlatformConnection(tenantId, "facebook");
+  const facebook = await getPlatformConnection(tenantId, "facebook");
   if (facebook?.platformPageId) {
     const page = await getFacebookPageInsights({
       pageId: facebook.platformPageId,
@@ -77,7 +77,7 @@ export async function collectFollowerSnapshot(
   const snapshots: FollowerSnapshot[] = [];
   const now = new Date().toISOString().slice(0, 10);
 
-  const instagram = getPlatformConnection(tenantId, "instagram");
+  const instagram = await getPlatformConnection(tenantId, "instagram");
   if (instagram) {
     const igUserId = await resolveInstagramUserId(instagram);
     if (igUserId) {
@@ -96,7 +96,7 @@ export async function collectFollowerSnapshot(
     }
   }
 
-  const facebook = getPlatformConnection(tenantId, "facebook");
+  const facebook = await getPlatformConnection(tenantId, "facebook");
   if (facebook?.platformPageId) {
     const page = await getFacebookPageInsights({
       pageId: facebook.platformPageId,

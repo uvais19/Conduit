@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const removed = disconnectPlatform(session.user.tenantId, parsed.data.platform);
+    const removed = await disconnectPlatform(session.user.tenantId, parsed.data.platform);
     if (!removed) {
       return NextResponse.json({ error: "Platform not connected" }, { status: 404 });
     }

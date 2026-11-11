@@ -58,7 +58,7 @@ export async function refreshConnectionToken(
     const tokenExpiresAt = refreshed.expiresIn
       ? new Date(Date.now() + refreshed.expiresIn * 1000).toISOString()
       : connection.tokenExpiresAt;
-    updatePlatformConnectionTokens({
+    await updatePlatformConnectionTokens({
       tenantId: connection.tenantId,
       platform: connection.platform,
       accessToken: refreshed.accessToken,
@@ -69,7 +69,7 @@ export async function refreshConnectionToken(
     return { ok: true, mode: "refresh_token" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Token refresh failed";
-    updatePlatformConnectionTokens({
+    await updatePlatformConnectionTokens({
       tenantId: connection.tenantId,
       platform: connection.platform,
       accessToken: connection.accessToken,

@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server";
 import { collectAllMetrics } from "@/lib/agents/analytics/collector";
 import { getPlatformConnection } from "@/lib/platforms/store";
-
-function unauthorized() {
-  return NextResponse.json(
-    { error: "Unauthorized cron request" },
-    { status: 401 },
-  );
-}
+import { authorizeCron, cronUnauthorizedResponse } from "@/lib/jobs/cron-auth";
 
 export async function POST(request: Request) {
-  const secret = process.env.CRON_JOB_SECRET;
-  if (secret) {
-    const token = request.headers.get("x-cron-secret");
-    if (!token || token !== secret) return unauthorized();
-  }
+  const authResult = authorizeCron(request);
+  if (authResult !== "ok") return cronUnauthorizedResponse(authResult);
 
   try {
     const body = (await request.json().catch(() => ({}))) as {

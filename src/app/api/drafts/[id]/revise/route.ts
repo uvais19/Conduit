@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDraftById, updateDraft } from "@/lib/content/store";
 import { recordAuditEvent, resolveTransition } from "@/lib/content/audit";
-import { fireNotification } from "@/lib/notifications/store";
+import { notifyDraftOwnerOrReviewers } from "@/lib/notifications";
 
 const bodySchema = z.object({
   notes: z.string().min(1, "Revision notes are required"),
@@ -56,12 +56,14 @@ export async function POST(
       notes,
     });
 
-    fireNotification({
+    await notifyDraftOwnerOrReviewers({
       tenantId,
-      type: "revision-requested",
       draftId: id,
-      actorName: session.user.name ?? session.user.email,
+      actorId: session.user.id,
+      type: "revision_requested",
+      title: "Revision requested",
       message: `Revision requested by ${session.user.name ?? session.user.email}: ${notes}`,
+      link: "/approval",
     });
 
     return NextResponse.json({ draft: updated });

@@ -1,7 +1,8 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { tenants, users } from "@/lib/db/schema";
+import { decideLoginClaim, normalizeEmail } from "@/lib/auth/login-claim";
 import type { UserRole } from "@/lib/types";
 
 type Permission =
@@ -74,15 +75,50 @@ async function ensureAppUser(
     name: users.name,
     avatarUrl: users.avatarUrl,
   };
+  const normalized = normalizeEmail(email);
 
-  const [existing] = await db
+  const [byClerk] = await db
     .select(selectFields)
     .from(users)
     .where(eq(users.clerkId, clerkId))
     .limit(1);
 
-  if (existing) {
-    return existing;
+  const [byEmail] = await db
+    .select({ clerkId: users.clerkId })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${normalized}`)
+    .limit(1);
+
+  const claim = decideLoginClaim(byClerk ? { clerkId } : null, byEmail ?? null);
+
+  if (claim === "use_existing" && byClerk) {
+    return byClerk;
+  }
+
+  if (claim === "claim_placeholder") {
+    const [claimed] = await db
+      .update(users)
+      .set({
+        clerkId,
+        email: normalized,
+        name,
+        ...(image ? { avatarUrl: image } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(sql`lower(${users.email}) = ${normalized}`, isNull(users.clerkId)))
+      .returning(selectFields);
+    if (claimed) return claimed;
+
+    const [raced] = await db
+      .select(selectFields)
+      .from(users)
+      .where(eq(users.clerkId, clerkId))
+      .limit(1);
+    if (raced) return raced;
+  }
+
+  if (claim === "email_taken") {
+    throw new Error("Email already belongs to another account");
   }
 
   // First login: provision a tenant and create the user
@@ -96,7 +132,7 @@ async function ensureAppUser(
     .values({
       clerkId,
       tenantId: tenant.id,
-      email,
+      email: normalized,
       name,
       avatarUrl: image ?? undefined,
       role: "admin",

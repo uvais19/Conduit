@@ -47,32 +47,42 @@ export async function POST(request: Request) {
   const raw = await request.text();
   const sig = request.headers.get("x-hub-signature-256");
 
-  if (secret && sig && !verifySignature(raw, sig, secret)) {
+  if (!secret || !verifySignature(raw, sig, secret)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
+  let parsed: unknown;
   try {
-    const parsed = raw ? JSON.parse(raw) : null;
-    const entries = Array.isArray(parsed?.entry) ? parsed.entry : [];
-    for (const entry of entries) {
-      const tenantId = String(entry?.id ?? "global");
-      const changed = Array.isArray(entry?.changes) ? entry.changes : [];
-      const postId = changed[0]?.value?.post_id;
-      const dedupeKey = `${entry?.id ?? "global"}:${entry?.time ?? "0"}:${changed[0]?.field ?? "unknown"}`;
-      ingestWebhookEvent(tenantId, {
-        id: randomUUID(),
-        platform: entry?.id ? "facebook" : "instagram",
-        eventType: classifyWebhookEventType(entry),
-        occurredAt: new Date().toISOString(),
-        postId: typeof postId === "string" ? postId : undefined,
-        dedupeKey,
-        payload: entry,
-      });
-    }
+    parsed = raw ? JSON.parse(raw) : null;
   } catch {
-    // ignore malformed body
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const processed = processWebhookJobs(50);
+  const entries = Array.isArray((parsed as { entry?: unknown } | null)?.entry)
+    ? (parsed as { entry: unknown[] }).entry
+    : [];
+  for (const entry of entries) {
+    const record = entry as {
+      id?: unknown;
+      time?: unknown;
+      changes?: unknown;
+    };
+    const providerId = String(record?.id ?? "global");
+    const changed = Array.isArray(record?.changes) ? record.changes : [];
+    const firstChange = changed[0] as { value?: { post_id?: unknown }; field?: unknown } | undefined;
+    const postId = firstChange?.value?.post_id;
+    const dedupeKey = `${providerId}:${record?.time ?? "0"}:${firstChange?.field ?? "unknown"}`;
+    await ingestWebhookEvent(providerId, {
+      id: randomUUID(),
+      platform: record?.id ? "facebook" : "instagram",
+      eventType: classifyWebhookEventType(entry),
+      occurredAt: new Date().toISOString(),
+      postId: typeof postId === "string" ? postId : undefined,
+      dedupeKey,
+      payload: entry,
+    });
+  }
+
+  const processed = await processWebhookJobs(50);
   return NextResponse.json({ received: true, processed });
 }
